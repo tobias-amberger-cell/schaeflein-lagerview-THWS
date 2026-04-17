@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "ssi_lagerview" "\0"
+            VALUE "CompanyName", "Schaeflein Logistics" "\0"
+            VALUE "FileDescription", "Schaeflein LagerView" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "ssi_lagerview" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "ssi_lagerview.exe" "\0"
-            VALUE "ProductName", "ssi_lagerview" "\0"
+            VALUE "InternalName", "schaeflein_lagerview" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Schaeflein Logistics. All rights reserved." "\0"
+            VALUE "OriginalFilename", "schaeflein_lagerview.exe" "\0"
+            VALUE "ProductName", "Schaeflein LagerView" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

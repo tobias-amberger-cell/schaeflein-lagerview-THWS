@@ -65,9 +65,10 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final isWebWide = kIsWeb && width >= 1400;
+    final isWebWide = kIsWeb && width >= 1560;
     final isWide = width >= AppBreakpoints.rail;
-    final logoHeight = isWebWide ? 64.0 : isWide ? 56.0 : width >= AppBreakpoints.tablet ? 44.0 : 34.0;
+    final logoHeight =
+        isWebWide ? 64.0 : isWide ? 56.0 : width >= AppBreakpoints.tablet ? 44.0 : 34.0;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -89,6 +90,22 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 8,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: <Color>[
+                    colorScheme.primary,
+                    colorScheme.secondary,
+                  ],
+                ),
+              ),
+            ),
+          ),
           Positioned.fill(
             child: IgnorePointer(
               child: Opacity(
@@ -102,23 +119,23 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           Positioned(
-            top: -120,
-            right: -80,
+            top: -140,
+            right: -90,
             child: Container(
-              width: 260,
-              height: 260,
+              width: 300,
+              height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: colorScheme.primary.withValues(alpha: 0.09),
+                color: colorScheme.primary.withValues(alpha: 0.08),
               ),
             ),
           ),
           Positioned(
-            bottom: -140,
-            left: -100,
+            bottom: -160,
+            left: -120,
             child: Container(
-              width: 300,
-              height: 300,
+              width: 320,
+              height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: colorScheme.secondary.withValues(alpha: 0.08),
@@ -135,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Center(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxWidth: isWebWide ? 1180 : isWide ? 960 : (kIsWeb ? 560 : 460),
+                          maxWidth: isWebWide ? 1240 : isWide ? 780 : (kIsWeb ? 560 : 460),
                         ),
                         child: isWebWide
                             ? _buildWideLayout(context, logoHeight)
@@ -186,13 +203,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildWideLayout(BuildContext context, double logoHeight) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Row(
+    return IntrinsicHeight(
+      child: Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Expanded(
+          flex: 5,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(26),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -205,6 +224,13 @@ class _LoginScreenState extends State<LoginScreen> {
               border: Border.all(
                 color: colorScheme.outlineVariant.withValues(alpha: 0.4),
               ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.08),
+                  blurRadius: 30,
+                  offset: const Offset(0, 14),
+                ),
+              ],
             ),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -284,13 +310,21 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
-          child: _buildLoginCard(
-            context,
-            logoHeight: logoHeight,
-            showFooter: true,
+          flex: 4,
+          child: Align(
+            alignment: Alignment.center,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: _buildLoginCard(
+                context,
+                logoHeight: logoHeight,
+                showFooter: true,
+              ),
+            ),
           ),
         ),
       ],
+    ),
     );
   }
 
@@ -298,9 +332,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: colorScheme.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(26),
+        color: colorScheme.surface.withValues(alpha: 0.96),
         border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.35)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -385,14 +426,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: colorScheme.surface.withValues(alpha: 0.96),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.45)),
+        borderRadius: BorderRadius.circular(26),
+        color: colorScheme.surface.withValues(alpha: 0.98),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 32,
+            offset: const Offset(0, 18),
           ),
         ],
       ),
@@ -403,7 +444,19 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Center(child: CompanyLogo(height: logoHeight)),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: CompanyLogo(height: logoHeight),
+                ),
+              ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 AppConstants.appName,
@@ -436,7 +489,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: AppSpacing.md),
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,

@@ -65,6 +65,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/schaeflein_logo.jpg
+    - assets/data/warehouse_ai_master.csv
     - assets/data/df_platz_reduced.csv
     - assets/data/df_palette_reduced.csv
     - assets/data/df_order_reduced.csv
