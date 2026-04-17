@@ -1,4 +1,4 @@
-package com.example.ssi_lagerview
+package de.schaeflein.lagerview
 
 import io.flutter.embedding.android.FlutterActivity
 

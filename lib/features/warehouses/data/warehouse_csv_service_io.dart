@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:csv/csv.dart';
 
 import '../../../models/warehouse.dart';
+import '../../../models/warehouse_operations_profile.dart';
+import '../../../models/warehouse_trend.dart';
+import 'warehouse_master_parser.dart';
 
 class WarehouseCsvService {
   WarehouseCsvService({this.dataDirectory});
@@ -11,33 +14,40 @@ class WarehouseCsvService {
   final String? dataDirectory;
 
   static const String _defaultWarehouseId = 'schlf-ber03';
+  static const List<String> _masterFileNames = <String>[
+    'warehouse_ai_master.csv',
+  ];
 
   Future<List<Warehouse>> loadWarehousesFromDisk() async {
-    if (dataDirectory == null || dataDirectory!.isEmpty) {
+    final masterCsv = await _loadMasterCsvFromDisk();
+    if (masterCsv != null) {
+      final parsed = WarehouseMasterParser.parseWarehouses(masterCsv);
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+
+    final dir = _resolveLegacyDataDirectory();
+    if (dir == null) {
       return <Warehouse>[];
     }
 
-    final dir = Directory(dataDirectory!);
-    if (!await dir.exists()) {
-      return <Warehouse>[];
-    }
-
-    final platzFile = _resolveFile(
+    final platzFile = _resolveLegacyFile(
       dir,
       reducedName: 'df_platz_reduced.csv',
       originalName: 'df_platz_ber03_schlg_rti3.csv',
     );
-    final paletteFile = _resolveFile(
+    final paletteFile = _resolveLegacyFile(
       dir,
       reducedName: 'df_palette_reduced.csv',
       originalName: 'df_palette_08042026_ber03_schlg_rti3.csv',
     );
-    final orderFile = _resolveFile(
+    final orderFile = _resolveLegacyFile(
       dir,
       reducedName: 'df_order_reduced.csv',
       originalName: 'df_order_6mon_schlg_rti3.csv',
     );
-    final tpaFile = _resolveFile(
+    final tpaFile = _resolveLegacyFile(
       dir,
       reducedName: 'df_tpa_reduced.csv',
       originalName: 'df_tpa_6mon_ber03_schlg_rti3.csv',
@@ -48,50 +58,71 @@ class WarehouseCsvService {
     }
 
     final totalSlots = await _countRows(platzFile);
-    final occupiedSlots =
-        (await paletteFile.exists()) ? await _countRows(paletteFile) : 0;
+    final occupiedSlots = (await paletteFile.exists()) ? await _countRows(paletteFile) : 0;
     final articleCount = (await orderFile.exists())
         ? await _countUnique(
             orderFile,
-            const <String>['artnr', 'artikel', 'article', 'sku'],
+            const <String>[
+              'artnr',
+              'artikelnr',
+              'artikel_nr',
+              'artikel',
+              'article',
+              'sku',
+            ],
           )
         : 0;
-    final throughputPerDay =
-        (await tpaFile.exists()) ? await _estimateThroughput(tpaFile) : 0;
+    final throughputPerDay = (await tpaFile.exists()) ? await _estimateThroughput(tpaFile) : 0;
 
-    final abc = _deriveAbc(totalSlots, articleCount);
+    return <Warehouse>[
+      Warehouse(
+        id: _defaultWarehouseId,
+        name: 'Schäflein Hauptlager',
+        location: 'Berg 03',
+        zoneCount: 8,
+        status: WarehouseStatus.online,
+        description: 'Automatisiert aus CSV-Daten generiert.',
+        totalStorageSlots: totalSlots,
+        occupiedStorageSlots: occupiedSlots.clamp(0, totalSlots),
+        articleCount: articleCount,
+        abcAnalysis: _deriveAbc(articleCount),
+        inboundPerDay: (throughputPerDay * 0.55).round(),
+        throughputPerDay: throughputPerDay,
+        pickRatePerHour: (throughputPerDay / 10).round(),
+        zones: _buildZones(8),
+      ),
+    ];
+  }
 
-    final warehouse = Warehouse(
-      id: _defaultWarehouseId,
-      name: 'Schäflein Hauptlager',
-      location: 'Berg 03',
-      zoneCount: 8,
-      status: WarehouseStatus.online,
-      description: 'Automatisiert aus CSV-Daten generiert.',
-      totalStorageSlots: totalSlots,
-      occupiedStorageSlots: occupiedSlots.clamp(0, totalSlots),
-      articleCount: articleCount,
-      abcAnalysis: abc,
-      inboundPerDay: (throughputPerDay * 0.55).round(),
-      throughputPerDay: throughputPerDay,
-      pickRatePerHour: (throughputPerDay / 10).round(),
-      zones: _buildZones(8),
-    );
-
-    return <Warehouse>[warehouse];
+  Future<Map<String, WarehouseOperationsProfile>> loadOperationsProfilesFromDisk() async {
+    final masterCsv = await _loadMasterCsvFromDisk();
+    if (masterCsv == null) {
+      return <String, WarehouseOperationsProfile>{};
+    }
+    return WarehouseMasterParser.parseOperationsProfiles(masterCsv);
   }
 
   Future<List<WarehouseStorageLocation>> loadStorageLocationsFromDisk({
     int limit = 24,
+    String? warehouseId,
   }) async {
-    if (dataDirectory == null || dataDirectory!.isEmpty) {
+    final masterCsv = await _loadMasterCsvFromDisk();
+    if (masterCsv != null) {
+      final parsed = WarehouseMasterParser.parseStorageLocations(
+        masterCsv,
+        limit: limit,
+        warehouseId: warehouseId,
+      );
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+
+    final dir = _resolveLegacyDataDirectory();
+    if (dir == null) {
       return <WarehouseStorageLocation>[];
     }
-    final dir = Directory(dataDirectory!);
-    if (!await dir.exists()) {
-      return <WarehouseStorageLocation>[];
-    }
-    final platzFile = _resolveFile(
+    final platzFile = _resolveLegacyFile(
       dir,
       reducedName: 'df_platz_reduced.csv',
       originalName: 'df_platz_ber03_schlg_rti3.csv',
@@ -101,6 +132,81 @@ class WarehouseCsvService {
     }
     final csvText = await platzFile.readAsString();
     return _parseStorageLocations(csvText, limit);
+  }
+
+  Future<List<WarehouseTrendPoint>> loadThroughputTrendFromDisk({
+    int days = 14,
+  }) async {
+    final masterCsv = await _loadMasterCsvFromDisk();
+    if (masterCsv != null) {
+      final parsed = WarehouseMasterParser.parseThroughputTrend(
+        masterCsv,
+        days: days,
+      );
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+
+    final dir = _resolveLegacyDataDirectory();
+    if (dir == null) {
+      return <WarehouseTrendPoint>[];
+    }
+    final tpaFile = _resolveLegacyFile(
+      dir,
+      reducedName: 'df_tpa_reduced.csv',
+      originalName: 'df_tpa_6mon_ber03_schlg_rti3.csv',
+    );
+    if (!await tpaFile.exists()) {
+      return <WarehouseTrendPoint>[];
+    }
+    final csvText = await tpaFile.readAsString();
+    return _parseThroughputTrend(csvText, days);
+  }
+
+  Future<String?> _loadMasterCsvFromDisk() async {
+    final directories = <Directory>[
+      if (dataDirectory != null && dataDirectory!.trim().isNotEmpty)
+        Directory(dataDirectory!.trim()),
+      Directory('data'),
+      Directory('assets${Platform.pathSeparator}data'),
+    ];
+
+    for (final directory in directories) {
+      if (!await directory.exists()) {
+        continue;
+      }
+      for (final fileName in _masterFileNames) {
+        final file = File('${directory.path}${Platform.pathSeparator}$fileName');
+        if (await file.exists()) {
+          return file.readAsString();
+        }
+      }
+    }
+    return null;
+  }
+
+  Directory? _resolveLegacyDataDirectory() {
+    if (dataDirectory == null || dataDirectory!.trim().isEmpty) {
+      return null;
+    }
+    final directory = Directory(dataDirectory!.trim());
+    if (!directory.existsSync()) {
+      return null;
+    }
+    return directory;
+  }
+
+  File _resolveLegacyFile(
+    Directory dir, {
+    required String reducedName,
+    required String originalName,
+  }) {
+    final reduced = File('${dir.path}${Platform.pathSeparator}$reducedName');
+    if (reduced.existsSync()) {
+      return reduced;
+    }
+    return File('${dir.path}${Platform.pathSeparator}$originalName');
   }
 
   Future<int> _countRows(File file) async {
@@ -132,8 +238,7 @@ class WarehouseCsvService {
     var isHeader = true;
     await for (final row in stream) {
       if (isHeader) {
-        header =
-            row.map((cell) => cell.toString().trim().toLowerCase()).toList();
+        header = row.map((cell) => cell.toString().trim().toLowerCase()).toList();
         isHeader = false;
         continue;
       }
@@ -180,7 +285,7 @@ class WarehouseCsvService {
     }
     final header = rows.first
         .map((cell) => cell.toString().trim().toLowerCase())
-        .toList();
+        .toList(growable: false);
     final rackIndex = _findHeaderIndex(header, const <String>['regal', 'rack']);
     final levelIndex = _findHeaderIndex(header, const <String>['ebene', 'level']);
     final slotIndex = _findHeaderIndex(header, const <String>['fach', 'slot']);
@@ -190,10 +295,8 @@ class WarehouseCsvService {
     final placeIndex =
         _findHeaderIndex(header, const <String>['platz_id', 'platz', 'place_id']);
     final areaIndex = _findHeaderIndex(header, const <String>['bereich', 'area']);
-    final abcIndex =
-        _findHeaderIndex(header, const <String>['abc_klasse', 'abc']);
-    final statusIndex =
-        _findHeaderIndex(header, const <String>['zustand', 'status']);
+    final abcIndex = _findHeaderIndex(header, const <String>['abc_klasse', 'abc']);
+    final statusIndex = _findHeaderIndex(header, const <String>['zustand', 'status']);
 
     final locations = <WarehouseStorageLocation>[];
     final seen = <String>{};
@@ -245,7 +348,74 @@ class WarehouseCsvService {
     return locations;
   }
 
-  AbcAnalysis _deriveAbc(int totalSlots, int articleCount) {
+  List<WarehouseTrendPoint> _parseThroughputTrend(
+    String csvText,
+    int days,
+  ) {
+    final rows = const CsvToListConverter(eol: '\n').convert(csvText);
+    if (rows.isEmpty) {
+      return <WarehouseTrendPoint>[];
+    }
+    final header = rows.first
+        .map((cell) => cell.toString().trim().toLowerCase())
+        .toList(growable: false);
+    final dateIndex = _findHeaderIndex(header, const <String>[
+      'ende_datum',
+      'datum',
+      'date',
+      'end_date',
+      'created_at',
+    ]);
+    if (dateIndex == null) {
+      return <WarehouseTrendPoint>[];
+    }
+    final counts = <DateTime, int>{};
+    for (var i = 1; i < rows.length; i++) {
+      final row = rows[i];
+      if (row.isEmpty || dateIndex >= row.length) {
+        continue;
+      }
+      final rawDate = row[dateIndex].toString().trim();
+      if (rawDate.isEmpty) {
+        continue;
+      }
+      final parsed = _parseDate(rawDate);
+      if (parsed == null) {
+        continue;
+      }
+      final dayKey = DateTime(parsed.year, parsed.month, parsed.day);
+      counts.update(dayKey, (value) => value + 1, ifAbsent: () => 1);
+    }
+    final sortedKeys = counts.keys.toList()..sort((a, b) => a.compareTo(b));
+    if (sortedKeys.isEmpty) {
+      return <WarehouseTrendPoint>[];
+    }
+    final limitedKeys =
+        sortedKeys.length > days ? sortedKeys.sublist(sortedKeys.length - days) : sortedKeys;
+    return limitedKeys
+        .map((key) => WarehouseTrendPoint(date: key, value: counts[key] ?? 0))
+        .toList(growable: false);
+  }
+
+  DateTime? _parseDate(String raw) {
+    final normalized = raw.trim();
+    final iso = DateTime.tryParse(normalized);
+    if (iso != null) {
+      return iso;
+    }
+    final parts = normalized.split('.');
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return null;
+  }
+
+  AbcAnalysis _deriveAbc(int articleCount) {
     if (articleCount == 0) {
       return const AbcAnalysis(aCount: 0, bCount: 0, cCount: 0);
     }
@@ -270,17 +440,5 @@ class WarehouseCsvService {
         pickRatePerHour: 0,
       ),
     );
-  }
-
-  File _resolveFile(
-    Directory dir, {
-    required String reducedName,
-    required String originalName,
-  }) {
-    final reduced = File('${dir.path}${Platform.pathSeparator}$reducedName');
-    if (reduced.existsSync()) {
-      return reduced;
-    }
-    return File('${dir.path}${Platform.pathSeparator}$originalName');
   }
 }

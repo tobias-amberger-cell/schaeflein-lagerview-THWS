@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -2440,8 +2441,11 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
     if (_cameraMode == _ViewerCameraMode.firstPerson && widget.heatmapVisible) {
       return _RenderQuality.performance;
     }
+    if (widget.heatmapVisible && _cameraMode == _ViewerCameraMode.orbit) {
+      return kIsWeb ? _RenderQuality.performance : _RenderQuality.balanced;
+    }
     if (_cameraMode == _ViewerCameraMode.firstPerson) {
-      return _RenderQuality.balanced;
+      return kIsWeb ? _RenderQuality.performance : _RenderQuality.balanced;
     }
     return _RenderQuality.auto;
   }
@@ -5487,6 +5491,15 @@ class _Warehouse3DPainter extends CustomPainter {
     }
     if (isCameraInMotion) {
       return _RenderQuality.performance;
+    }
+    if (heatmapVisible && devicePixelRatio >= 1.8) {
+      return _RenderQuality.performance;
+    }
+    if (kIsWeb) {
+      if (devicePixelRatio >= 2.0) {
+        return _RenderQuality.performance;
+      }
+      return _RenderQuality.balanced;
     }
     if (devicePixelRatio >= 2.3) {
       return _RenderQuality.performance;

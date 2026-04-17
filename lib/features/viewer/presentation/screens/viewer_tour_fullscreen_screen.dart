@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/state/app_state.dart';
+import '../../../../models/viewer_heatmap.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../domain/viewer_adapter_factory.dart';
 import '../../domain/viewer_type.dart';
@@ -21,11 +22,20 @@ class ViewerTourFullscreenScreen extends StatefulWidget {
 
 class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen> {
   bool _showLegend = false;
+  bool _showUiChrome = false;
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showUiChrome = true;
+      });
+    });
   }
 
   @override
@@ -42,9 +52,12 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
     final topInset = media.padding.top;
     final bottomInset = media.padding.bottom;
     final compactHeader = media.size.width < 900;
-    final headerReservedHeight = compactHeader ? 68.0 : 56.0;
+    final isWideLayout = media.size.width >= 960;
+    final headerReservedHeight = compactHeader ? 78.0 : 64.0;
     final headerTop = topInset + AppSpacing.sm;
-    final legendBottomOffset = compactHeader ? 132.0 : 112.0;
+    final dockHeight = isWideLayout ? 84.0 : 76.0;
+    final dockBottom = bottomInset + AppSpacing.sm;
+    final legendBottomOffset = dockBottom + dockHeight + AppSpacing.sm;
     final isNarrowPhone = media.size.width < 640;
 
     if (warehouse == null) {
@@ -86,117 +99,100 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
                     focusLocationRequestId: appState.viewerFocusLocationRequestId,
                     enableFirstPersonControls: true,
                     topOverlayReservedSpace: headerReservedHeight + topInset + AppSpacing.sm,
-                    bottomOverlayReservedSpace: 76,
+                    bottomOverlayReservedSpace: dockHeight + AppSpacing.md,
                     cameraToggleBottom: true,
                     showOperatorPanel: false,
                   )
                 : adapter.buildViewerCanvas(context, warehouse),
           ),
           Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      Colors.black.withValues(alpha: 0.24),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: const SizedBox(height: 120),
+              ),
+            ),
+          ),
+          Positioned(
             top: headerTop,
             left: AppSpacing.sm,
             right: AppSpacing.sm,
-            child: Row(
-              children: <Widget>[
-                FilledButton.tonalIcon(
-                  onPressed: () => _closeTour(context, appState),
-                  icon: const Icon(Icons.close_fullscreen),
-                  label: Text(context.tr('viewerPauseTour')),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _TourInfoChip(
-                    title: warehouse.name,
-                    subtitle: context.tr('tourActive'),
-                  ),
-                ),
-              ],
+            child: _AnimatedOverlay(
+              visible: _showUiChrome,
+              offset: const Offset(0, -0.08),
+              child: _TourHeaderBar(
+                warehouseName: warehouse.name,
+                tourActiveLabel: context.tr('tourActive'),
+                zonesVisible: appState.viewerZonesVisible,
+                heatmapVisible: appState.viewerHeatmapVisible,
+                heatmapMetricLabel: context.tr(appState.viewerHeatmapMetric.labelKey),
+                onClose: () => _closeTour(context, appState),
+                onToggleLegend: () => setState(() => _showLegend = !_showLegend),
+                showLegend: _showLegend,
+              ),
             ),
           ),
-          if (_showLegend)
-            isNarrowPhone
-                ? Positioned(
-                    left: AppSpacing.sm,
-                    right: AppSpacing.sm,
-                    bottom: bottomInset + legendBottomOffset,
-                    child: _FullscreenLegendCard(
-                      heatmapVisible: appState.viewerHeatmapVisible,
-                    ),
-                  )
-                : Positioned(
-                    right: AppSpacing.sm,
-                    bottom: bottomInset + legendBottomOffset,
+          isNarrowPhone
+              ? Positioned(
+                  left: AppSpacing.sm,
+                  right: AppSpacing.sm,
+                  bottom: bottomInset + legendBottomOffset,
+                  child: _AnimatedOverlay(
+                    visible: _showLegend,
+                    offset: const Offset(0, 0.08),
                     child: _FullscreenLegendCard(
                       heatmapVisible: appState.viewerHeatmapVisible,
                     ),
                   ),
+                )
+              : Positioned(
+                  right: AppSpacing.sm,
+                  bottom: bottomInset + legendBottomOffset,
+                  child: _AnimatedOverlay(
+                    visible: _showLegend,
+                    offset: const Offset(0, 0.08),
+                    child: _FullscreenLegendCard(
+                      heatmapVisible: appState.viewerHeatmapVisible,
+                    ),
+                  ),
+                ),
           Positioned(
             left: AppSpacing.sm,
             right: AppSpacing.sm,
-            bottom: bottomInset + AppSpacing.sm,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.35),
-                ),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.all(6),
-                child: Row(
-                  children: <Widget>[
-                    IconButton.filledTonal(
-                      tooltip: appState.viewerZonesVisible
-                          ? context.tr('viewerHideZones')
-                          : context.tr('viewerShowZones'),
-                      onPressed: () {
-                        final next = !appState.viewerZonesVisible;
-                        appState.setViewerZonesVisible(next);
-                      },
-                      icon: Icon(
-                        appState.viewerZonesVisible
-                            ? Icons.grid_off_outlined
-                            : Icons.grid_view_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    IconButton.filledTonal(
-                      tooltip: appState.viewerHeatmapVisible
-                          ? context.tr('viewerHideHeatmap')
-                          : context.tr('viewerShowHeatmap'),
-                      onPressed: () {
-                        final next = !appState.viewerHeatmapVisible;
-                        appState.setViewerHeatmapVisible(next);
-                      },
-                      icon: Icon(
-                        appState.viewerHeatmapVisible
-                            ? Icons.layers_clear_outlined
-                            : Icons.layers_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    IconButton.outlined(
-                      tooltip: context.tr('viewerReset'),
-                      onPressed: () {
-                        appState.resetViewerState();
-                        appState.setViewerTourRunning(true);
-                      },
-                      icon: const Icon(Icons.refresh),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    IconButton.filledTonal(
-                      tooltip: _showLegend
-                          ? context.tr('viewerLegendHide')
-                          : context.tr('viewerLegendShow'),
-                      onPressed: () => setState(() => _showLegend = !_showLegend),
-                      icon: Icon(
-                        _showLegend ? Icons.legend_toggle : Icons.legend_toggle_outlined,
-                      ),
-                    ),
-                  ],
-                ),
+            bottom: dockBottom,
+            child: _AnimatedOverlay(
+              visible: _showUiChrome,
+              offset: const Offset(0, 0.08),
+              child: _TourControlDock(
+                isWideLayout: isWideLayout,
+                zonesVisible: appState.viewerZonesVisible,
+                heatmapVisible: appState.viewerHeatmapVisible,
+                showLegend: _showLegend,
+                onToggleZones: () {
+                  final next = !appState.viewerZonesVisible;
+                  appState.setViewerZonesVisible(next);
+                },
+                onToggleHeatmap: () {
+                  final next = !appState.viewerHeatmapVisible;
+                  appState.setViewerHeatmapVisible(next);
+                },
+                onReset: () {
+                  appState.resetViewerState();
+                  appState.setViewerTourRunning(true);
+                },
+                onToggleLegend: () => setState(() => _showLegend = !_showLegend),
               ),
             ),
           ),
@@ -215,6 +211,36 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
   }
 }
 
+class _AnimatedOverlay extends StatelessWidget {
+  const _AnimatedOverlay({
+    required this.visible,
+    required this.child,
+    this.offset = const Offset(0, 0.06),
+  });
+
+  final bool visible;
+  final Offset offset;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        offset: visible ? Offset.zero : offset,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          opacity: visible ? 1 : 0,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class _FullscreenLegendCard extends StatelessWidget {
   const _FullscreenLegendCard({required this.heatmapVisible});
 
@@ -228,9 +254,16 @@ class _FullscreenLegendCard extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 320),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colorScheme.surface.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colorScheme.outlineVariant),
+          color: colorScheme.surface.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.sm),
@@ -345,6 +378,274 @@ class _TourInfoChip extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TourHeaderBar extends StatelessWidget {
+  const _TourHeaderBar({
+    required this.warehouseName,
+    required this.tourActiveLabel,
+    required this.zonesVisible,
+    required this.heatmapVisible,
+    required this.heatmapMetricLabel,
+    required this.onClose,
+    required this.onToggleLegend,
+    required this.showLegend,
+  });
+
+  final String warehouseName;
+  final String tourActiveLabel;
+  final bool zonesVisible;
+  final bool heatmapVisible;
+  final String heatmapMetricLabel;
+  final VoidCallback onClose;
+  final VoidCallback onToggleLegend;
+  final bool showLegend;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final width = MediaQuery.sizeOf(context).width;
+    final showStatusChips = width >= 980;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Row(
+          children: <Widget>[
+            FilledButton.tonalIcon(
+              onPressed: onClose,
+              icon: const Icon(Icons.close_fullscreen),
+              label: Text(context.tr('viewerPauseTour')),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: _TourInfoChip(
+                title: warehouseName,
+                subtitle: tourActiveLabel,
+              ),
+            ),
+            if (showStatusChips) ...<Widget>[
+              const SizedBox(width: AppSpacing.xs),
+              _TourStatusChip(
+                icon:
+                    zonesVisible ? Icons.grid_view_outlined : Icons.grid_off_outlined,
+                label: zonesVisible ? 'Zonen an' : 'Zonen aus',
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              _TourStatusChip(
+                icon: heatmapVisible
+                    ? Icons.layers_outlined
+                    : Icons.layers_clear_outlined,
+                label: heatmapVisible ? heatmapMetricLabel : 'Heatmap aus',
+              ),
+            ],
+            const SizedBox(width: AppSpacing.xs),
+            IconButton.filledTonal(
+              tooltip: showLegend
+                  ? context.tr('viewerLegendHide')
+                  : context.tr('viewerLegendShow'),
+              onPressed: onToggleLegend,
+              icon: Icon(
+                showLegend ? Icons.legend_toggle : Icons.legend_toggle_outlined,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TourStatusChip extends StatelessWidget {
+  const _TourStatusChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TourControlDock extends StatelessWidget {
+  const _TourControlDock({
+    required this.isWideLayout,
+    required this.zonesVisible,
+    required this.heatmapVisible,
+    required this.showLegend,
+    required this.onToggleZones,
+    required this.onToggleHeatmap,
+    required this.onReset,
+    required this.onToggleLegend,
+  });
+
+  final bool isWideLayout;
+  final bool zonesVisible;
+  final bool heatmapVisible;
+  final bool showLegend;
+  final VoidCallback onToggleZones;
+  final VoidCallback onToggleHeatmap;
+  final VoidCallback onReset;
+  final VoidCallback onToggleLegend;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final controls = <Widget>[
+      _DockActionButton(
+        active: zonesVisible,
+        icon: zonesVisible ? Icons.grid_off_outlined : Icons.grid_view_outlined,
+        label: zonesVisible ? 'Zonen aus' : 'Zonen an',
+        onTap: onToggleZones,
+      ),
+      _DockActionButton(
+        active: heatmapVisible,
+        icon: heatmapVisible ? Icons.layers_clear_outlined : Icons.layers_outlined,
+        label: heatmapVisible ? 'Heatmap aus' : 'Heatmap an',
+        onTap: onToggleHeatmap,
+      ),
+      _DockActionButton(
+        active: false,
+        icon: Icons.refresh,
+        label: 'Reset',
+        onTap: onReset,
+      ),
+      _DockActionButton(
+        active: showLegend,
+        icon: showLegend ? Icons.legend_toggle : Icons.legend_toggle_outlined,
+        label: showLegend ? 'Legende aus' : 'Legende an',
+        onTap: onToggleLegend,
+      ),
+    ];
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: isWideLayout
+            ? Row(
+                children: controls
+                    .map(
+                      (button) => Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: button,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              )
+            : SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: controls
+                      .map(
+                        (button) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: button,
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _DockActionButton extends StatelessWidget {
+  const _DockActionButton({
+    required this.active,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final bool active;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final background = active
+        ? colorScheme.primaryContainer.withValues(alpha: 0.8)
+        : colorScheme.surfaceContainerHighest;
+    final foreground = active ? colorScheme.onPrimaryContainer : colorScheme.onSurface;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: active
+                ? colorScheme.primary.withValues(alpha: 0.5)
+                : colorScheme.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
           ),
         ),
       ),

@@ -60,7 +60,6 @@ class ViewerScreen extends StatelessWidget {
       );
     });
     final appState = context.read<AppState>();
-    final colorScheme = Theme.of(context).colorScheme;
     final warehouse = viewState.warehouse;
     final canUseControls = viewState.canUseControls;
     final hasBackendIssue =
@@ -89,176 +88,172 @@ class ViewerScreen extends StatelessWidget {
       metric: viewState.heatmapMetric,
       limit: isTablet ? 4 : 3,
     );
+    final useWebSplitLayout = kIsWeb && viewport.width >= 1180;
 
-    return ListView(
-      children: <Widget>[
-        _AutoGenerateModelEffect(
-          warehouseId: warehouse.id,
-          hasGeneratedModel: warehouse.generatedModel != null,
-          canUseControls: canUseControls,
-          isGeneratingModel: viewState.isGeneratingModel,
-        ),
-        _AutoRefreshWarehousesEffect(
-          isWarehousesSyncing: viewState.isWarehousesSyncing,
-          isOfflineMode: viewState.isWarehouseOfflineMode,
-        ),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
+    final viewerExperienceCard = Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            OutlinedButton.icon(
-              onPressed: () => context.go('/warehouses'),
-              icon: const Icon(Icons.arrow_back_rounded),
-              label: Text(context.tr('toWarehouseList')),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => context.go('/dashboard'),
-              icon: const Icon(Icons.dashboard_outlined),
-              label: Text(context.tr('dashboard')),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        PageSectionHeader(
-          title: context.tr('viewer'),
-          subtitle: context.tr(
-            'adapter',
-            <String, Object>{'name': context.tr(adapter.displayName)},
-          ),
-          trailing: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.96),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-              ),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        context.tr('viewerCanvasTitle'),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        context.tr(
+                          'viewerWarehouse',
+                          <String, Object>{'name': warehouse.name},
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: canUseControls
+                      ? () => _openTourFullscreen(
+                            context: context,
+                            warehouse: warehouse,
+                          )
+                      : null,
+                  icon: const Icon(Icons.fullscreen),
+                  label: Text(context.tr('viewerFullscreenTour')),
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xs),
-              child: Wrap(
-                spacing: AppSpacing.xs,
-                runSpacing: AppSpacing.xs,
-                children: <Widget>[
-                  Chip(
-                    label: Text(context.tr(adapter.statusText)),
-                    avatar: Icon(
-                      adapter.isImplemented ? Icons.check_circle : Icons.schedule,
-                      size: 18,
-                    ),
-                    backgroundColor: colorScheme.surfaceContainerHighest,
-                    side: BorderSide(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                    ),
-                  ),
-                  _ViewerBackendStatusChip(
-                    isOfflineMode: viewState.isWarehouseOfflineMode,
-                    hasError: hasBackendIssue,
-                  ),
-                  _ViewerRefreshChip(
-                    isSyncing: viewState.isWarehousesSyncing,
-                    onPressed: viewState.isWarehousesSyncing
-                        ? null
-                        : () => _syncWarehouseData(
-                              context: context,
-                              showFeedback: true,
-                              warehouseId: warehouse.id,
-                            ),
-                  ),
-                  _ViewerLastSyncChip(lastSyncAt: viewState.lastWarehouseSyncAt),
-                ],
-              ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: <Widget>[
+                _StateChip(
+                  icon: viewState.tourRunning
+                      ? Icons.directions_walk_outlined
+                      : Icons.pause_circle_outline,
+                  label: viewState.tourRunning
+                      ? context.tr('tourActive')
+                      : context.tr('tourPaused'),
+                  active: viewState.tourRunning,
+                ),
+                _StateChip(
+                  icon: viewState.zonesVisible
+                      ? Icons.grid_view_outlined
+                      : Icons.grid_off_outlined,
+                  label: viewState.zonesVisible
+                      ? context.tr('zonesVisible')
+                      : context.tr('zonesHidden'),
+                  active: viewState.zonesVisible,
+                ),
+                _StateChip(
+                  icon: viewState.heatmapVisible
+                      ? Icons.layers_outlined
+                      : Icons.layers_clear_outlined,
+                  label: viewState.heatmapVisible
+                      ? context.tr(
+                          'heatmapActiveState',
+                          <String, Object>{
+                            'metric': context.tr(viewState.heatmapMetric.labelKey),
+                          },
+                        )
+                      : context.tr('heatmapInactiveState'),
+                  active: viewState.heatmapVisible,
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              context.tr('viewerControlsHint'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.md),
-        _WarehouseMeta(warehouse: warehouse),
-        const SizedBox(height: AppSpacing.sm),
-        _StorageLocationCard(
-          warehouse: warehouse,
-          initialRack: viewState.focusRackNumber,
-          initialLevel: viewState.focusLevelNumber,
-          initialSlot: viewState.focusSlotNumber,
-          canUseControls: canUseControls,
-          samples: viewState.storageLocations,
-          prefs: viewState.storagePrefs,
-          onFocus: canUseControls
-              ? (rack, level, slot) {
-                  final match = viewState.storageLocations.firstWhere(
-                    (sample) =>
-                        sample.rackNumber == rack &&
-                        sample.levelNumber == level &&
-                        sample.slotNumber == slot,
-                    orElse: () => const WarehouseStorageLocation(
-                      placeId: '',
-                      area: '',
-                      rackNumber: 0,
-                      levelNumber: 0,
-                      slotNumber: 0,
-                      abcClass: '',
-                      status: '',
-                    ),
-                  );
-                  appState.setSelectedStorageLocation(
-                    match.rackNumber == 0 ? null : match,
-                  );
-                  appState.requestViewerStorageFocus(
-                    rack: rack,
-                    level: level,
-                    slot: slot,
-                  );
-                }
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        _StorageLocationDetailsCard(
-          selected: viewState.selectedStorageLocation,
-          fallbackRack: viewState.focusRackNumber,
-          fallbackLevel: viewState.focusLevelNumber,
-          fallbackSlot: viewState.focusSlotNumber,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        _ModelGenerationCard(
-          warehouse: warehouse,
-          isGenerating: viewState.isGeneratingModel,
-          onGenerate: canUseControls
-              ? () => _generateModel(
-                    context: context,
-                    warehouse: warehouse,
-                  )
-              : null,
-        ),
-        if (viewState.warehouseApiError != null || viewState.isWarehouseOfflineMode) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          _ViewerBackendStatusCard(
-            apiError: viewState.warehouseApiError,
-            isOfflineMode: viewState.isWarehouseOfflineMode,
-            showRetryAction: canUseControls,
-            onRetry: viewState.isGeneratingModel
-                ? null
-                : () => _generateModel(
-                      context: context,
-                      warehouse: warehouse,
-                    ),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        _ViewerStatePanel(
-          zonesVisible: viewState.zonesVisible,
-          tourRunning: viewState.tourRunning,
-          heatmapVisible: viewState.heatmapVisible,
-          heatmapMetric: viewState.heatmapMetric,
-          resetCount: viewState.resetCount,
-        ),
-        if (heatmapData.isNotEmpty) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          _HeatmapOverviewCard(
+      ),
+    );
+
+    final warehouseMetaCard = _WarehouseMeta(warehouse: warehouse);
+    final storageLocationCard = _StorageLocationCard(
+      warehouse: warehouse,
+      initialRack: viewState.focusRackNumber,
+      initialLevel: viewState.focusLevelNumber,
+      initialSlot: viewState.focusSlotNumber,
+      canUseControls: canUseControls,
+      samples: viewState.storageLocations,
+      prefs: viewState.storagePrefs,
+      onFocus: canUseControls
+          ? (rack, level, slot) {
+              final match = viewState.storageLocations.firstWhere(
+                (sample) =>
+                    sample.rackNumber == rack &&
+                    sample.levelNumber == level &&
+                    sample.slotNumber == slot,
+                orElse: () => const WarehouseStorageLocation(
+                  placeId: '',
+                  area: '',
+                  rackNumber: 0,
+                  levelNumber: 0,
+                  slotNumber: 0,
+                  abcClass: '',
+                  status: '',
+                ),
+              );
+              appState.setSelectedStorageLocation(
+                match.rackNumber == 0 ? null : match,
+              );
+              appState.requestViewerStorageFocus(
+                rack: rack,
+                level: level,
+                slot: slot,
+              );
+            }
+          : null,
+    );
+    final storageLocationDetailsCard = _StorageLocationDetailsCard(
+      selected: viewState.selectedStorageLocation,
+      fallbackRack: viewState.focusRackNumber,
+      fallbackLevel: viewState.focusLevelNumber,
+      fallbackSlot: viewState.focusSlotNumber,
+    );
+    final modelGenerationCard = _ModelGenerationCard(
+      warehouse: warehouse,
+      isGenerating: viewState.isGeneratingModel,
+      onGenerate: canUseControls
+          ? () => _generateModel(
+                context: context,
+                warehouse: warehouse,
+              )
+          : null,
+    );
+    final backendStatusCard =
+        viewState.warehouseApiError != null || viewState.isWarehouseOfflineMode
+            ? _ViewerBackendStatusCard(
+                apiError: viewState.warehouseApiError,
+                isOfflineMode: viewState.isWarehouseOfflineMode,
+                showRetryAction: canUseControls,
+                onRetry: viewState.isGeneratingModel
+                    ? null
+                    : () => _generateModel(
+                          context: context,
+                          warehouse: warehouse,
+                        ),
+              )
+            : null;
+    final viewerStatePanel = _ViewerStatePanel(
+      zonesVisible: viewState.zonesVisible,
+      tourRunning: viewState.tourRunning,
+      heatmapVisible: viewState.heatmapVisible,
+      heatmapMetric: viewState.heatmapMetric,
+      resetCount: viewState.resetCount,
+    );
+    final heatmapOverviewCard = heatmapData.isNotEmpty
+        ? _HeatmapOverviewCard(
             entries: heatmapData,
             metric: viewState.heatmapMetric,
             selectedZoneTypeFilterKey: viewState.heatmapZoneTypeFilterKey,
@@ -274,167 +269,50 @@ class ViewerScreen extends StatelessWidget {
               entry: entry,
               metric: viewState.heatmapMetric,
             ),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            context.tr('viewerCanvasTitle'),
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            context.tr(
-                              'viewerWarehouse',
-                              <String, Object>{'name': warehouse.name},
-                            ),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: canUseControls ? () => _openTourFullscreen(
-                            context: context,
-                            warehouse: warehouse,
-                          ) : null,
-                      icon: const Icon(Icons.fullscreen),
-                      label: Text(context.tr('viewerFullscreenTour')),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: <Widget>[
-                    _StateChip(
-                      icon: viewState.tourRunning
-                          ? Icons.directions_walk_outlined
-                          : Icons.pause_circle_outline,
-                      label: viewState.tourRunning
-                          ? context.tr('tourActive')
-                          : context.tr('tourPaused'),
-                      active: viewState.tourRunning,
-                    ),
-                    _StateChip(
-                      icon: viewState.zonesVisible
-                          ? Icons.grid_view_outlined
-                          : Icons.grid_off_outlined,
-                      label: viewState.zonesVisible
-                          ? context.tr('zonesVisible')
-                          : context.tr('zonesHidden'),
-                      active: viewState.zonesVisible,
-                    ),
-                    _StateChip(
-                      icon: viewState.heatmapVisible
-                          ? Icons.layers_outlined
-                          : Icons.layers_clear_outlined,
-                      label: viewState.heatmapVisible
-                          ? context.tr(
-                              'heatmapActiveState',
-                              <String, Object>{
-                                'metric': context.tr(viewState.heatmapMetric.labelKey),
-                              },
-                            )
-                          : context.tr('heatmapInactiveState'),
-                      active: viewState.heatmapVisible,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  context.tr('viewerControlsHint'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: viewerHeight,
-          child: _ViewerCanvas(
-            adapter: adapter,
-            warehouse: warehouse,
-            isGeneratingModel: viewState.isGeneratingModel,
-            zonesVisible: viewState.zonesVisible,
-            tourRunning: viewState.tourRunning,
-            heatmapVisible: viewState.heatmapVisible,
-            heatmapMetric: viewState.heatmapMetric,
-            heatmapData: heatmapData,
-            generatedModel: warehouse.generatedModel,
-            focusZoneName: viewState.focusZoneName,
-            focusRequestId: viewState.focusRequestId,
-            focusRackNumber: viewState.focusRackNumber,
-            focusLevelNumber: viewState.focusLevelNumber,
-            focusSlotNumber: viewState.focusSlotNumber,
-            focusLocationRequestId: viewState.focusLocationRequestId,
-            onZoneTap: (entry, metric) {
-              _focusAndOpenZoneDetails(
-                context: context,
-                warehouse: warehouse,
-                entry: entry,
-                metric: metric,
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _ViewerActionPanel(
-          canUseControls: canUseControls && !viewState.isGeneratingModel,
-          zonesVisible: viewState.zonesVisible,
-          tourRunning: viewState.tourRunning,
-          heatmapVisible: viewState.heatmapVisible,
-          heatmapMetric: viewState.heatmapMetric,
-          onReset: () => _onReset(
-            context: context,
-            adapter: adapter,
-            warehouse: warehouse,
-          ),
-          onToggleZones: () => _toggleZones(
-            context: context,
-            adapter: adapter,
-            warehouse: warehouse,
-          ),
-          onToggleTour: () => _toggleTour(
-            context: context,
-            adapter: adapter,
-            warehouse: warehouse,
-          ),
-          onSelectMetric: (metric) => _setHeatmapMetric(
-            context: context,
-            adapter: adapter,
-            warehouse: warehouse,
-            metric: metric,
-          ),
-          onToggleHeatmap: () => _toggleHeatmap(
-            context: context,
-            adapter: adapter,
-            warehouse: warehouse,
-          ),
-          canFocusCriticalZone: warehouse.generatedModel?.zones.isNotEmpty ?? false,
-          onFocusCriticalZone: () => _focusCriticalZone(
-            context: context,
-            warehouse: warehouse,
-            metric: viewState.heatmapMetric,
-            heatmapData: heatmapData,
-          ),
-        ),
-        if (topCriticalZones.isNotEmpty) ...<Widget>[
-          const SizedBox(height: AppSpacing.md),
-          _CriticalZonesStrip(
+          )
+        : null;
+    final viewerActionPanel = _ViewerActionPanel(
+      canUseControls: canUseControls && !viewState.isGeneratingModel,
+      zonesVisible: viewState.zonesVisible,
+      tourRunning: viewState.tourRunning,
+      heatmapVisible: viewState.heatmapVisible,
+      heatmapMetric: viewState.heatmapMetric,
+      onReset: () => _onReset(
+        context: context,
+        adapter: adapter,
+        warehouse: warehouse,
+      ),
+      onToggleZones: () => _toggleZones(
+        context: context,
+        adapter: adapter,
+        warehouse: warehouse,
+      ),
+      onToggleTour: () => _toggleTour(
+        context: context,
+        adapter: adapter,
+        warehouse: warehouse,
+      ),
+      onSelectMetric: (metric) => _setHeatmapMetric(
+        context: context,
+        adapter: adapter,
+        warehouse: warehouse,
+        metric: metric,
+      ),
+      onToggleHeatmap: () => _toggleHeatmap(
+        context: context,
+        adapter: adapter,
+        warehouse: warehouse,
+      ),
+      canFocusCriticalZone: warehouse.generatedModel?.zones.isNotEmpty ?? false,
+      onFocusCriticalZone: () => _focusCriticalZone(
+        context: context,
+        warehouse: warehouse,
+        metric: viewState.heatmapMetric,
+        heatmapData: heatmapData,
+      ),
+    );
+    final criticalZonesStrip = topCriticalZones.isNotEmpty
+        ? _CriticalZonesStrip(
             entries: topCriticalZones,
             metric: viewState.heatmapMetric,
             selectedSeverityFilterKey: viewState.heatmapSeverityFilterKey,
@@ -459,7 +337,212 @@ class ViewerScreen extends StatelessWidget {
               entry: entry,
               metric: viewState.heatmapMetric,
             ),
+          )
+        : null;
+
+    return ListView(
+      children: <Widget>[
+        _AutoGenerateModelEffect(
+          warehouseId: warehouse.id,
+          hasGeneratedModel: warehouse.generatedModel != null,
+          canUseControls: canUseControls,
+          isGeneratingModel: viewState.isGeneratingModel,
+        ),
+        _AutoRefreshWarehousesEffect(
+          isWarehousesSyncing: viewState.isWarehousesSyncing,
+          isOfflineMode: viewState.isWarehouseOfflineMode,
+        ),
+        _ViewerHeaderBar(
+          warehouseName: warehouse.name,
+          adapterStatusLabel: context.tr(adapter.statusText),
+          hasBackendIssue: hasBackendIssue,
+          isOfflineMode: viewState.isWarehouseOfflineMode,
+          isSyncing: viewState.isWarehousesSyncing,
+          lastSyncAt: viewState.lastWarehouseSyncAt,
+          onOpenWarehouses: () => context.go('/warehouses'),
+          onOpenDashboard: () => context.go('/dashboard'),
+          onRefresh: viewState.isWarehousesSyncing
+              ? null
+              : () => _syncWarehouseData(
+                    context: context,
+                    showFeedback: true,
+                    warehouseId: warehouse.id,
+                  ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        PageSectionHeader(
+          eyebrow: '3D Cockpit',
+          title: context.tr('viewer'),
+          subtitle: context.tr(
+            'viewerWarehouse',
+            <String, Object>{'name': warehouse.name},
           ),
+          badges: <Widget>[
+            _StateChip(
+              icon: viewState.tourRunning
+                  ? Icons.directions_walk_outlined
+                  : Icons.pause_circle_outline,
+              label: viewState.tourRunning
+                  ? context.tr('tourActive')
+                  : context.tr('tourPaused'),
+              active: viewState.tourRunning,
+            ),
+            _StateChip(
+              icon: viewState.heatmapVisible
+                  ? Icons.layers_outlined
+                  : Icons.layers_clear_outlined,
+              label: viewState.heatmapVisible
+                  ? context.tr(
+                      'heatmapActiveState',
+                      <String, Object>{
+                        'metric': context.tr(viewState.heatmapMetric.labelKey),
+                      },
+                    )
+                  : context.tr('heatmapInactiveState'),
+              active: viewState.heatmapVisible,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _ViewerHeroBanner(
+          warehouse: warehouse,
+          criticalZoneCount: topCriticalZones.length,
+          canUseControls: canUseControls,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (!useWebSplitLayout) ...<Widget>[
+          warehouseMetaCard,
+          const SizedBox(height: AppSpacing.sm),
+          storageLocationCard,
+          const SizedBox(height: AppSpacing.sm),
+          storageLocationDetailsCard,
+          const SizedBox(height: AppSpacing.sm),
+          modelGenerationCard,
+          if (backendStatusCard != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            backendStatusCard,
+          ],
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (useWebSplitLayout)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    viewerExperienceCard,
+                    const SizedBox(height: AppSpacing.md),
+                    SizedBox(
+                      height: viewerHeight,
+                      child: _ViewerCanvas(
+                        adapter: adapter,
+                        warehouse: warehouse,
+                        isGeneratingModel: viewState.isGeneratingModel,
+                        zonesVisible: viewState.zonesVisible,
+                        tourRunning: viewState.tourRunning,
+                        heatmapVisible: viewState.heatmapVisible,
+                        heatmapMetric: viewState.heatmapMetric,
+                        heatmapData: heatmapData,
+                        generatedModel: warehouse.generatedModel,
+                        focusZoneName: viewState.focusZoneName,
+                        focusRequestId: viewState.focusRequestId,
+                        focusRackNumber: viewState.focusRackNumber,
+                        focusLevelNumber: viewState.focusLevelNumber,
+                        focusSlotNumber: viewState.focusSlotNumber,
+                        focusLocationRequestId: viewState.focusLocationRequestId,
+                        onZoneTap: (entry, metric) {
+                          _focusAndOpenZoneDetails(
+                            context: context,
+                            warehouse: warehouse,
+                            entry: entry,
+                            metric: metric,
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    viewerActionPanel,
+                    if (criticalZonesStrip != null) ...<Widget>[
+                      const SizedBox(height: AppSpacing.md),
+                      criticalZonesStrip,
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    viewerStatePanel,
+                    if (heatmapOverviewCard != null) ...<Widget>[
+                      const SizedBox(height: AppSpacing.sm),
+                      heatmapOverviewCard,
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    warehouseMetaCard,
+                    const SizedBox(height: AppSpacing.sm),
+                    storageLocationCard,
+                    const SizedBox(height: AppSpacing.sm),
+                    storageLocationDetailsCard,
+                    const SizedBox(height: AppSpacing.sm),
+                    modelGenerationCard,
+                    if (backendStatusCard != null) ...<Widget>[
+                      const SizedBox(height: AppSpacing.sm),
+                      backendStatusCard,
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          )
+        else ...<Widget>[
+          viewerStatePanel,
+          if (heatmapOverviewCard != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            heatmapOverviewCard,
+          ],
+          const SizedBox(height: AppSpacing.md),
+          viewerExperienceCard,
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: viewerHeight,
+            child: _ViewerCanvas(
+              adapter: adapter,
+              warehouse: warehouse,
+              isGeneratingModel: viewState.isGeneratingModel,
+              zonesVisible: viewState.zonesVisible,
+              tourRunning: viewState.tourRunning,
+              heatmapVisible: viewState.heatmapVisible,
+              heatmapMetric: viewState.heatmapMetric,
+              heatmapData: heatmapData,
+              generatedModel: warehouse.generatedModel,
+              focusZoneName: viewState.focusZoneName,
+              focusRequestId: viewState.focusRequestId,
+              focusRackNumber: viewState.focusRackNumber,
+              focusLevelNumber: viewState.focusLevelNumber,
+              focusSlotNumber: viewState.focusSlotNumber,
+              focusLocationRequestId: viewState.focusLocationRequestId,
+              onZoneTap: (entry, metric) {
+                _focusAndOpenZoneDetails(
+                  context: context,
+                  warehouse: warehouse,
+                  entry: entry,
+                  metric: metric,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          viewerActionPanel,
+          if (criticalZonesStrip != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.md),
+            criticalZonesStrip,
+          ],
         ],
         if (!canUseControls) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
@@ -2155,6 +2238,129 @@ class _ViewerUiState {
       ]);
 }
 
+class _ViewerHeaderBar extends StatelessWidget {
+  const _ViewerHeaderBar({
+    required this.warehouseName,
+    required this.adapterStatusLabel,
+    required this.hasBackendIssue,
+    required this.isOfflineMode,
+    required this.isSyncing,
+    required this.lastSyncAt,
+    required this.onOpenWarehouses,
+    required this.onOpenDashboard,
+    required this.onRefresh,
+  });
+
+  final String warehouseName;
+  final String adapterStatusLabel;
+  final bool hasBackendIssue;
+  final bool isOfflineMode;
+  final bool isSyncing;
+  final DateTime? lastSyncAt;
+  final VoidCallback onOpenWarehouses;
+  final VoidCallback onOpenDashboard;
+  final VoidCallback? onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 760;
+                final navButtons = Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: onOpenWarehouses,
+                      icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                      label: Text(context.tr('toWarehouseList')),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: onOpenDashboard,
+                      icon: const Icon(Icons.dashboard_outlined, size: 18),
+                      label: Text(context.tr('dashboard')),
+                    ),
+                  ],
+                );
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        warehouseName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      navButtons,
+                    ],
+                  );
+                }
+                return Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        warehouseName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                    navButtons,
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: <Widget>[
+                Chip(
+                  avatar: const Icon(Icons.view_in_ar_outlined, size: 18),
+                  label: Text(adapterStatusLabel),
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  side: BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                ),
+                _ViewerBackendStatusChip(
+                  isOfflineMode: isOfflineMode,
+                  hasError: hasBackendIssue,
+                ),
+                _ViewerRefreshChip(
+                  isSyncing: isSyncing,
+                  onPressed: onRefresh,
+                ),
+                _ViewerLastSyncChip(lastSyncAt: lastSyncAt),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ViewerBackendStatusCard extends StatelessWidget {
   const _ViewerBackendStatusCard({
     required this.apiError,
@@ -3463,6 +3669,167 @@ class _WarehouseMeta extends StatelessWidget {
                 value: '${layout.heightM} m',
                 icon: Icons.height_outlined,
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewerHeroBanner extends StatelessWidget {
+  const _ViewerHeroBanner({
+    required this.warehouse,
+    required this.criticalZoneCount,
+    required this.canUseControls,
+  });
+
+  final Warehouse warehouse;
+  final int criticalZoneCount;
+  final bool canUseControls;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final metrics = <Widget>[
+      _HeroMetricChip(
+        icon: Icons.grid_view_rounded,
+        label: context.tr('zones'),
+        value: '${warehouse.zoneCount}',
+      ),
+      _HeroMetricChip(
+        icon: Icons.layers_outlined,
+        label: context.tr('kpiTotalSlots'),
+        value: '${warehouse.totalStorageSlots}',
+      ),
+      _HeroMetricChip(
+        icon: Icons.speed_outlined,
+        label: context.tr('kpiUtilization'),
+        value: '${warehouse.utilizationPercent}%',
+      ),
+      _HeroMetricChip(
+        icon: Icons.warning_amber_outlined,
+        label: 'Kritische Zonen',
+        value: '$criticalZoneCount',
+      ),
+      _HeroMetricChip(
+        icon: canUseControls ? Icons.tune : Icons.visibility_outlined,
+        label: 'Modus',
+        value: canUseControls ? 'Steuerung' : 'Beobachtung',
+      ),
+    ];
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            colorScheme.primaryContainer.withValues(alpha: 0.55),
+            colorScheme.secondaryContainer.withValues(alpha: 0.2),
+            colorScheme.surfaceContainerLowest,
+          ],
+        ),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Viewer Control',
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '3D-Ansicht, Heatmap und Lagerplatz-Fokus in einem Arbeitsbereich.',
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 760;
+                return Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: compact ? metrics.take(4).toList() : metrics,
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              canUseControls ? 'Modus: Steuerung aktiv' : 'Modus: Beobachtung',
+              style: textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroMetricChip extends StatelessWidget {
+  const _HeroMetricChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 16, color: colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              '$label: ',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
           ],
         ),
       ),

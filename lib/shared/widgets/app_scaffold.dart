@@ -23,6 +23,7 @@ class AppScaffold extends StatelessWidget {
     final location = GoRouterState.of(context).matchedLocation;
     final selectedIndex = _selectedIndexForLocation(location);
     final sectionTitle = _titleForLocation(location, l10n);
+    final isProfileRoute = location.startsWith('/profile');
     final isViewerFullscreen = location.startsWith('/viewer/tour');
     final selectedWarehouse = context.select<AppState, Warehouse?>(
       (state) => state.selectedWarehouse,
@@ -75,6 +76,7 @@ class AppScaffold extends StatelessWidget {
                   criticalTicketCount: criticalTicketCount,
                   viewerRiskSeverity: viewerRiskSeverity,
                   selectedWarehouseName: selectedWarehouseName,
+                  isProfileSelected: isProfileRoute,
                   onDestinationSelected: (index) =>
                       _onDestinationSelected(context, index),
                   onProfileTap: () => context.go('/profile'),
@@ -91,6 +93,7 @@ class AppScaffold extends StatelessWidget {
                         liveRisk: liveRisk,
                         viewerRiskSeverity: viewerRiskSeverity,
                         criticalTicketCount: criticalTicketCount,
+                        isProfileSelected: isProfileRoute,
                       ),
                       Expanded(
                         child: _AppBackdrop(
@@ -121,6 +124,7 @@ class AppScaffold extends StatelessWidget {
                 criticalTicketCount: criticalTicketCount,
                 viewerRiskSeverity: viewerRiskSeverity,
                 liveRisk: liveRisk,
+                isProfileSelected: isProfileRoute,
                 onDestinationSelected: (index) =>
                     _onDestinationSelected(context, index),
               ),
@@ -346,6 +350,9 @@ class AppScaffold extends StatelessWidget {
   }
 
   String _titleForLocation(String location, AppLocalizations l10n) {
+    if (location.startsWith('/dashboard')) {
+      return l10n.tr('dashboard');
+    }
     if (location.startsWith('/warehouses')) {
       return l10n.tr('warehouses');
     }
@@ -355,7 +362,7 @@ class AppScaffold extends StatelessWidget {
     if (location.startsWith('/profile')) {
       return l10n.tr('profile');
     }
-    return '';
+    return l10n.tr('dashboard');
   }
 
   void _onDestinationSelected(BuildContext context, int index) {
@@ -548,13 +555,13 @@ class _WebBodyContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final horizontalPadding = width < 1100 ? 24.0 : 32.0;
+    final horizontalPadding = width < 1100 ? 20.0 : width < 1400 ? 28.0 : 36.0;
     return SafeArea(
       top: includeTopSafeArea,
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1400),
+          constraints: const BoxConstraints(maxWidth: 1500),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               horizontalPadding,
@@ -576,6 +583,7 @@ class _WebSidebar extends StatelessWidget {
     required this.criticalTicketCount,
     required this.viewerRiskSeverity,
     required this.selectedWarehouseName,
+    required this.isProfileSelected,
     required this.onDestinationSelected,
     required this.onProfileTap,
   });
@@ -584,6 +592,7 @@ class _WebSidebar extends StatelessWidget {
   final int criticalTicketCount;
   final _ViewerRiskSeverity viewerRiskSeverity;
   final String? selectedWarehouseName;
+  final bool isProfileSelected;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onProfileTap;
 
@@ -717,7 +726,7 @@ class _WebSidebar extends StatelessWidget {
               const Spacer(),
               _SidebarNavItem(
                 label: context.tr('profile'),
-                selected: false,
+                selected: isProfileSelected,
                 icon: const Icon(Icons.person_outline, size: 18),
                 onTap: onProfileTap,
               ),
@@ -804,6 +813,7 @@ class _WebTopBar extends StatelessWidget {
     required this.liveRisk,
     required this.viewerRiskSeverity,
     required this.criticalTicketCount,
+    required this.isProfileSelected,
   });
 
   final String sectionTitle;
@@ -814,6 +824,7 @@ class _WebTopBar extends StatelessWidget {
   final ({String? zoneName, double score, bool critical}) liveRisk;
   final _ViewerRiskSeverity viewerRiskSeverity;
   final int criticalTicketCount;
+  final bool isProfileSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -841,7 +852,7 @@ class _WebTopBar extends StatelessWidget {
                   Text(
                     sectionTitle.isEmpty
                         ? 'Operations Cockpit'
-                        : 'Live\u2011Übersicht',
+                        : 'Live-Übersicht',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -875,6 +886,7 @@ class _WebTopBar extends StatelessWidget {
               const SizedBox(width: 8),
               _WebProfileButton(
                 userName: userName,
+                selected: isProfileSelected,
                 onTap: () => context.go('/profile'),
               ),
             ],
@@ -895,6 +907,7 @@ class _WebHeader extends StatelessWidget {
     required this.criticalTicketCount,
     required this.viewerRiskSeverity,
     required this.liveRisk,
+    required this.isProfileSelected,
     required this.onDestinationSelected,
   });
 
@@ -906,6 +919,7 @@ class _WebHeader extends StatelessWidget {
   final int criticalTicketCount;
   final _ViewerRiskSeverity viewerRiskSeverity;
   final ({String? zoneName, double score, bool critical}) liveRisk;
+  final bool isProfileSelected;
   final ValueChanged<int> onDestinationSelected;
 
   @override
@@ -983,6 +997,7 @@ class _WebHeader extends StatelessWidget {
             const SizedBox(width: 8),
             _WebProfileButton(
               userName: userName,
+              selected: isProfileSelected,
               onTap: () => context.go('/profile'),
             ),
           ],
@@ -1118,16 +1133,20 @@ class _ViewerDestinationIcon extends StatelessWidget {
 class _WebProfileButton extends StatelessWidget {
   const _WebProfileButton({
     required this.userName,
+    required this.selected,
     required this.onTap,
   });
 
   final String userName;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final nameParts = userName.trim().isEmpty ? const <String>[] : userName.trim().split(RegExp(r'\s+'));
+    final nameParts = userName.trim().isEmpty
+        ? const <String>[]
+        : userName.trim().split(RegExp(r'\s+'));
     final initials = nameParts.isEmpty
         ? 'U'
         : nameParts
@@ -1141,9 +1160,15 @@ class _WebProfileButton extends StatelessWidget {
       onTap: onTap,
       child: Ink(
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLowest,
+          color: selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.72)
+              : colorScheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.45)),
+          border: Border.all(
+            color: selected
+                ? colorScheme.primary.withValues(alpha: 0.45)
+                : colorScheme.outlineVariant.withValues(alpha: 0.45),
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1165,6 +1190,7 @@ class _WebProfileButton extends StatelessWidget {
                 nameParts.isEmpty ? 'User' : nameParts.first,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w600,
+                      color: selected ? colorScheme.onPrimaryContainer : null,
                     ),
               ),
               const SizedBox(width: 6),
