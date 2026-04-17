@@ -45,3 +45,30 @@ app.*.map.json
 /android/app/release
 .vercel
 data/*.csv
+
+# Large local datasets (never commit raw source dumps)
+/data/**/*.csv
+/data_reduced/**/*.csv
+/backend/**/*.db
+/backend/**/*.sqlite
+/backend/**/*.sqlite3
+
+# Local generated exports / temp files
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# Python local caches (for data scripts)
+__pycache__/
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# VS Code local workspace files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
