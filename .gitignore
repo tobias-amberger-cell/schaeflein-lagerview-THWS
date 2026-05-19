@@ -53,6 +53,15 @@ data/*.csv
 /backend/**/*.sqlite
 /backend/**/*.sqlite3
 
+# Volle warehouse.db (289 MB, >GitHub-Limit). Sample-DB darf rein.
+/data/warehouse.db
+!/data/warehouse_sample.db
+
+# Grosse Modell-Quellen / Backups bleiben lokal.
+/data/warehouse.scene.unity
+/data/warehouse.model.fbx
+/data/*.original.glb
+
 # Local generated exports / temp files
 *.tmp
 *.temp
@@ -72,3 +81,5 @@ venv/
 !.vscode/settings.json
 !.vscode/launch.json
 !.vscode/tasks.json
+# Local vendored Python deps for backend runtime
+backend/_pydeps/
