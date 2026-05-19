@@ -122,7 +122,7 @@ def load_zone_distribution() -> pd.DataFrame:
 @st.cache_data(ttl=3600)
 def load_rack_heatmap() -> pd.DataFrame:
     con = get_connection()
-    return pd.read_sql_query(
+    df = pd.read_sql_query(
         f"""
         SELECT
             CAST(COALESCE(REGAL, '0') AS INTEGER) AS regal,
@@ -131,11 +131,19 @@ def load_rack_heatmap() -> pd.DataFrame:
             SUM(CASE WHEN COALESCE(ZUSTAND, 0) > 0 THEN 1 ELSE 0 END) AS occupied
         FROM {PLATZ_TABLE}
         WHERE TRIM(COALESCE(PLATZ_ID, '')) <> ''
-        GROUP BY regal, ebene
-        ORDER BY regal, ebene
+        GROUP BY REGAL, EBENE
         """,
         con,
     )
+    # Verschiedene Roh-Strings wie "5" und "05" kollabieren auf denselben
+    # CAST-Wert. Nach dem CAST nochmal aggregieren, damit das Pivot eindeutig
+    # bleibt.
+    df = (
+        df.groupby(["regal", "ebene"], as_index=False)[["total_slots", "occupied"]]
+        .sum()
+        .sort_values(["regal", "ebene"])
+    )
+    return df
 
 
 @st.cache_data(ttl=3600)
@@ -232,7 +240,12 @@ def main() -> None:
     with tab2:
         heat = load_rack_heatmap()
         heat["auslastung_%"] = (heat["occupied"] / heat["total_slots"] * 100).round(1)
-        pivot = heat.pivot(index="ebene", columns="regal", values="auslastung_%")
+        pivot = heat.pivot_table(
+            index="ebene",
+            columns="regal",
+            values="auslastung_%",
+            aggfunc="mean",
+        )
         fig = px.imshow(
             pivot,
             color_continuous_scale="RdYlGn_r",
