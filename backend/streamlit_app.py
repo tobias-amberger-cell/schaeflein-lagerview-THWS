@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="Schaeflein LagerView v1.123",
@@ -283,7 +284,8 @@ def main() -> None:
               f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—")
     c4.metric("Ueberlastet (>100 %)", f"{overloaded:,}".replace(",", "."))
 
-    tab_hallen, tab_heat, tab_bottle, tab_free, tab_reloc, tab_abc, tab_trend, tab_top = st.tabs([
+    (tab_hallen, tab_heat, tab_bottle, tab_free, tab_reloc, tab_abc,
+     tab_trend, tab_top, tab_3d) = st.tabs([
         "Hallen",
         "Auslastungs-Heatmap",
         "Bottlenecks",
@@ -292,6 +294,7 @@ def main() -> None:
         "ABC-Analyse",
         "Durchsatz",
         "Top-Artikel",
+        "3D-Modell",
     ])
 
     with tab_hallen:
@@ -450,6 +453,37 @@ def main() -> None:
     with tab_top:
         top = load_top_articles(article_limit)
         st.dataframe(top, use_container_width=True, hide_index=True)
+
+    with tab_3d:
+        # GLB wird direkt vom GitHub-Repo (raw) geladen. Damit muss die App
+        # die ~35 MB nicht selbst ausliefern -- der Browser holt sie sich.
+        glb_url = (
+            "https://raw.githubusercontent.com/"
+            "tobias-amberger-cell/schaeflein-lagerview-THWS/"
+            "main/data/SampleScene.glb"
+        )
+        components.html(
+            f"""
+<script type="module"
+    src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
+</script>
+<div style="width:100%;height:640px;background:#f5f5f7;border-radius:8px;">
+  <model-viewer
+      src="{glb_url}"
+      alt="Schaeflein BER03 Lager"
+      camera-controls
+      touch-action="pan-y"
+      shadow-intensity="0.8"
+      exposure="1"
+      style="width:100%;height:100%;background-color:#f5f5f7;">
+  </model-viewer>
+</div>
+            """,
+            height=660,
+        )
+        st.caption(
+            f"GLB-Quelle: [{glb_url}]({glb_url}) — Stand: aktueller `main`-Branch."
+        )
 
 
 if __name__ == "__main__":
