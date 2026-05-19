@@ -24,7 +24,7 @@ import plotly.express as px
 import streamlit as st
 
 st.set_page_config(
-    page_title="Schaeflein LagerView v1.1",
+    page_title="Schaeflein LagerView v1.123",
     page_icon="📦",
     layout="wide",
 )
