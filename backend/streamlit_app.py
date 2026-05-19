@@ -24,7 +24,7 @@ import plotly.express as px
 import streamlit as st
 
 st.set_page_config(
-    page_title="Schaeflein LagerView",
+    page_title="Schaeflein LagerView v1.1",
     page_icon="📦",
     layout="wide",
 )
@@ -189,7 +189,7 @@ def load_top_articles(limit: int = 25) -> pd.DataFrame:
 
 
 def main() -> None:
-    st.title("📦 Schaeflein LagerView")
+    st.title("📦 Schaeflein LagerView v1.1")
     st.caption("Lager BER03 — Live-Auswertung aus warehouse.db")
 
     with st.sidebar:
