@@ -73,7 +73,12 @@ def get_db_path() -> str:
 
 @st.cache_resource
 def get_connection() -> sqlite3.Connection:
-    return sqlite3.connect(get_db_path(), check_same_thread=False)
+    path = get_db_path()
+    # Read-only via URI: auf Streamlit Cloud ist das DB-File read-only
+    # gemountet, ein RW-Open scheitert beim ersten Journal-Schreiben mit
+    # "attempt to write a readonly database".
+    uri = f"file:{Path(path).absolute().as_posix()}?mode=ro"
+    return sqlite3.connect(uri, uri=True, check_same_thread=False)
 
 
 def _hall_for_regal(regal: int) -> str:
@@ -231,7 +236,12 @@ def main() -> None:
     st.title("📦 Schaeflein LagerView v1.133")
     st.caption("Lager BER03 — Live-Auswertung aus warehouse.db")
 
-    platz = load_platz_full()
+    try:
+        platz = load_platz_full()
+    except Exception as exc:
+        st.error(f"Konnte Stellplatz-Daten nicht laden: {exc}")
+        st.exception(exc)
+        st.stop()
 
     with st.sidebar:
         st.header("Filter")
