@@ -189,7 +189,7 @@ def load_top_articles(limit: int = 25) -> pd.DataFrame:
 
 
 def main() -> None:
-    st.title("📦 Schaeflein LagerView v1.1")
+    st.title("📦 Schaeflein LagerView v1.133")
     st.caption("Lager BER03 — Live-Auswertung aus warehouse.db")
 
     with st.sidebar:
