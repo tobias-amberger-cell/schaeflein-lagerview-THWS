@@ -24,6 +24,7 @@ class SelectedWarehousePanel extends StatelessWidget {
     if (warehouse == null) {
       return Card(
         elevation: 0,
+        color: colorScheme.surfaceContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
           side: BorderSide(
@@ -65,6 +66,7 @@ class SelectedWarehousePanel extends StatelessWidget {
 
     return Card(
       elevation: 0,
+      color: colorScheme.surfaceContainer,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(

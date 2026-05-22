@@ -20,6 +20,7 @@ class ThroughputTrendCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return Card(
       elevation: 0,
+      color: colorScheme.surfaceContainer,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
@@ -47,7 +48,7 @@ class ThroughputTrendCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Auftragsabschlüsse pro Tag (CSV).',
+              'Auftragsabschluesse pro Tag (warehouse.db).',
               style: textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -305,3 +306,4 @@ class _TrendLabels extends StatelessWidget {
     );
   }
 }
+

@@ -42,3 +42,10 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Unity runtime optional: nur aktiv, wenn :unityLibrary in settings.gradle.kts eingebunden ist.
+    if (project.findProject(":unityLibrary") != null) {
+        implementation(project(":unityLibrary"))
+    }
+}

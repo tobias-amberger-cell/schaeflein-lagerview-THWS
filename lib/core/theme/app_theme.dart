@@ -9,12 +9,12 @@ class AppTheme {
   static const Color _brandBlue = Color(0xFF005AA4);
   static const Color _brandRed = Color(0xFFE10B2B);
   static const Color _brandInk = Color(0xFF111827);
-  static const Color _surfaceLight = Color(0xFFF7F8FB);
-  static const Color _surfaceLightLow = Color(0xFFF1F4F8);
-  static const Color _surfaceLightHigh = Color(0xFFE6EBF2);
-  static const Color _surfaceDark = Color(0xFF0F1115);
-  static const Color _surfaceDarkLow = Color(0xFF181B21);
-  static const Color _surfaceDarkHigh = Color(0xFF23262E);
+  static const Color _surfaceLight = Color(0xFFF8FAFC);
+  static const Color _surfaceLightLow = Color(0xFFFFFFFF);
+  static const Color _surfaceLightHigh = Color(0xFFF1F5F9);
+  static const Color _surfaceDark = Color(0xFF0E1523);
+  static const Color _surfaceDarkLow = Color(0xFF162033);
+  static const Color _surfaceDarkHigh = Color(0xFF1F2C42);
 
   static ThemeData get lightTheme => _buildTheme(Brightness.light);
   static ThemeData get darkTheme => _buildTheme(Brightness.dark);
@@ -26,43 +26,51 @@ class AppTheme {
     );
     final colorScheme = brightness == Brightness.dark
         ? seededScheme.copyWith(
-            primary: const Color(0xFF77B3FF),
-            onPrimary: const Color(0xFF001B3B),
-            secondary: const Color(0xFFFFB4B4),
-            onSecondary: const Color(0xFF3A0409),
-            tertiary: const Color(0xFFB9C2D0),
+            primary: const Color(0xFF82BFFF),
+            onPrimary: const Color(0xFF001A38),
+            primaryContainer: const Color(0xFF113A69),
+            onPrimaryContainer: const Color(0xFFD6E9FF),
+            secondary: const Color(0xFFFF9DAB),
+            onSecondary: const Color(0xFF4A0511),
+            secondaryContainer: const Color(0xFF6B1020),
+            onSecondaryContainer: const Color(0xFFFFD9DF),
+            tertiary: const Color(0xFFC8D4E8),
             surface: _surfaceDark,
             surfaceContainerLowest: _surfaceDark,
             surfaceContainerLow: _surfaceDarkLow,
             surfaceContainer: _surfaceDarkLow,
             surfaceContainerHigh: _surfaceDarkHigh,
-            surfaceContainerHighest: const Color(0xFF2B3038),
-            surfaceDim: const Color(0xFF0D0F12),
-            surfaceBright: const Color(0xFF343A44),
+            surfaceContainerHighest: const Color(0xFF293A56),
+            surfaceDim: const Color(0xFF0A101B),
+            surfaceBright: const Color(0xFF31445F),
             surfaceTint: Colors.transparent,
-            outline: const Color(0xFF3B4250),
-            outlineVariant: const Color(0xFF2B313B),
+            outline: const Color(0xFF445975),
+            outlineVariant: const Color(0xFF2D3E56),
           )
         : seededScheme.copyWith(
             primary: _brandBlue,
             onPrimary: Colors.white,
+            primaryContainer: const Color(0xFFE6F0FA),
+            onPrimaryContainer: const Color(0xFF003765),
             secondary: _brandRed,
             onSecondary: Colors.white,
+            secondaryContainer: const Color(0xFFFFE8EC),
+            onSecondaryContainer: const Color(0xFF6C0013),
             tertiary: _brandInk,
             surface: _surfaceLight,
             surfaceContainerLowest: Colors.white,
             surfaceContainerLow: _surfaceLightLow,
             surfaceContainer: _surfaceLightLow,
             surfaceContainerHigh: _surfaceLightHigh,
-            surfaceContainerHighest: const Color(0xFFEEF2F7),
-            surfaceDim: const Color(0xFFE0E5ED),
+            surfaceContainerHighest: const Color(0xFFEBF0F6),
+            surfaceDim: const Color(0xFFE2E8F0),
             surfaceBright: Colors.white,
             surfaceTint: Colors.transparent,
-            outline: const Color(0xFFB9C2D0),
-            outlineVariant: const Color(0xFFD6DCE6),
+            outline: const Color(0xFFB7C3D4),
+            outlineVariant: const Color(0xFFD7E0EA),
           );
 
-    final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme(
+    final baseTextTheme = GoogleFonts.dmSansTextTheme(
       ThemeData(brightness: brightness).textTheme,
     );
 
@@ -94,6 +102,13 @@ class AppTheme {
         fontWeight: FontWeight.w600,
         letterSpacing: 0.2,
       ),
+      labelSmall: GoogleFonts.dmMono(
+        textStyle: baseTextTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w500,
+          height: 1.24,
+          letterSpacing: 0.18,
+        ),
+      ),
     );
 
     return ThemeData(
@@ -116,7 +131,7 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        shadowColor: colorScheme.shadow.withValues(alpha: 0.08),
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.06),
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         color: colorScheme.surfaceContainerLowest,
@@ -124,7 +139,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+            color: colorScheme.outlineVariant.withValues(alpha: 0.38),
           ),
         ),
       ),

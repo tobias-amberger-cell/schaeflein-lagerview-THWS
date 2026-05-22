@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 class AppColors {
   const AppColors._();
 
-  // ── Brand / Primary ───────────────────────────────────────────────────
+  // Brand / Primary
   static const Color brandBlue = Color(0xFF2563EB);
   static const Color brandTeal = Color(0xFF0F766E);
   static const Color brandPurple = Color(0xFF7C3AED);
@@ -16,7 +16,7 @@ class AppColors {
   static const Color brandIndigo = Color(0xFF4F46E5);
   static const Color brandSky = Color(0xFF0EA5E9);
 
-  // ��─ Severity / Status ─────────────────────────────────────────────────
+  // Severity / Status
   static const Color success = Color(0xFF16A34A);
   static const Color successDark = Color(0xFF166534);
   static const Color successLight = Color(0xFFDCFCE7);
@@ -35,7 +35,7 @@ class AppColors {
   static const Color neutralGray = Color(0xFF6B7280);
   static const Color brownDark = Color(0xFF9A3412);
 
-  // ── ABC Analysis ──────────────────────────────────────────────────────
+  // ABC Analysis
   static const Color abcA = Color(0xFF15803D);
   static const Color abcB = Color(0xFFF59E0B);
   static const Color abcC = Color(0xFF6B7280);

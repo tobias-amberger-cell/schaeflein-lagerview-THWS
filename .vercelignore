@@ -1,0 +1,67 @@
+# --- Vercel-Ignorelisten ----------------------------------------------------
+# Was hoch soll: vercel.json, build/web/** (Flutter Web-Output)
+# Alles andere: weglassen, um den Upload schlank zu halten.
+
+# Source/Tooling braucht Vercel nicht zum statischen Serven:
+.dart_tool/
+.git/
+.idea/
+.vscode/
+
+# Native Plattform-Ordner (keine Web-Relevanz):
+android/
+ios/
+macos/
+linux/
+windows/
+web/
+
+# Backend / Streamlit / Python-Sachen:
+backend/
+_import_warehouse_api/
+.venv/
+**/_pydeps/
+**/__pycache__/
+**/*.pyc
+
+# Source dirs (Vercel deployt nur build/web als Static-Output, kein Build laeuft remote):
+lib/
+test/
+integration_test/
+assets/
+data/
+docs/
+e2e_results/
+
+# Flutter build-Output: NUR build/web behalten, alles andere weg.
+build/app/
+build/windows/
+build/linux/
+build/macos/
+build/ios/
+build/android/
+build/native_assets/
+build/flutter_assets/
+build/reports/
+build/test_cache/
+build/unit_test_assets/
+build/file_selector_android/
+build/path_provider_android/
+build/shared_preferences_android/
+build/sqlite3_flutter_libs/
+build/url_launcher_android/
+build/last_build_id
+build/*.dill
+build/*.dill.track.dill
+# Caches mit Hash-Namen direkt unter build/:
+build/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*/
+
+# Lokale SQLite / Daten:
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*.unity
+
+# Misc local-only files
+.DS_Store
+*.log

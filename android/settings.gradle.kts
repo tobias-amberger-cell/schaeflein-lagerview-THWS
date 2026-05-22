@@ -24,3 +24,12 @@ plugins {
 }
 
 include(":app")
+
+// Optional Unity runtime module (flutter_unity_widget).
+// Wird nur eingebunden, wenn ein Unity-Android-Export vorhanden ist.
+val unityExportAndroidDir = file("../unity_export/android")
+val unityLibraryDir = file("../unity_export/android/unityLibrary")
+if (unityExportAndroidDir.exists() && unityLibraryDir.exists()) {
+    include(":unityLibrary")
+    project(":unityLibrary").projectDir = unityLibraryDir
+}

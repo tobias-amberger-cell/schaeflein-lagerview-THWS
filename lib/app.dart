@@ -29,9 +29,14 @@ class _LagerViewAppState extends State<LagerViewApp> {
     _appState = AppState();
     _router = createAppRouter(_appState);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_appState.loadPersistedSettings());
-      unawaited(_appState.syncWarehouses());
+      unawaited(_bootstrapAppState());
     });
+  }
+
+  Future<void> _bootstrapAppState() async {
+    await _appState.loadPersistedSettings();
+    await _appState.prepareLocalDatabaseIfNeeded();
+    await _appState.syncWarehouses();
   }
 
   @override

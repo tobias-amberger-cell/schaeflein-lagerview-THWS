@@ -19,6 +19,7 @@ class AlertsCard extends StatelessWidget {
     final visibleItems = items.take(3).toList(growable: false);
     return Card(
       elevation: 0,
+      color: colorScheme.surfaceContainer,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(

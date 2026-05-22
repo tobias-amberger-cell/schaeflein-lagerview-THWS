@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../models/app_notification_item.dart';
-import '../../../../models/control_tower_event.dart';
-import '../../../../models/control_tower_ticket.dart';
 import '../../../../models/viewer_heatmap.dart';
 import '../../../../models/warehouse.dart';
 
@@ -60,39 +58,6 @@ Color severityColor(NotificationSeverity severity) {
   }
 }
 
-Color ticketSeverityColor(ControlTowerEventSeverity severity) {
-  switch (severity) {
-    case ControlTowerEventSeverity.info:
-      return AppColors.brandBlue;
-    case ControlTowerEventSeverity.warning:
-      return AppColors.warning;
-    case ControlTowerEventSeverity.critical:
-      return AppColors.error;
-  }
-}
-
-String ticketStatusLabel(ControlTowerTicketStatus status) {
-  switch (status) {
-    case ControlTowerTicketStatus.open:
-      return 'Offen';
-    case ControlTowerTicketStatus.inProgress:
-      return 'In Arbeit';
-    case ControlTowerTicketStatus.resolved:
-      return 'Gelöst';
-  }
-}
-
-String ticketTitle(ControlTowerTicket ticket) {
-  switch (ticket.titleKey) {
-    case 'controlTowerTicketCapacityTitle':
-      return 'Kapazität kritisch';
-    case 'controlTowerTicketInventoryTitle':
-      return 'Inventur prüfen';
-    default:
-      return ticket.titleKey;
-  }
-}
-
 String heatmapMetricLabel(ViewerHeatmapMetric metric) {
   switch (metric) {
     case ViewerHeatmapMetric.utilization:
@@ -124,7 +89,7 @@ String statusLabel(WarehouseStatus status) {
     case WarehouseStatus.online:
       return 'Online';
     case WarehouseStatus.limited:
-      return 'Eingeschränkt';
+      return 'Eingeschraenkt';
     case WarehouseStatus.maintenance:
       return 'Wartung';
   }

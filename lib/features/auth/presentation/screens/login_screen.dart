@@ -50,9 +50,6 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('loginSuccess'))),
-    );
     context.go('/dashboard');
   }
 

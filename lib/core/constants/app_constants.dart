@@ -5,6 +5,11 @@ class AppConstants {
 
   static const String appName = 'Sch\u00E4flein LagerView';
   static const String appVersion = '1.0.0-mvp';
+  static const String localWarehouseDbFileName = 'database.db';
+  static const String warehouseDbDownloadUrl = String.fromEnvironment(
+    'WAREHOUSE_DB_DOWNLOAD_URL',
+    defaultValue: 'HIER_DEIN_GITHUB_RELEASE_DOWNLOAD_LINK_EINFUEGEN',
+  );
 
   static String get apiBaseUrl {
     const fromEnv = String.fromEnvironment('API_BASE_URL', defaultValue: '');

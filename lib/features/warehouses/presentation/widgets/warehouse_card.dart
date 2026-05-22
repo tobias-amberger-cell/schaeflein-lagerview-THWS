@@ -26,27 +26,36 @@ class WarehouseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Farben/Typo aus dem Theme zentral ziehen, damit die Karte in allen Themes konsistent bleibt.
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    // Auslastungsquote fuer Progressbar berechnen und Division durch 0 vermeiden.
     final utilizationRatio = warehouse.totalStorageSlots == 0
         ? 0.0
         : warehouse.occupiedStorageSlots / warehouse.totalStorageSlots;
+    // Status wird in Farbe + Text überführt, damit Information schnell erfassbar ist.
     final statusColor = switch (warehouse.status) {
       WarehouseStatus.online => Colors.green.shade600,
       WarehouseStatus.limited => Colors.orange.shade700,
       WarehouseStatus.maintenance => Colors.red.shade700,
     };
+    final statusLabel = context.tr(warehouse.status.labelKey);
+    final statusTint = statusColor.withValues(alpha: 0.1);
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        // In sehr schmalen Breiten reduzieren wir optionale Textelemente.
         final isCompact = constraints.maxWidth < 420;
+        final isShort = constraints.maxHeight.isFinite && constraints.maxHeight < 420;
+        final showDescription = !isCompact && !isShort;
         return DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: <Color>[
+                statusTint,
                 colorScheme.surfaceContainerLowest,
                 colorScheme.surfaceContainerLow,
               ],
@@ -67,36 +76,41 @@ class WarehouseCard extends StatelessWidget {
           ),
           child: Material(
             color: Colors.transparent,
-            child: InkWell(
+              child: InkWell(
+              // Ein Tap auf die Karte bedeutet: Lager selektieren.
               onTap: onTap,
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
+              borderRadius: BorderRadius.circular(22),
+                child: Padding(
+                  padding: EdgeInsets.all(isShort ? AppSpacing.sm : AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
                     Row(
+                      // Kopfbereich: Status, Name, Ort und Favorit.
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Icon(
-                              Icons.apartment_rounded,
-                              size: 18,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  _StateBadge(
+                                    label: statusLabel,
+                                    icon: Icons.circle,
+                                    color: statusColor,
+                                  ),
+                                  if (isSelected) ...<Widget>[
+                                    const SizedBox(width: AppSpacing.xs),
+                                    _StateBadge(
+                                      label: 'Aktiv',
+                                      icon: Icons.check_circle_outline,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
                               Text(
                                 warehouse.name,
                                 maxLines: 2,
@@ -106,46 +120,46 @@ class WarehouseCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              Text(
-                                warehouse.location,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                              Row(
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    size: 14,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      warehouse.location,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: <Widget>[
-                            if (isSelected)
-                              _StateBadge(
-                                label: 'Aktiv',
-                                icon: Icons.check_circle_outline,
-                                color: colorScheme.primary,
-                              )
-                            else
-                              StatusChip(status: warehouse.status),
-                            const SizedBox(height: 4),
-                            IconButton(
-                              tooltip: isFavorite
-                                  ? context.tr('removeFavorite')
-                                  : context.tr('markFavorite'),
-                              onPressed: onToggleFavorite,
-                              visualDensity: VisualDensity.compact,
-                              icon: Icon(
-                                isFavorite ? Icons.star : Icons.star_border_rounded,
-                                color: isFavorite ? Colors.amber.shade700 : null,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: AppSpacing.xs),
+                        IconButton.filledTonal(
+                          tooltip: isFavorite
+                              ? context.tr('removeFavorite')
+                              : context.tr('markFavorite'),
+                          onPressed: onToggleFavorite,
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            isFavorite ? Icons.star : Icons.star_border_rounded,
+                            color: isFavorite ? Colors.amber.shade700 : null,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xs),
+                    SizedBox(height: isShort ? AppSpacing.xs : AppSpacing.sm),
                     Wrap(
+                      // Kern-Metadaten mit schneller visueller Erkennung.
                       spacing: AppSpacing.xs,
                       runSpacing: AppSpacing.xs,
                       children: <Widget>[
@@ -156,17 +170,32 @@ class WarehouseCard extends StatelessWidget {
                         _MetaPill(
                           icon: Icons.layers_outlined,
                           label:
-                              '${context.tr('kpiTotalSlots')}: ${warehouse.totalStorageSlots}',
+                            '${context.tr('kpiTotalSlots')}: ${warehouse.totalStorageSlots}',
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xs),
+                    SizedBox(height: isShort ? AppSpacing.xs : AppSpacing.sm),
+                    Text(
+                      'Auslastung',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
                     Row(
+                      // Prozent + absolute Belegung + visuelle Progressbar.
                       children: <Widget>[
                         Text(
                           '${warehouse.utilizationPercent}%',
                           style: textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          '${warehouse.occupiedStorageSlots}/${warehouse.totalStorageSlots}',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.xs),
@@ -183,25 +212,42 @@ class WarehouseCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.xs,
-                      runSpacing: AppSpacing.xs,
-                      children: <Widget>[
-                        _StatChip(
-                          label: '${context.tr('kpiTotalSlots')}: '
-                              '${warehouse.occupiedStorageSlots}/${warehouse.totalStorageSlots}',
-                        ),
-                        _StatChip(
-                          label: '${context.tr('kpiArticles')}: ${warehouse.articleCount}',
-                        ),
-                        _StatChip(
-                          label: 'Pick/h: ${warehouse.pickRatePerHour}',
-                        ),
-                      ],
-                    ),
-                    if (!isCompact) ...<Widget>[
-                      const SizedBox(height: AppSpacing.xs),
+                    SizedBox(height: isShort ? AppSpacing.xs : AppSpacing.sm),
+                    if (!isShort)
+                      Wrap(
+                        // Weitere KPI-Schnipsel kompakt untereinander.
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: <Widget>[
+                          _StatChip(
+                            label: '${context.tr('kpiTotalSlots')}: '
+                                '${warehouse.occupiedStorageSlots}/${warehouse.totalStorageSlots}',
+                          ),
+                          _StatChip(
+                            label: '${context.tr('kpiArticles')}: ${warehouse.articleCount}',
+                          ),
+                          _StatChip(
+                            label: 'Pick/h ca.: ${warehouse.pickRatePerHour}',
+                          ),
+                        ],
+                      )
+                    else
+                      Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: <Widget>[
+                          _StatChip(
+                            label:
+                                '${context.tr('kpiArticles')}: ${warehouse.articleCount}',
+                          ),
+                          _StatChip(
+                            label: 'Pick/h ca.: ${warehouse.pickRatePerHour}',
+                          ),
+                        ],
+                      ),
+                    if (showDescription) ...<Widget>[
+                      // Beschreibung nur bei genug Platz zeigen.
+                      const SizedBox(height: AppSpacing.sm),
                       Text(
                         warehouse.description,
                         maxLines: 1,
@@ -209,8 +255,9 @@ class WarehouseCard extends StatelessWidget {
                         style: textTheme.bodySmall,
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(height: isShort ? AppSpacing.xs : AppSpacing.sm),
                     Wrap(
+                      // CTA-Reihe: Auswahl und 3D-Viewer.
                       alignment: WrapAlignment.end,
                       runAlignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -232,7 +279,7 @@ class WarehouseCard extends StatelessWidget {
                                 ? Icons.check_circle
                                 : Icons.check_circle_outline,
                           ),
-                          label: Text(isSelected ? 'Aktiv' : 'Auswählen'),
+                          label: Text(isSelected ? 'Aktiv' : 'Auswaehlen'),
                         ),
                         FilledButton.icon(
                           onPressed: onOpenViewer,
@@ -273,6 +320,7 @@ class _StateBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Status-Badge mit leichter Tönung zur schnellen Orientierung.
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
@@ -307,6 +355,7 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Kompakter Textchip für KPI-Werte.
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -336,6 +385,7 @@ class _MetaPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Icon + Label Pill für Metadatenblöcke.
     final colorScheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -370,6 +420,7 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Legacy/Reusable Status-Chip (wird außerhalb der Karte ebenfalls genutzt).
     final color = switch (status) {
       WarehouseStatus.online => Colors.green,
       WarehouseStatus.limited => Colors.orange,

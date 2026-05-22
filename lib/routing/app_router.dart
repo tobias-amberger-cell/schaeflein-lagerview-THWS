@@ -5,17 +5,13 @@ import '../core/state/app_state.dart';
 import '../features/auth/presentation/screens/access_denied_screen.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
-import '../features/control_tower/presentation/screens/control_tower_screen.dart';
-import '../features/control_tower/presentation/screens/ticket_detail_screen.dart';
-import '../features/control_tower/presentation/screens/tickets_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/notifications/presentation/screens/notifications_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
 import '../features/profile/presentation/screens/settings_screen.dart';
-import '../features/tours/presentation/screens/tours_screen.dart';
+
 import '../features/viewer/presentation/screens/viewer_screen.dart';
 import '../features/viewer/presentation/screens/viewer_tour_fullscreen_screen.dart';
-import '../features/warehouses/presentation/screens/warehouse_detail_screen.dart';
 import '../features/warehouses/presentation/screens/warehouses_screen.dart';
 import '../shared/widgets/app_scaffold.dart';
 
@@ -82,37 +78,7 @@ GoRouter createAppRouter(AppState appState) {
               child: const DashboardScreen(),
             ),
           ),
-          GoRoute(
-            path: '/control-tower',
-            pageBuilder: (context, state) => _buildAnimatedPage(
-              state: state,
-              child: const ControlTowerScreen(),
-            ),
-          ),
-          GoRoute(
-            path: '/control-tower/tickets',
-            pageBuilder: (context, state) => _buildAnimatedPage(
-              state: state,
-              child: const ControlTowerTicketsScreen(),
-            ),
-          ),
-          GoRoute(
-            path: '/control-tower/tickets/:ticketId',
-            pageBuilder: (context, state) {
-              final ticketId = state.pathParameters['ticketId'] ?? '';
-              return _buildAnimatedPage(
-                state: state,
-                child: ControlTowerTicketDetailScreen(ticketId: ticketId),
-              );
-            },
-          ),
-          GoRoute(
-            path: '/tours',
-            pageBuilder: (context, state) => _buildAnimatedPage(
-              state: state,
-              child: const ToursScreen(),
-            ),
-          ),
+          
           GoRoute(
             path: '/warehouses',
             pageBuilder: (context, state) => _buildAnimatedPage(
@@ -122,13 +88,7 @@ GoRouter createAppRouter(AppState appState) {
           ),
           GoRoute(
             path: '/warehouses/:warehouseId',
-            pageBuilder: (context, state) {
-              final warehouseId = state.pathParameters['warehouseId'] ?? '';
-              return _buildAnimatedPage(
-                state: state,
-                child: WarehouseDetailScreen(warehouseId: warehouseId),
-              );
-            },
+            redirect: (context, state) => '/warehouses',
           ),
           GoRoute(
             path: '/viewer',
@@ -207,8 +167,5 @@ bool _hasAccessForRole({
   required String location,
   required AppState appState,
 }) {
-  if (location.startsWith('/control-tower') && !appState.canAccessControlTower) {
-    return false;
-  }
   return true;
 }
