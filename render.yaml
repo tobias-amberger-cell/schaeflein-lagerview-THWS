@@ -2,23 +2,26 @@ services:
   - type: web
     name: ssi-lagerview-api
     env: python
-    plan: starter
+    plan: free
     rootDir: .
     buildCommand: pip install -r backend/requirements.txt
     startCommand: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    disk:
-      name: warehouse-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 2
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      # Auf Free gibt es keine Persistent Disk -> DB liegt im ephemeren /tmp
+      # und wird beim ersten Zugriff aus WAREHOUSE_DB_URL geladen.
+      - key: WAREHOUSE_DB_PATH
+        value: /tmp/warehouse.db
+      # GitHub-Release-Asset: Release mit Tag "db-v1" anlegen und warehouse.db hochladen.
+      - key: WAREHOUSE_DB_URL
+        value: https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/db-v1/warehouse.db
 
   - type: web
     name: ssi-lagerview-web
     env: docker
-    plan: starter
+    plan: free
     rootDir: .
     dockerfilePath: ./Dockerfile
     envVars:
