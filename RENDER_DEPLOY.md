@@ -1,62 +1,72 @@
-# Render Deployment (Team Access)
+# Render Deployment (kostenlos, Team-Zugriff)
 
-Diese Anleitung stellt die App fuer dein Team online bereit, ohne lokale Daten zu verlieren.
+Diese Anleitung stellt die App fuer dein Team online bereit – komplett auf dem
+**kostenlosen** Render-Plan.
+
+## Wie "kostenlos" funktioniert
+
+- Beide Services laufen auf `plan: free`.
+- Free hat **keine Persistent Disk**. Die 303-MB-`warehouse.db` passt auch nicht
+  ins GitHub-Repo (100-MB-Limit pro Datei).
+- Loesung: Die DB liegt als **GitHub-Release-Asset** und wird vom Backend beim
+  **ersten Zugriff** automatisch nach `/tmp/warehouse.db` heruntergeladen.
+- Hinweis Free-Tier: Der Service schlaeft nach ~15 min Inaktivitaet ein. Beim
+  Aufwachen (Cold Start) wird die DB neu geladen -> erste Anfrage dauert laenger.
 
 ## Was bereits vorbereitet ist
 
-- `render.yaml` fuer 2 Services:
-  - `ssi-lagerview-api` (FastAPI, Python, mit Persistent Disk)
+- `render.yaml` fuer 2 Free-Services:
+  - `ssi-lagerview-api` (FastAPI, Python)
   - `ssi-lagerview-web` (Flutter Web via Docker)
-- Backend liest DB jetzt auch aus `WAREHOUSE_DB_PATH` (Render-Disk-Pfad).
-- Docker-Build nimmt `API_BASE_URL` als `--dart-define`.
+- Backend laedt die DB bei Bedarf aus `WAREHOUSE_DB_URL` nach `WAREHOUSE_DB_PATH`.
+- `/health` antwortet sofort `status: ok` (loest den Download NICHT aus), damit
+  der Render-Deploy-Healthcheck nicht in ein Timeout laeuft.
 
-## Wichtige Vorbedingung
+## Schritt 1: DB als GitHub-Release hochladen
 
-- Render `Starter` (oder hoeher), weil Persistent Disk nicht auf Free Web Services verfuegbar ist.
-- Deine `warehouse.db` liegt lokal als Backup vor (hast du schon).
+1. Auf GitHub ins Repo `tobias-amberger-cell/schaeflein-lagerview-THWS`.
+2. Rechts auf **Releases** -> **Draft a new release**.
+3. **Tag** exakt `db-v1` setzen (Target-Branch egal).
+4. Unter **Attach binaries** die lokale `data/warehouse.db` hochladen
+   (Dateiname muss `warehouse.db` bleiben).
+5. **Publish release**.
+6. Die Download-URL ist dann exakt:
+   `https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/db-v1/warehouse.db`
+   (genau diese URL steht schon in `render.yaml`).
 
-## Deployment-Schritte
+> Anderer Tag/Name? Dann in `render.yaml` den Wert von `WAREHOUSE_DB_URL`
+> entsprechend anpassen.
 
-1. Repo nach GitHub pushen (inkl. `render.yaml` und Code-Aenderungen).
-2. In Render: `New +` -> `Blueprint` -> Repo waehlen.
-3. Blueprint erzeugt 2 Services.
-4. API-Service pruefen:
-   - Name: `ssi-lagerview-api`
-   - Disk: `/opt/render/project/src/data` (2 GB)
-5. Web-Service pruefen:
-   - Name: `ssi-lagerview-web`
-   - Env: `API_BASE_URL=https://ssi-lagerview-api.onrender.com`
-   - Falls Render einen anderen Hostnamen vergibt: `API_BASE_URL` auf die echte API-URL setzen und Web-Service neu deployen.
+## Schritt 2: Blueprint in Render deployen
 
-## Datenbank auf Render-Disk legen
+1. In Render oben rechts: **+ New** -> **Blueprint**.
+2. Repo `tobias-amberger-cell/schaeflein-lagerview-THWS` waehlen.
+3. Branch `chore-render-team-deploy` waehlen.
+4. Render liest `render.yaml` und zeigt 2 Services -> **Apply / Create**.
+5. Web-Service pruefen: `API_BASE_URL` muss auf die echte API-URL zeigen.
+   Falls Render einen anderen Hostnamen vergibt, `API_BASE_URL` anpassen und
+   den Web-Service neu deployen.
 
-Die Datei muss auf der API-Disk unter exakt diesem Pfad liegen:
+## Schritt 3: Verifikation
 
-- `/opt/render/project/src/data/warehouse.db`
+1. API-Health: `https://ssi-lagerview-api.onrender.com/health`
+   - muss `status: ok` liefern.
+   - `db_ready: false` direkt nach Deploy ist normal (DB noch nicht geladen).
+2. Eine Datenanfrage ausloesen, z. B.
+   `https://ssi-lagerview-api.onrender.com/warehouses`
+   - Erster Aufruf laedt die DB (kann dauern), danach kommen die Lagerdaten.
+3. Web-App: `https://ssi-lagerview-web.onrender.com` oeffnen und pruefen, ob
+   Lagerdaten erscheinen.
 
-Optionen:
+## DB aktualisieren
 
-- Render Shell/SSH + Upload (SCP/SFTP) auf die Disk.
-- Danach API-Service neu starten.
+- Neue `warehouse.db` als Asset an dasselbe Release `db-v1` haengen (altes Asset
+  loeschen/ersetzen) – URL bleibt gleich. API-Service neu starten, damit beim
+  naechsten Zugriff frisch geladen wird.
 
-## Verifikation
+## Upgrade-Pfad (optional, falls Free zu langsam)
 
-1. API-Health aufrufen:
-   - `https://ssi-lagerview-api.onrender.com/health`
-2. Muss `status: ok` liefern und den DB-Pfad zeigen.
-3. Dann Web-App aufrufen:
-   - `https://ssi-lagerview-web.onrender.com`
-4. In der App pruefen, ob Lagerdaten sichtbar sind.
-
-## Rollback
-
-- Lokales Backup unveraendert behalten.
-- Wenn etwas schiefgeht:
-  - API stoppen
-  - alte `warehouse.db` wieder auf `/opt/render/project/src/data/warehouse.db` ersetzen
-  - API neu starten
-
-## Hinweis zu Postgres (Phase 2)
-
-Aktuell ist das sichere Ziel: Team-Zugriff ohne Datenverlust.
-Die vollstaendige Migration auf Render Postgres ist ein separater Schritt, weil mehrere SQL-Abfragen aktuell SQLite-spezifisch sind.
+- `plan: free` -> `plan: starter` und eine Persistent Disk ergaenzen; dann liegt
+  die DB dauerhaft auf der Disk (kein Cold-Start-Download mehr). Kostenpflichtig.
+- Vollstaendige Migration auf Render Postgres ist ein separater Schritt
+  (mehrere Abfragen sind aktuell SQLite-spezifisch).
