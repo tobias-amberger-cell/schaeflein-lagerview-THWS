@@ -18,6 +18,12 @@ services:
       # GitHub-Release-Asset: Release mit Tag "db-v1" anlegen und warehouse.db hochladen.
       - key: WAREHOUSE_DB_URL
         value: https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/db-v1/warehouse.db
+      # 3D-Modell: GitHub-Release sendet kein CORS -> API laedt die GLB einmal
+      # und liefert sie via /model.glb mit CORS-Headern aus.
+      - key: WAREHOUSE_MODEL_PATH
+        value: /opt/render/project/src/data/model.glb
+      - key: WAREHOUSE_MODEL_URL
+        value: https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/model-v1/SampleScene_fixed.glb
 
   - type: web
     name: ssi-lagerview-web

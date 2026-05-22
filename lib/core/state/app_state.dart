@@ -687,8 +687,9 @@ class AppState extends ChangeNotifier
   ) async {
     try {
       _warehouseAbcArticlesMap.clear();
-      // Nicht mehr als gebundeltes Asset (zu gross), sondern vom GitHub-Release.
-      const preferredModelPath = AppConstants.modelDownloadUrl;
+      // Nicht gebundelt und nicht direkt vom GitHub-Release (kein CORS),
+      // sondern ueber den CORS-faehigen API-Proxy /model.glb.
+      final preferredModelPath = '${AppConstants.apiBaseUrl}/model.glb';
 
       _warehouseExternalModelPathMap.clear();
       String? sharedModelPath;

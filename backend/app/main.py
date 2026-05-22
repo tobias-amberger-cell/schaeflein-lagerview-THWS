@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 # Lokale optionale Python-Dependencies (z. B. pandas/numpy) aus dem Repo laden.
 _LOCAL_PYDEPS = Path(__file__).resolve().parents[1] / "_pydeps"
@@ -108,6 +109,38 @@ def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(str(_ensure_db()))
     conn.row_factory = sqlite3.Row
     return conn
+
+
+_MODEL_DOWNLOAD_LOCK = threading.Lock()
+
+
+def _model_target() -> Path:
+    configured = os.getenv("WAREHOUSE_MODEL_PATH", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    return Path(__file__).resolve().parents[2] / "data" / "model.glb"
+
+
+def _ensure_model() -> Path:
+    """3D-Modell (GLB) lokal sicherstellen. GitHub-Release-Assets senden kein
+    CORS -> wir laden die GLB einmalig herunter und liefern sie ueber die API
+    aus (CORSMiddleware ergaenzt die noetigen Header)."""
+    target = _model_target()
+    if target.is_file() and target.stat().st_size > 0:
+        return target.resolve()
+
+    url = os.getenv("WAREHOUSE_MODEL_URL", "").strip()
+    if not url:
+        raise FileNotFoundError("WAREHOUSE_MODEL_URL ist nicht gesetzt")
+
+    with _MODEL_DOWNLOAD_LOCK:
+        if target.is_file() and target.stat().st_size > 0:
+            return target.resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(target.name + ".part")
+        urllib.request.urlretrieve(url, tmp)  # noqa: S310 (feste, eigene Release-URL)
+        tmp.replace(target)
+    return target.resolve()
 
 
 def _quote_identifier(identifier: str) -> str:
@@ -411,6 +444,21 @@ def health() -> dict[str, Any]:
             "db_ready": False,
             "download_configured": bool(os.getenv("WAREHOUSE_DB_URL", "").strip()),
         }
+
+
+@app.get("/model.glb")
+def get_model_glb() -> FileResponse:
+    try:
+        path = _ensure_model()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=404, detail=f"3D-Modell nicht verfuegbar: {exc}"
+        ) from exc
+    return FileResponse(
+        str(path),
+        media_type="model/gltf-binary",
+        filename="SampleScene_fixed.glb",
+    )
 
 
 @app.get("/meta/schema")
