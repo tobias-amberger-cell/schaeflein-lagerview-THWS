@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: ssi-lagerview-api
+    env: python
+    plan: starter
+    rootDir: .
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    disk:
+      name: warehouse-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 2
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+
+  - type: web
+    name: ssi-lagerview-web
+    env: docker
+    plan: starter
+    rootDir: .
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: API_BASE_URL
+        value: https://ssi-lagerview-api.onrender.com
