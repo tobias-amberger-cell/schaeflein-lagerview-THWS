@@ -90,13 +90,19 @@ class WarehouseApiService {
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
+  // Hoch gesetzt, weil der kostenlose Render-Service nach Inaktivitaet
+  // einschlaeft und beim ersten Aufruf erst hochfaehrt + die DB neu laedt
+  // (~100 s). Kuerzere Timeouts wuerden den ersten Request abbrechen.
+  static const Duration _requestTimeout = Duration(seconds: 180);
+
   Future<http.Response> _request(Future<http.Response> pending) async {
     try {
-      return await pending.timeout(const Duration(seconds: 30));
+      return await pending.timeout(_requestTimeout);
     } on TimeoutException {
       throw const WarehouseApiException(
-        'API nicht erreichbar (Timeout). Backend und URL pruefen. '
-        'Android-Emulator: http://10.0.2.2:8000, echtes Geraet: http://<PC-IP>:8000.',
+        'API nicht erreichbar (Timeout). Der kostenlose Server braucht beim '
+        'ersten Aufruf bis zu 2 Minuten zum Aufwachen - bitte gleich erneut '
+        'versuchen. Sonst Backend und URL pruefen.',
       );
     } on http.ClientException catch (error) {
       throw WarehouseApiException(
