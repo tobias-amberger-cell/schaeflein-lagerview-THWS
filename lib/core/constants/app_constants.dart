@@ -11,6 +11,15 @@ class AppConstants {
     defaultValue: 'HIER_DEIN_GITHUB_RELEASE_DOWNLOAD_LINK_EINFUEGEN',
   );
 
+  // 3D-Modell wird nicht mehr gebundlet (zu gross fuer Repo/Web-Build),
+  // sondern bei Bedarf vom GitHub-Release geladen. Per --dart-define
+  // MODEL_DOWNLOAD_URL ueberschreibbar.
+  static const String modelDownloadUrl = String.fromEnvironment(
+    'MODEL_DOWNLOAD_URL',
+    defaultValue:
+        'https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/model-v1/SampleScene_fixed.glb',
+  );
+
   static String get apiBaseUrl {
     const fromEnv = String.fromEnvironment('API_BASE_URL', defaultValue: '');
     if (fromEnv.isNotEmpty) {
