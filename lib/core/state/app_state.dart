@@ -687,7 +687,8 @@ class AppState extends ChangeNotifier
   ) async {
     try {
       _warehouseAbcArticlesMap.clear();
-      const preferredModelPath = 'assets/models/SampleScene_fixed.glb';
+      // Nicht mehr als gebundeltes Asset (zu gross), sondern vom GitHub-Release.
+      const preferredModelPath = AppConstants.modelDownloadUrl;
 
       _warehouseExternalModelPathMap.clear();
       String? sharedModelPath;

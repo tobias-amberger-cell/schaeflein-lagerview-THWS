@@ -74,5 +74,3 @@ flutter:
   assets:
     - assets/branding/schaeflein_logo.jpg
     - assets/layouts/elringklinger_etzberg14_layout.png
-    - assets/unity_source/Scenes/SampleScene.unity
-    - assets/models/SampleScene_fixed.glb
