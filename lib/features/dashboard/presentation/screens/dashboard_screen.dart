@@ -28,6 +28,7 @@ import '../widgets/putaway_candidates_panel.dart';
 import '../widgets/relocation_candidates_panel.dart';
 import '../widgets/retrieval_candidates_panel.dart';
 import '../widgets/replenishment_candidates_panel.dart';
+import '../../../viewer/presentation/widgets/glb_3d_viewer.dart';
 
 double _resolveWrapItemWidth({
   required double maxWidth,
@@ -1222,6 +1223,17 @@ class DashboardScreen extends StatelessWidget {
         ],
       ),
       _DashboardTab(
+        label: _deEn(context, de: '3D-Modell', en: '3D model'),
+        icon: Icons.view_in_ar_outlined,
+        children: <Widget>[
+          _Dashboard3DModelCard(
+            modelPath: warehouse == null
+                ? null
+                : appState.getExternalModelPathForWarehouse(warehouse.id),
+          ),
+        ],
+      ),
+      _DashboardTab(
         label: _deEn(context, de: 'Auftragsvolumen', en: 'Order volume'),
         icon: Icons.show_chart_rounded,
         children: <Widget>[
@@ -1347,6 +1359,51 @@ class _DashboardTab {
   final String label;
   final IconData icon;
   final List<Widget> children;
+}
+
+class _Dashboard3DModelCard extends StatelessWidget {
+  const _Dashboard3DModelCard({required this.modelPath});
+
+  final String? modelPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final path = modelPath?.trim() ?? '';
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: 520,
+        child: path.isEmpty
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        Icons.view_in_ar_outlined,
+                        size: 48,
+                        color: theme.colorScheme.outline,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        _deEn(
+                          context,
+                          de: 'Kein 3D-Modell verfuegbar.',
+                          en: 'No 3D model available.',
+                        ),
+                        style: theme.textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Glb3DViewer(modelPath: path),
+      ),
+    );
+  }
 }
 
 class _TopArticlesCard extends StatelessWidget {
