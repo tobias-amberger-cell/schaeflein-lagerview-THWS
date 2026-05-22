@@ -455,13 +455,10 @@ def main() -> None:
         st.dataframe(top, use_container_width=True, hide_index=True)
 
     with tab_3d:
-        # GLB wird direkt vom GitHub-Repo (raw) geladen. Damit muss die App
-        # die ~35 MB nicht selbst ausliefern -- der Browser holt sie sich.
-        glb_url = (
-            "https://raw.githubusercontent.com/"
-            "tobias-amberger-cell/schaeflein-lagerview-THWS/"
-            "main/data/SampleScene.glb"
-        )
+        # GitHub-Release-Assets senden kein CORS -> der Browser wuerde das
+        # Modell blocken. Daher ueber den CORS-faehigen API-Proxy laden
+        # (gleiche Quelle wie die Flutter-App).
+        glb_url = "https://ssi-lagerview-api.onrender.com/model.glb"
         components.html(
             f"""
 <script type="module"
@@ -482,7 +479,7 @@ def main() -> None:
             height=660,
         )
         st.caption(
-            f"GLB-Quelle: [{glb_url}]({glb_url}) — Stand: aktueller `main`-Branch."
+            f"GLB-Quelle: [{glb_url}]({glb_url}) — GitHub-Release `model-v1`."
         )
 
 
