@@ -6,9 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../models/viewer_heatmap.dart';
+import '../../../../models/warehouse_heatmap_layer.dart';
 import '../../../../models/warehouse.dart';
 
 class NativeWarehouse3DView extends StatefulWidget {
@@ -21,6 +23,7 @@ class NativeWarehouse3DView extends StatefulWidget {
     required this.heatmapVisible,
     required this.heatmapMetric,
     required this.heatmapData,
+    this.warehouseHeatmapLayer = const <WarehouseHeatmapLayerEntry>[],
     this.focusZoneName,
     this.focusRequestId = 0,
     this.focusRackNumber,
@@ -41,6 +44,7 @@ class NativeWarehouse3DView extends StatefulWidget {
   final bool heatmapVisible;
   final ViewerHeatmapMetric heatmapMetric;
   final List<ViewerHeatmapEntry> heatmapData;
+  final List<WarehouseHeatmapLayerEntry> warehouseHeatmapLayer;
   final String? focusZoneName;
   final int focusRequestId;
   final int? focusRackNumber;
@@ -2317,9 +2321,9 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
             child: SingleChildScrollView(
               child: SelectableText(
                 jsonText,
-                style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
-                    ),
+                style: GoogleFonts.dmMono(
+                  textStyle: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
               ),
             ),
           ),
@@ -2357,15 +2361,15 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Marker Export (CSV)'),
+          title: const Text('Marker Export (Tabellenformat)'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
               child: SelectableText(
                 csvText,
-                style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
-                    ),
+                style: GoogleFonts.dmMono(
+                  textStyle: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
               ),
             ),
           ),
@@ -2382,7 +2386,7 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
                 }
                 Navigator.of(dialogContext).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('CSV in Zwischenablage kopiert')),
+                  const SnackBar(content: Text('Daten in Zwischenablage kopiert')),
                 );
               },
               icon: const Icon(Icons.copy_all_outlined),
@@ -3411,6 +3415,8 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
                                     heatmapVisible: showHeatmapOverlay,
                                     heatmapMetric: widget.heatmapMetric,
                                     heatmapData: widget.heatmapData,
+                                    warehouseHeatmapLayer:
+                                        widget.warehouseHeatmapLayer,
                                     levelFilter: levelFilter,
                                     totalLevels: _availableShelfLevels,
                                   ),
@@ -4439,6 +4445,8 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
                                         heatmapVisible: widget.heatmapVisible,
                                         heatmapMetric: widget.heatmapMetric,
                                         heatmapData: widget.heatmapData,
+                                        warehouseHeatmapLayer:
+                                            widget.warehouseHeatmapLayer,
                                         levelFilter: -1,
                                         totalLevels: _availableShelfLevels,
                                       ),
@@ -4544,7 +4552,7 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
                                 ),
                               if (_inspectionMarkers.isNotEmpty)
                                 _PresetChip(
-                                  label: 'CSV',
+                                  label: 'Tabelle',
                                   onTap: () => _exportInspectionMarkersCsv(context),
                                 ),
                             ],
@@ -5174,6 +5182,47 @@ class _Warehouse3DPainter extends CustomPainter {
       final b = projection.project(base.length * t, base.width, 0.02);
       canvas.drawLine(a, b, stripePaint);
     }
+    if (_isElringLayoutProfile()) {
+      final hallSeparatorPaint = Paint()
+        ..color = colorScheme.onSurface.withValues(alpha: 0.28)
+        ..strokeWidth = 2.0;
+      for (final ratio in <double>[0.34, 0.62]) {
+        final x = base.length * ratio;
+        final a = projection.project(x, 0, 0.08);
+        final b = projection.project(x, base.width, 0.08);
+        canvas.drawLine(a, b, hallSeparatorPaint);
+      }
+      final inboundStartY = base.width * 0.80;
+      final inboundPath = Path()
+        ..moveTo(
+          projection.project(0, inboundStartY, 0.06).dx,
+          projection.project(0, inboundStartY, 0.06).dy,
+        )
+        ..lineTo(
+          projection.project(base.length, inboundStartY, 0.06).dx,
+          projection.project(base.length, inboundStartY, 0.06).dy,
+        )
+        ..lineTo(
+          projection.project(base.length, base.width, 0.06).dx,
+          projection.project(base.length, base.width, 0.06).dy,
+        )
+        ..lineTo(
+          projection.project(0, base.width, 0.06).dx,
+          projection.project(0, base.width, 0.06).dy,
+        )
+        ..close();
+      canvas.drawPath(
+        inboundPath,
+        Paint()..color = Colors.amber.withValues(alpha: 0.12),
+      );
+      canvas.drawLine(
+        projection.project(0, inboundStartY, 0.09),
+        projection.project(base.length, inboundStartY, 0.09),
+        Paint()
+          ..color = Colors.amber.withValues(alpha: 0.55)
+          ..strokeWidth = 2,
+      );
+    }
     canvas.drawPath(
       floor,
       Paint()
@@ -5236,10 +5285,15 @@ class _Warehouse3DPainter extends CustomPainter {
       canvas.drawLine(a, b, framePaint);
     }
 
-    final gateWidth = base.length / 7;
-    for (var i = 0; i < 4; i++) {
-      final x0 = (base.length * 0.12) + (i * gateWidth * 1.35);
-      final x1 = x0 + (gateWidth * 0.74);
+    final gateCount = _isElringLayoutProfile() ? 20 : 4;
+    final startRatio = _isElringLayoutProfile() ? 0.04 : 0.12;
+    final spanRatio = _isElringLayoutProfile() ? 0.92 : 0.72;
+    final gateSpan = base.length * spanRatio;
+    final gateSlotWidth = gateSpan / gateCount;
+    final gateWidth = gateSlotWidth * (_isElringLayoutProfile() ? 0.68 : 0.74);
+    for (var i = 0; i < gateCount; i++) {
+      final x0 = (base.length * startRatio) + (i * gateSlotWidth) + ((gateSlotWidth - gateWidth) * 0.5);
+      final x1 = x0 + gateWidth;
       final z0 = 0.4;
       final z1 = wallHeight * 0.38;
       _drawQuad(
@@ -6559,6 +6613,13 @@ class _Warehouse3DPainter extends CustomPainter {
     return colorScheme.primary.withValues(alpha: 0.88);
   }
 
+  bool _isElringLayoutProfile() {
+    final normalizedName = warehouse.name.toLowerCase();
+    return warehouse.id == 'schlg_rti3-03' ||
+        warehouse.id == 'elringklinger-etzberg14' ||
+        normalizedName.contains('elring');
+  }
+
   @override
   bool shouldRepaint(covariant _Warehouse3DPainter oldDelegate) {
     return oldDelegate.colorScheme != colorScheme ||
@@ -6729,6 +6790,7 @@ class _MiniMapPainter extends CustomPainter {
     required this.heatmapVisible,
     required this.heatmapMetric,
     required this.heatmapData,
+    required this.warehouseHeatmapLayer,
     required this.levelFilter,
     required this.totalLevels,
   });
@@ -6744,6 +6806,7 @@ class _MiniMapPainter extends CustomPainter {
   final bool heatmapVisible;
   final ViewerHeatmapMetric heatmapMetric;
   final List<ViewerHeatmapEntry> heatmapData;
+  final List<WarehouseHeatmapLayerEntry> warehouseHeatmapLayer;
   final int levelFilter;
   final int totalLevels;
 
@@ -6826,6 +6889,36 @@ class _MiniMapPainter extends CustomPainter {
               ..style = PaintingStyle.stroke
               ..strokeWidth = 1
               ..color = Colors.white.withValues(alpha: 0.86),
+          );
+        }
+      }
+    }
+
+    if (heatmapVisible && warehouseHeatmapLayer.isNotEmpty) {
+      final csvByRackIndex = _aggregateCsvHeatByRackIndex();
+      for (var row = 0; row < geometry.rows; row += rowStep) {
+        for (var column = 0; column < geometry.columns; column += colStep) {
+          final rawRackIndex = (row * geometry.columns) + column;
+          final csvHeat = csvByRackIndex[rawRackIndex];
+          if (csvHeat == null) {
+            continue;
+          }
+          final rackX = geometry.originX +
+              column * geometry.stepX +
+              ((geometry.stepX - geometry.rackLength) * 0.5);
+          final rackY = geometry.originY +
+              row * geometry.stepY +
+              ((geometry.stepY - geometry.rackDepth) * 0.5);
+          final x0 = (rackX / geometry.length) * size.width;
+          final y0 = (rackY / geometry.width) * size.height;
+          final w = (geometry.rackLength / geometry.length) * size.width;
+          final h = (geometry.rackDepth / geometry.width) * size.height;
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(x0, y0, w, h),
+              const Radius.circular(2),
+            ),
+            Paint()..color = _heatColor(csvHeat).withValues(alpha: 0.34),
           );
         }
       }
@@ -6922,8 +7015,29 @@ class _MiniMapPainter extends CustomPainter {
         oldDelegate.heatmapVisible != heatmapVisible ||
         oldDelegate.heatmapMetric != heatmapMetric ||
         oldDelegate.heatmapData != heatmapData ||
+        oldDelegate.warehouseHeatmapLayer != warehouseHeatmapLayer ||
         oldDelegate.levelFilter != levelFilter ||
         oldDelegate.totalLevels != totalLevels;
+  }
+
+  Map<int, double> _aggregateCsvHeatByRackIndex() {
+    final totalRackCount = (geometry.rows * geometry.columns).clamp(1, 1000000);
+    final sumByRack = <int, double>{};
+    final countByRack = <int, int>{};
+    for (final entry in warehouseHeatmapLayer) {
+      if (entry.regal <= 0) {
+        continue;
+      }
+      final rackIndex = (entry.regal - 1) % totalRackCount;
+      sumByRack[rackIndex] = (sumByRack[rackIndex] ?? 0) + entry.utilizationUnit;
+      countByRack[rackIndex] = (countByRack[rackIndex] ?? 0) + 1;
+    }
+    final result = <int, double>{};
+    for (final entry in sumByRack.entries) {
+      final count = countByRack[entry.key] ?? 1;
+      result[entry.key] = (entry.value / count).clamp(0, 1).toDouble();
+    }
+    return result;
   }
 
   Color _heatColor(double value) {
@@ -7311,3 +7425,4 @@ class _VirtualJoystickState extends State<_VirtualJoystick> {
     widget.onChanged(Offset.zero);
   }
 }
+

@@ -1,0 +1,10 @@
+{
+  "dataUrl": "Build/Warehouse.data.unityweb",
+  "frameworkUrl": "Build/Warehouse.framework.js.unityweb",
+  "codeUrl": "Build/Warehouse.wasm.unityweb",
+  "loaderUrl": "Build/Warehouse.loader.js",
+  "streamingAssetsUrl": "StreamingAssets",
+  "companyName": "Warehouse",
+  "productName": "Warehouse",
+  "productVersion": "1.0.0"
+}

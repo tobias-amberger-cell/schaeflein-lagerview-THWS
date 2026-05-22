@@ -37,16 +37,6 @@ mixin SettingsStateMixin on ChangeNotifier {
   static const String prefUserRole = 'settings.user_role';
   static const String prefAutoEscFirstMinutes = 'settings.auto_escalation_first';
   static const String prefAutoEscSecondMinutes = 'settings.auto_escalation_second';
-  static const String prefControlTowerEventStatusFilter =
-      'settings.control_tower.event_status_filter';
-  static const String prefControlTowerEventSeverityFilter =
-      'settings.control_tower.event_severity_filter';
-  static const String prefControlTowerEventTimeFilter =
-      'settings.control_tower.event_time_filter';
-  static const String prefControlTowerEventVisibleCount =
-      'settings.control_tower.event_visible_count';
-  static const String prefControlTowerAuditVisibleCount =
-      'settings.control_tower.audit_visible_count';
   static const String prefViewerHeatmapZoneTypeFilter =
       'settings.viewer.heatmap_zone_type_filter';
   static const String prefViewerHeatmapSeverityFilter =
@@ -67,11 +57,6 @@ mixin SettingsStateMixin on ChangeNotifier {
   UserRole settingsUserRole = UserRole.operator;
   int settingsAutoEscalationFirstStepMinutes = 0;
   int settingsAutoEscalationSecondStepMinutes = 30;
-  String settingsControlTowerEventStatusFilter = 'open';
-  String settingsControlTowerEventSeverityFilter = 'all';
-  String settingsControlTowerEventTimeFilter = 'last24Hours';
-  int settingsControlTowerEventVisibleCount = 10;
-  int settingsControlTowerAuditVisibleCount = 8;
   String settingsViewerHeatmapZoneTypeFilter = 'all';
   String settingsViewerHeatmapSeverityFilter = 'all';
   bool settingsViewerHeatmapLiveModeEnabled = !kIsWeb;
@@ -95,11 +80,6 @@ mixin SettingsStateMixin on ChangeNotifier {
   int get autoEscalationSecondStepMinutes => settingsAutoEscalationSecondStepMinutes;
   DateTime? get settingsLastSavedAtValue => settingsLastSavedAt;
   bool get hasLoadedPersistedSettings => settingsHasLoadedPersistedSettings;
-  String get controlTowerEventStatusFilter => settingsControlTowerEventStatusFilter;
-  String get controlTowerEventSeverityFilter => settingsControlTowerEventSeverityFilter;
-  String get controlTowerEventTimeFilter => settingsControlTowerEventTimeFilter;
-  int get controlTowerEventVisibleCount => settingsControlTowerEventVisibleCount;
-  int get controlTowerAuditVisibleCount => settingsControlTowerAuditVisibleCount;
   String get viewerHeatmapZoneTypeFilter => settingsViewerHeatmapZoneTypeFilter;
   String get viewerHeatmapSeverityFilter => settingsViewerHeatmapSeverityFilter;
   bool get viewerHeatmapLiveModeEnabled => settingsViewerHeatmapLiveModeEnabled;
@@ -112,9 +92,6 @@ mixin SettingsStateMixin on ChangeNotifier {
   bool get canToggleFavorites => settingsUserRole != UserRole.viewer;
   bool get canManageWarehouses => settingsUserRole != UserRole.viewer;
   bool get canExportReports => settingsUserRole != UserRole.viewer;
-  bool get canAccessControlTower => settingsUserRole != UserRole.viewer;
-  bool get canAcknowledgeControlTowerEvents => settingsUserRole != UserRole.viewer;
-  bool get canEscalateControlTowerEvents => settingsUserRole != UserRole.viewer;
 
   AutoEscalationPreset get autoEscalationPreset {
     if (settingsAutoEscalationFirstStepMinutes == 15 &&
@@ -148,21 +125,6 @@ mixin SettingsStateMixin on ChangeNotifier {
     settingsAutoEscalationSecondStepMinutes =
         settingsPrefs?.getInt(prefAutoEscSecondMinutes) ??
             settingsAutoEscalationSecondStepMinutes;
-    settingsControlTowerEventStatusFilter =
-        settingsPrefs?.getString(prefControlTowerEventStatusFilter) ??
-            settingsControlTowerEventStatusFilter;
-    settingsControlTowerEventSeverityFilter =
-        settingsPrefs?.getString(prefControlTowerEventSeverityFilter) ??
-            settingsControlTowerEventSeverityFilter;
-    settingsControlTowerEventTimeFilter =
-        settingsPrefs?.getString(prefControlTowerEventTimeFilter) ??
-            settingsControlTowerEventTimeFilter;
-    settingsControlTowerEventVisibleCount =
-        settingsPrefs?.getInt(prefControlTowerEventVisibleCount) ??
-            settingsControlTowerEventVisibleCount;
-    settingsControlTowerAuditVisibleCount =
-        settingsPrefs?.getInt(prefControlTowerAuditVisibleCount) ??
-            settingsControlTowerAuditVisibleCount;
     settingsViewerHeatmapZoneTypeFilter =
         settingsPrefs?.getString(prefViewerHeatmapZoneTypeFilter) ??
             settingsViewerHeatmapZoneTypeFilter;
@@ -263,28 +225,6 @@ mixin SettingsStateMixin on ChangeNotifier {
         prefAutoEscFirstMinutes, settingsAutoEscalationFirstStepMinutes);
     settingsPrefs?.setInt(
         prefAutoEscSecondMinutes, settingsAutoEscalationSecondStepMinutes);
-    touchSettingsSaved();
-    notifyListeners();
-  }
-
-  void setControlTowerUiState({
-    required String eventStatusFilter,
-    required String eventSeverityFilter,
-    required String eventTimeFilter,
-    required int eventVisibleCount,
-    required int auditVisibleCount,
-  }) {
-    settingsControlTowerEventStatusFilter = eventStatusFilter;
-    settingsControlTowerEventSeverityFilter = eventSeverityFilter;
-    settingsControlTowerEventTimeFilter = eventTimeFilter;
-    settingsControlTowerEventVisibleCount = eventVisibleCount;
-    settingsControlTowerAuditVisibleCount = auditVisibleCount;
-    settingsPrefs?.setString(prefControlTowerEventStatusFilter, eventStatusFilter);
-    settingsPrefs?.setString(
-        prefControlTowerEventSeverityFilter, eventSeverityFilter);
-    settingsPrefs?.setString(prefControlTowerEventTimeFilter, eventTimeFilter);
-    settingsPrefs?.setInt(prefControlTowerEventVisibleCount, eventVisibleCount);
-    settingsPrefs?.setInt(prefControlTowerAuditVisibleCount, auditVisibleCount);
     touchSettingsSaved();
     notifyListeners();
   }

@@ -6,19 +6,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../models/viewer_heatmap.dart';
+import '../../../../models/warehouse_heatmap_layer.dart';
 import '../../../../models/warehouse.dart';
 import '../../../../shared/widgets/abc_analysis_bar.dart';
 import '../../../../shared/widgets/empty_state.dart';
-import '../../../../shared/widgets/page_section_header.dart';
+import '../../../../shared/widgets/status_pill.dart';
 import '../../domain/viewer_adapter.dart';
 import '../../domain/viewer_adapter_factory.dart';
 import '../../domain/viewer_type.dart';
+import '../widgets/glb_3d_viewer.dart';
+import '../widgets/heatmap_zone_overlay.dart';
 import '../widgets/native_warehouse_3d_view.dart';
+import '../widgets/unity_runtime_view.dart';
+import '../widgets/unity_source_notice.dart';
+
+String _fileNameFromPath(String path) {
+  final normalized = path.trim();
+  if (normalized.isEmpty) {
+    return path;
+  }
+  final parts = normalized.split(RegExp(r'[\\/]'));
+  return parts.isEmpty ? normalized : parts.last;
+}
 
 class ViewerScreen extends StatelessWidget {
   const ViewerScreen({super.key});
@@ -26,7 +42,7 @@ class ViewerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewState = context.select<AppState, _ViewerUiState>((state) {
-      final warehouse = state.selectedWarehouse;
+      final warehouse = state.riskFocusWarehouse;
       return _ViewerUiState(
         warehouse: warehouse,
         canUseControls: state.canUseViewerControls,
@@ -56,7 +72,12 @@ class ViewerScreen extends StatelessWidget {
         warehouseApiError: state.warehouseApiError,
         isWarehouseOfflineMode: state.isWarehouseOfflineMode,
         isGeneratingModel:
-            warehouse != null && state.hasModelGenerationInProgress(warehouse.id),
+            warehouse != null &&
+            state.hasModelGenerationInProgress(warehouse.id),
+        warehouseHeatmapLayer: state.warehouseHeatmapLayer,
+        externalModelPath: warehouse == null
+            ? null
+            : state.getExternalModelPathForWarehouse(warehouse.id),
       );
     });
     final appState = context.read<AppState>();
@@ -67,111 +88,94 @@ class ViewerScreen extends StatelessWidget {
         viewState.warehouseApiError!.trim().isNotEmpty;
 
     if (warehouse == null) {
+      unawaited(appState.syncWarehouses(force: true));
+      final isSyncing = viewState.isWarehousesSyncing;
+      final message = isSyncing
+          ? 'Lagerdaten werden aus der API geladen...'
+          : (viewState.warehouseApiError?.trim().isNotEmpty ?? false)
+              ? viewState.warehouseApiError!.trim()
+              : 'Keine Lagerdaten aus der API gefunden. Bitte API pruefen und erneut laden.';
       return EmptyState(
         icon: Icons.view_in_ar_outlined,
-        title: context.tr('emptyViewerTitle'),
-        message: context.tr('emptyViewerMessage'),
-        actionLabel: context.tr('toWarehouseList'),
-        onAction: () => context.go('/warehouses'),
+        title: '3D Ansicht wird vorbereitet',
+        message: message,
+        actionLabel: isSyncing ? null : context.tr('retry'),
+        onAction: isSyncing ? null : () => appState.syncWarehouses(force: true),
       );
     }
+    unawaited(
+      appState.ensureStorageLocationsLoadedForWarehouse(
+        warehouse.id,
+        limit: 120,
+      ),
+    );
+    unawaited(appState.ensureWarehouseHeatmapLayerLoaded());
 
     final adapter = ViewerAdapterFactory.create(viewState.viewerType);
     final heatmapData = _buildHeatmapData(warehouse);
     final viewport = MediaQuery.sizeOf(context);
     final isTablet = viewport.shortestSide >= 700;
-    final viewerHeight = (isTablet ? viewport.height * 0.62 : viewport.height * 0.48)
-        .clamp(360.0, 820.0)
-        .toDouble();
-    final topCriticalZones = _topCriticalZones(
-      data: heatmapData,
-      metric: viewState.heatmapMetric,
-      limit: isTablet ? 4 : 3,
-    );
+    final viewerHeight =
+        (isTablet ? viewport.height * 0.72 : viewport.height * 0.58)
+            .clamp(420.0, 900.0)
+            .toDouble();
     final useWebSplitLayout = kIsWeb && viewport.width >= 1180;
 
-    final viewerExperienceCard = Card(
+    final viewerCanvasHeaderCard = Card(
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        context.tr('viewerCanvasTitle'),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        context.tr(
-                          'viewerWarehouse',
-                          <String, Object>{'name': warehouse.name},
-                        ),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+            Expanded(
+              child: Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  Text(
+                    context.tr('viewerCanvasTitle'),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                FilledButton.icon(
-                  onPressed: canUseControls
-                      ? () => _openTourFullscreen(
-                            context: context,
-                            warehouse: warehouse,
-                          )
-                      : null,
-                  icon: const Icon(Icons.fullscreen),
-                  label: Text(context.tr('viewerFullscreenTour')),
-                ),
-              ],
+                  StatusPill(
+                    icon: Icons.warehouse_outlined,
+                    label: warehouse.name,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.66),
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    borderColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.24),
+                  ),
+                  if (viewState.externalModelPath != null)
+                    StatusPill(
+                      icon: Icons.view_in_ar_outlined,
+                      label: _fileNameFromPath(viewState.externalModelPath!),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                      foregroundColor: Theme.of(context).colorScheme.onSurface,
+                      borderColor: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.45),
+                    ),
+                ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: <Widget>[
-                _StateChip(
-                  icon: viewState.tourRunning
-                      ? Icons.directions_walk_outlined
-                      : Icons.pause_circle_outline,
-                  label: viewState.tourRunning
-                      ? context.tr('tourActive')
-                      : context.tr('tourPaused'),
-                  active: viewState.tourRunning,
-                ),
-                _StateChip(
-                  icon: viewState.zonesVisible
-                      ? Icons.grid_view_outlined
-                      : Icons.grid_off_outlined,
-                  label: viewState.zonesVisible
-                      ? context.tr('zonesVisible')
-                      : context.tr('zonesHidden'),
-                  active: viewState.zonesVisible,
-                ),
-                _StateChip(
-                  icon: viewState.heatmapVisible
-                      ? Icons.layers_outlined
-                      : Icons.layers_clear_outlined,
-                  label: viewState.heatmapVisible
-                      ? context.tr(
-                          'heatmapActiveState',
-                          <String, Object>{
-                            'metric': context.tr(viewState.heatmapMetric.labelKey),
-                          },
-                        )
-                      : context.tr('heatmapInactiveState'),
-                  active: viewState.heatmapVisible,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              context.tr('viewerControlsHint'),
-              style: Theme.of(context).textTheme.bodySmall,
+            IconButton.filledTonal(
+              onPressed: canUseControls
+                  ? () => _openTourFullscreen(
+                      context: context,
+                      warehouse: warehouse,
+                    )
+                  : null,
+              tooltip: context.tr('viewerFullscreenTour'),
+              icon: const Icon(Icons.fullscreen_rounded),
             ),
           ],
         ),
@@ -225,32 +229,29 @@ class ViewerScreen extends StatelessWidget {
       warehouse: warehouse,
       isGenerating: viewState.isGeneratingModel,
       onGenerate: canUseControls
-          ? () => _generateModel(
-                context: context,
-                warehouse: warehouse,
-              )
+          ? () => _generateModel(context: context, warehouse: warehouse)
           : null,
     );
+    final externalModelCard = viewState.externalModelPath == null
+        ? null
+        : _ExternalModelCard(modelPath: viewState.externalModelPath!);
     final backendStatusCard =
         viewState.warehouseApiError != null || viewState.isWarehouseOfflineMode
-            ? _ViewerBackendStatusCard(
-                apiError: viewState.warehouseApiError,
-                isOfflineMode: viewState.isWarehouseOfflineMode,
-                showRetryAction: canUseControls,
-                onRetry: viewState.isGeneratingModel
-                    ? null
-                    : () => _generateModel(
-                          context: context,
-                          warehouse: warehouse,
-                        ),
-              )
-            : null;
-    final viewerStatePanel = _ViewerStatePanel(
-      zonesVisible: viewState.zonesVisible,
-      tourRunning: viewState.tourRunning,
-      heatmapVisible: viewState.heatmapVisible,
-      heatmapMetric: viewState.heatmapMetric,
-      resetCount: viewState.resetCount,
+        ? _ViewerBackendStatusCard(
+            apiError: viewState.warehouseApiError,
+            isOfflineMode: viewState.isWarehouseOfflineMode,
+            showRetryAction: canUseControls,
+            onRetry: viewState.isGeneratingModel
+                ? null
+                : () => _generateModel(context: context, warehouse: warehouse),
+          )
+        : null;
+    final viewerDetailsPanel = _ViewerDetailsPanel(
+      warehouseMetaCard: warehouseMetaCard,
+      storageLocationDetailsCard: storageLocationDetailsCard,
+      modelGenerationCard: modelGenerationCard,
+      externalModelCard: externalModelCard,
+      backendStatusCard: backendStatusCard,
     );
     final heatmapOverviewCard = heatmapData.isNotEmpty
         ? _HeatmapOverviewCard(
@@ -259,10 +260,8 @@ class ViewerScreen extends StatelessWidget {
             selectedZoneTypeFilterKey: viewState.heatmapZoneTypeFilterKey,
             onZoneTypeFilterChanged: (value) =>
                 _setHeatmapZoneTypeFilter(context: context, value: value),
-            onFocusTopZone: (entry) => _requestFocusOnZone(
-              context: context,
-              zoneName: entry.zoneName,
-            ),
+            onFocusTopZone: (entry) =>
+                _requestFocusOnZone(context: context, zoneName: entry.zoneName),
             onOpenTopZoneDetails: (entry) => _openZoneDetails(
               context: context,
               warehouse: warehouse,
@@ -277,21 +276,15 @@ class ViewerScreen extends StatelessWidget {
       tourRunning: viewState.tourRunning,
       heatmapVisible: viewState.heatmapVisible,
       heatmapMetric: viewState.heatmapMetric,
-      onReset: () => _onReset(
-        context: context,
-        adapter: adapter,
-        warehouse: warehouse,
-      ),
+      onReset: () =>
+          _onReset(context: context, adapter: adapter, warehouse: warehouse),
       onToggleZones: () => _toggleZones(
         context: context,
         adapter: adapter,
         warehouse: warehouse,
       ),
-      onToggleTour: () => _toggleTour(
-        context: context,
-        adapter: adapter,
-        warehouse: warehouse,
-      ),
+      onToggleTour: () =>
+          _toggleTour(context: context, adapter: adapter, warehouse: warehouse),
       onSelectMetric: (metric) => _setHeatmapMetric(
         context: context,
         adapter: adapter,
@@ -311,47 +304,8 @@ class ViewerScreen extends StatelessWidget {
         heatmapData: heatmapData,
       ),
     );
-    final criticalZonesStrip = topCriticalZones.isNotEmpty
-        ? _CriticalZonesStrip(
-            entries: topCriticalZones,
-            metric: viewState.heatmapMetric,
-            selectedSeverityFilterKey: viewState.heatmapSeverityFilterKey,
-            selectedZoneTypeFilterKey: viewState.heatmapZoneTypeFilterKey,
-            liveModeEnabled: viewState.heatmapLiveModeEnabled,
-            autoFocusEnabled: viewState.heatmapAutoFocusEnabled,
-            onSeverityFilterChanged: (value) =>
-                _setHeatmapSeverityFilter(context: context, value: value),
-            onZoneTypeFilterChanged: (value) =>
-                _setHeatmapZoneTypeFilter(context: context, value: value),
-            onLiveModeChanged: (value) =>
-                _setHeatmapLiveMode(context: context, value: value),
-            onAutoFocusChanged: (value) =>
-                _setHeatmapAutoFocus(context: context, value: value),
-            onTapZone: (entry) => _requestFocusOnZone(
-              context: context,
-              zoneName: entry.zoneName,
-            ),
-            onOpenDetails: (entry) => _openZoneDetails(
-              context: context,
-              warehouse: warehouse,
-              entry: entry,
-              metric: viewState.heatmapMetric,
-            ),
-          )
-        : null;
-
     return ListView(
       children: <Widget>[
-        _AutoGenerateModelEffect(
-          warehouseId: warehouse.id,
-          hasGeneratedModel: warehouse.generatedModel != null,
-          canUseControls: canUseControls,
-          isGeneratingModel: viewState.isGeneratingModel,
-        ),
-        _AutoRefreshWarehousesEffect(
-          isWarehousesSyncing: viewState.isWarehousesSyncing,
-          isOfflineMode: viewState.isWarehouseOfflineMode,
-        ),
         _ViewerHeaderBar(
           warehouseName: warehouse.name,
           adapterStatusLabel: context.tr(adapter.statusText),
@@ -364,66 +318,12 @@ class ViewerScreen extends StatelessWidget {
           onRefresh: viewState.isWarehousesSyncing
               ? null
               : () => _syncWarehouseData(
-                    context: context,
-                    showFeedback: true,
-                    warehouseId: warehouse.id,
-                  ),
+                  context: context,
+                  showFeedback: true,
+                  warehouseId: warehouse.id,
+                ),
         ),
         const SizedBox(height: AppSpacing.md),
-        PageSectionHeader(
-          eyebrow: '3D Cockpit',
-          title: context.tr('viewer'),
-          subtitle: context.tr(
-            'viewerWarehouse',
-            <String, Object>{'name': warehouse.name},
-          ),
-          badges: <Widget>[
-            _StateChip(
-              icon: viewState.tourRunning
-                  ? Icons.directions_walk_outlined
-                  : Icons.pause_circle_outline,
-              label: viewState.tourRunning
-                  ? context.tr('tourActive')
-                  : context.tr('tourPaused'),
-              active: viewState.tourRunning,
-            ),
-            _StateChip(
-              icon: viewState.heatmapVisible
-                  ? Icons.layers_outlined
-                  : Icons.layers_clear_outlined,
-              label: viewState.heatmapVisible
-                  ? context.tr(
-                      'heatmapActiveState',
-                      <String, Object>{
-                        'metric': context.tr(viewState.heatmapMetric.labelKey),
-                      },
-                    )
-                  : context.tr('heatmapInactiveState'),
-              active: viewState.heatmapVisible,
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _ViewerHeroBanner(
-          warehouse: warehouse,
-          criticalZoneCount: topCriticalZones.length,
-          canUseControls: canUseControls,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (!useWebSplitLayout) ...<Widget>[
-          warehouseMetaCard,
-          const SizedBox(height: AppSpacing.sm),
-          storageLocationCard,
-          const SizedBox(height: AppSpacing.sm),
-          storageLocationDetailsCard,
-          const SizedBox(height: AppSpacing.sm),
-          modelGenerationCard,
-          if (backendStatusCard != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            backendStatusCard,
-          ],
-          const SizedBox(height: AppSpacing.md),
-        ],
         if (useWebSplitLayout)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,7 +333,7 @@ class ViewerScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    viewerExperienceCard,
+                    viewerCanvasHeaderCard,
                     const SizedBox(height: AppSpacing.md),
                     SizedBox(
                       height: viewerHeight,
@@ -446,13 +346,16 @@ class ViewerScreen extends StatelessWidget {
                         heatmapVisible: viewState.heatmapVisible,
                         heatmapMetric: viewState.heatmapMetric,
                         heatmapData: heatmapData,
+                        warehouseHeatmapLayer: viewState.warehouseHeatmapLayer,
                         generatedModel: warehouse.generatedModel,
                         focusZoneName: viewState.focusZoneName,
                         focusRequestId: viewState.focusRequestId,
                         focusRackNumber: viewState.focusRackNumber,
                         focusLevelNumber: viewState.focusLevelNumber,
                         focusSlotNumber: viewState.focusSlotNumber,
-                        focusLocationRequestId: viewState.focusLocationRequestId,
+                        focusLocationRequestId:
+                            viewState.focusLocationRequestId,
+                        externalModelPath: viewState.externalModelPath,
                         onZoneTap: (entry, metric) {
                           _focusAndOpenZoneDetails(
                             context: context,
@@ -465,9 +368,9 @@ class ViewerScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     viewerActionPanel,
-                    if (criticalZonesStrip != null) ...<Widget>[
+                    if (heatmapOverviewCard != null) ...<Widget>[
                       const SizedBox(height: AppSpacing.md),
-                      criticalZonesStrip,
+                      heatmapOverviewCard,
                     ],
                   ],
                 ),
@@ -478,36 +381,16 @@ class ViewerScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    viewerStatePanel,
-                    if (heatmapOverviewCard != null) ...<Widget>[
-                      const SizedBox(height: AppSpacing.sm),
-                      heatmapOverviewCard,
-                    ],
-                    const SizedBox(height: AppSpacing.sm),
-                    warehouseMetaCard,
-                    const SizedBox(height: AppSpacing.sm),
                     storageLocationCard,
-                    const SizedBox(height: AppSpacing.sm),
-                    storageLocationDetailsCard,
-                    const SizedBox(height: AppSpacing.sm),
-                    modelGenerationCard,
-                    if (backendStatusCard != null) ...<Widget>[
-                      const SizedBox(height: AppSpacing.sm),
-                      backendStatusCard,
-                    ],
+                    const SizedBox(height: AppSpacing.md),
+                    viewerDetailsPanel,
                   ],
                 ),
               ),
             ],
           )
         else ...<Widget>[
-          viewerStatePanel,
-          if (heatmapOverviewCard != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            heatmapOverviewCard,
-          ],
-          const SizedBox(height: AppSpacing.md),
-          viewerExperienceCard,
+          viewerCanvasHeaderCard,
           const SizedBox(height: AppSpacing.md),
           SizedBox(
             height: viewerHeight,
@@ -520,6 +403,7 @@ class ViewerScreen extends StatelessWidget {
               heatmapVisible: viewState.heatmapVisible,
               heatmapMetric: viewState.heatmapMetric,
               heatmapData: heatmapData,
+              warehouseHeatmapLayer: viewState.warehouseHeatmapLayer,
               generatedModel: warehouse.generatedModel,
               focusZoneName: viewState.focusZoneName,
               focusRequestId: viewState.focusRequestId,
@@ -527,6 +411,7 @@ class ViewerScreen extends StatelessWidget {
               focusLevelNumber: viewState.focusLevelNumber,
               focusSlotNumber: viewState.focusSlotNumber,
               focusLocationRequestId: viewState.focusLocationRequestId,
+              externalModelPath: viewState.externalModelPath,
               onZoneTap: (entry, metric) {
                 _focusAndOpenZoneDetails(
                   context: context,
@@ -539,10 +424,14 @@ class ViewerScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           viewerActionPanel,
-          if (criticalZonesStrip != null) ...<Widget>[
+          if (heatmapOverviewCard != null) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
-            criticalZonesStrip,
+            heatmapOverviewCard,
           ],
+          const SizedBox(height: AppSpacing.md),
+          storageLocationCard,
+          const SizedBox(height: AppSpacing.md),
+          viewerDetailsPanel,
         ],
         if (!canUseControls) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
@@ -567,7 +456,9 @@ class ViewerScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _generateModel({
@@ -585,8 +476,11 @@ class ViewerScreen extends StatelessWidget {
       );
       return;
     }
-    final message = appState.warehouseApiError ?? context.tr('viewerModelGeneratedError');
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    final message =
+        appState.warehouseApiError ?? context.tr('viewerModelGeneratedError');
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _toggleZones({
@@ -604,7 +498,9 @@ class ViewerScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _toggleTour({
@@ -629,7 +525,9 @@ class ViewerScreen extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _openTourFullscreen({
@@ -655,14 +553,15 @@ class ViewerScreen extends StatelessWidget {
     final l10n = context.l10n;
     final message = appState.viewerHeatmapVisible
         ? await adapter.showHeatmap(l10n, warehouse, metric)
-        : l10n.tr(
-            'heatmapMetricChangedMsg',
-            <String, Object>{'metric': l10n.tr(metric.labelKey)},
-          );
+        : l10n.tr('heatmapMetricChangedMsg', <String, Object>{
+            'metric': l10n.tr(metric.labelKey),
+          });
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _toggleHeatmap({
@@ -675,12 +574,18 @@ class ViewerScreen extends StatelessWidget {
     appState.setViewerHeatmapVisible(enableHeatmap);
     final l10n = context.l10n;
     final message = enableHeatmap
-        ? await adapter.showHeatmap(l10n, warehouse, appState.viewerHeatmapMetric)
+        ? await adapter.showHeatmap(
+            l10n,
+            warehouse,
+            appState.viewerHeatmapMetric,
+          )
         : await adapter.hideHeatmap(l10n, warehouse);
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _requestFocusOnZone({
@@ -697,10 +602,7 @@ class ViewerScreen extends StatelessWidget {
     required ViewerHeatmapEntry entry,
     required ViewerHeatmapMetric metric,
   }) {
-    _requestFocusOnZone(
-      context: context,
-      zoneName: entry.zoneName,
-    );
+    _requestFocusOnZone(context: context, zoneName: entry.zoneName);
     _openZoneDetails(
       context: context,
       warehouse: warehouse,
@@ -718,9 +620,7 @@ class ViewerScreen extends StatelessWidget {
     final hasModelZones = warehouse.generatedModel?.zones.isNotEmpty ?? false;
     if (!hasModelZones || heatmapData.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr('viewerNoModelZonesForFocus')),
-        ),
+        SnackBar(content: Text(context.tr('viewerNoModelZonesForFocus'))),
       );
       return;
     }
@@ -728,60 +628,57 @@ class ViewerScreen extends StatelessWidget {
     final sorted = <ViewerHeatmapEntry>[...heatmapData]
       ..sort((a, b) => b.valueFor(metric).compareTo(a.valueFor(metric)));
     final target = sorted.first;
-    _requestFocusOnZone(
-      context: context,
-      zoneName: target.zoneName,
-    );
+    _requestFocusOnZone(context: context, zoneName: target.zoneName);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          context.tr(
-            'viewerFocusCriticalZoneMsg',
-            <String, Object>{'zone': target.zoneName},
-          ),
+          context.tr('viewerFocusCriticalZoneMsg', <String, Object>{
+            'zone': target.zoneName,
+          }),
         ),
       ),
     );
-  }
-
-  List<ViewerHeatmapEntry> _topCriticalZones({
-    required List<ViewerHeatmapEntry> data,
-    required ViewerHeatmapMetric metric,
-    required int limit,
-  }) {
-    final sorted = <ViewerHeatmapEntry>[...data]
-      ..sort((a, b) => b.valueFor(metric).compareTo(a.valueFor(metric)));
-    return sorted.take(limit.clamp(1, 6)).toList(growable: false);
   }
 
   List<ViewerHeatmapEntry> _buildHeatmapData(Warehouse warehouse) {
     final maxPick = warehouse.zones
         .map((zone) => zone.pickRatePerHour)
         .fold<int>(1, (prev, value) => value > prev ? value : prev);
-    final modelZones = warehouse.generatedModel?.zones ?? const <WarehouseModelZone>[];
+    final modelZones =
+        warehouse.generatedModel?.zones ?? const <WarehouseModelZone>[];
 
-    return warehouse.zones.asMap().entries.map((entry) {
-      final index = entry.key;
-      final zone = entry.value;
-      final modelZone = _matchModelZone(
-        modelZones: modelZones,
-        zoneName: zone.name,
-        zoneIndex: index,
-      );
-      final congestion = ((zone.utilizationRatio * 0.7) +
-              ((zone.inboundPerDay / (zone.throughputPerDay + 1)) * 0.3))
-          .clamp(0, 1)
-          .toDouble();
-      final fallbackPickRate = (zone.pickRatePerHour / maxPick).clamp(0, 1).toDouble();
-      return ViewerHeatmapEntry(
-        zoneId: zone.id,
-        zoneName: zone.name,
-        utilization: modelZone?.utilization ?? zone.utilizationRatio,
-        pickRate: modelZone?.pickRate ?? fallbackPickRate,
-        congestion: modelZone?.congestion ?? congestion,
-        abcA: modelZone?.abcA ?? zone.abcAnalysis.aRatio.clamp(0, 1).toDouble(),
-      );
-    }).toList(growable: false);
+    return warehouse.zones
+        .asMap()
+        .entries
+        .map((entry) {
+          final index = entry.key;
+          final zone = entry.value;
+          final modelZone = _matchModelZone(
+            modelZones: modelZones,
+            zoneName: zone.name,
+            zoneIndex: index,
+          );
+          final congestion =
+              ((zone.utilizationRatio * 0.7) +
+                      ((zone.inboundPerDay / (zone.throughputPerDay + 1)) *
+                          0.3))
+                  .clamp(0, 1)
+                  .toDouble();
+          final fallbackPickRate = (zone.pickRatePerHour / maxPick)
+              .clamp(0, 1)
+              .toDouble();
+          return ViewerHeatmapEntry(
+            zoneId: zone.id,
+            zoneName: zone.name,
+            utilization: modelZone?.utilization ?? zone.utilizationRatio,
+            pickRate: modelZone?.pickRate ?? fallbackPickRate,
+            congestion: modelZone?.congestion ?? congestion,
+            abcA:
+                modelZone?.abcA ??
+                zone.abcAnalysis.aRatio.clamp(0, 1).toDouble(),
+          );
+        })
+        .toList(growable: false);
   }
 
   WarehouseModelZone? _matchModelZone({
@@ -857,18 +754,15 @@ class ViewerScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            context.tr(
-              'warehousesSyncError',
-              <String, Object>{'error': error},
-            ),
+            context.tr('warehousesSyncError', <String, Object>{'error': error}),
           ),
         ),
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('viewerDataUpdated'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(context.tr('viewerDataUpdated'))));
   }
 
   void _setHeatmapZoneTypeFilter({
@@ -878,206 +772,65 @@ class ViewerScreen extends StatelessWidget {
     context.read<AppState>().setViewerHeatmapZoneTypeFilter(value);
   }
 
-  void _setHeatmapSeverityFilter({
-    required BuildContext context,
-    required String value,
-  }) {
-    context.read<AppState>().setViewerHeatmapSeverityFilter(value);
-  }
-
-  void _setHeatmapLiveMode({
-    required BuildContext context,
-    required bool value,
-  }) {
-    context.read<AppState>().setViewerHeatmapLiveModeEnabled(value);
-  }
-
-  void _setHeatmapAutoFocus({
-    required BuildContext context,
-    required bool value,
-  }) {
-    context.read<AppState>().setViewerHeatmapAutoFocusEnabled(value);
-  }
 }
 
-class _AutoRefreshWarehousesEffect extends StatefulWidget {
-  const _AutoRefreshWarehousesEffect({
-    required this.isWarehousesSyncing,
-    required this.isOfflineMode,
+class _ViewerDetailsPanel extends StatelessWidget {
+  const _ViewerDetailsPanel({
+    required this.warehouseMetaCard,
+    required this.storageLocationDetailsCard,
+    required this.modelGenerationCard,
+    this.externalModelCard,
+    this.backendStatusCard,
   });
 
-  final bool isWarehousesSyncing;
-  final bool isOfflineMode;
-
-  @override
-  State<_AutoRefreshWarehousesEffect> createState() =>
-      _AutoRefreshWarehousesEffectState();
-}
-
-class _AutoRefreshWarehousesEffectState extends State<_AutoRefreshWarehousesEffect>
-    with WidgetsBindingObserver {
-  static const Duration _onlineInterval = Duration(seconds: 60);
-  static const Duration _offlineInterval = Duration(seconds: 20);
-  Timer? _timer;
-  Duration? _activeInterval;
-  bool _isAppActive = true;
-  DateTime? _lastRefreshAt;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _isAppActive = _isLifecycleActive(WidgetsBinding.instance.lifecycleState);
-    _start();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AutoRefreshWarehousesEffect oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _start();
-    if (oldWidget.isOfflineMode != widget.isOfflineMode &&
-        _isAppActive &&
-        !widget.isWarehousesSyncing) {
-      _scheduleRefreshIfDue(force: true);
-      return;
-    }
-    if (_isAppActive && !widget.isWarehousesSyncing) {
-      _scheduleRefreshIfDue();
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    _isAppActive = _isLifecycleActive(state);
-    if (_isAppActive && !widget.isWarehousesSyncing) {
-      _scheduleRefreshIfDue(force: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
+  final Widget warehouseMetaCard;
+  final Widget storageLocationDetailsCard;
+  final Widget modelGenerationCard;
+  final Widget? externalModelCard;
+  final Widget? backendStatusCard;
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.shrink();
-  }
-
-  void _start() {
-    final interval = _currentInterval();
-    if (_timer != null && _activeInterval == interval) {
-      return;
-    }
-    _timer?.cancel();
-    _activeInterval = interval;
-    _timer = Timer.periodic(interval, (_) {
-      _refreshIfDue();
-    });
-  }
-
-  void _refreshIfDue({bool force = false}) {
-    if (!mounted || !_isAppActive || widget.isWarehousesSyncing) {
-      return;
-    }
-    final route = ModalRoute.of(context);
-    if (route != null && !route.isCurrent) {
-      return;
-    }
-    final lastRefreshAt = _lastRefreshAt;
-    final now = DateTime.now();
-    final interval = _currentInterval();
-    final due = lastRefreshAt == null || now.difference(lastRefreshAt) >= interval;
-    if (!force && !due) {
-      return;
-    }
-    _lastRefreshAt = now;
-    unawaited(context.read<AppState>().syncWarehouses());
-  }
-
-  void _scheduleRefreshIfDue({bool force = false}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _refreshIfDue(force: force);
-    });
-  }
-
-  Duration _currentInterval() {
-    if (kIsWeb) {
-      return widget.isOfflineMode
-          ? const Duration(seconds: 45)
-          : const Duration(seconds: 120);
-    }
-    return widget.isOfflineMode ? _offlineInterval : _onlineInterval;
-  }
-
-  bool _isLifecycleActive(AppLifecycleState? state) {
-    if (state == null) {
-      return true;
-    }
-    return switch (state) {
-      AppLifecycleState.resumed => true,
-      AppLifecycleState.inactive => true,
-      AppLifecycleState.hidden => false,
-      AppLifecycleState.paused => false,
-      AppLifecycleState.detached => false,
-    };
-  }
-}
-
-class _AutoGenerateModelEffect extends StatefulWidget {
-  const _AutoGenerateModelEffect({
-    required this.warehouseId,
-    required this.hasGeneratedModel,
-    required this.canUseControls,
-    required this.isGeneratingModel,
-  });
-
-  final String warehouseId;
-  final bool hasGeneratedModel;
-  final bool canUseControls;
-  final bool isGeneratingModel;
-
-  @override
-  State<_AutoGenerateModelEffect> createState() => _AutoGenerateModelEffectState();
-}
-
-class _AutoGenerateModelEffectState extends State<_AutoGenerateModelEffect> {
-  final Set<String> _attemptedWarehouseIds = <String>{};
-
-  @override
-  void didUpdateWidget(covariant _AutoGenerateModelEffect oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _tryAutoGenerate());
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _tryAutoGenerate());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox.shrink();
-  }
-
-  void _tryAutoGenerate() {
-    if (!mounted) {
-      return;
-    }
-    if (!widget.canUseControls ||
-        widget.hasGeneratedModel ||
-        widget.isGeneratingModel ||
-        _attemptedWarehouseIds.contains(widget.warehouseId)) {
-      return;
-    }
-    _attemptedWarehouseIds.add(widget.warehouseId);
-    unawaited(context.read<AppState>().generateWarehouseModel(widget.warehouseId));
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        tilePadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xs,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
+        title: Text(
+          'Details und Stammdaten',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          'Lagerstammdaten, Stellplatz-Fokus und Modellstatus',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        children: <Widget>[
+          warehouseMetaCard,
+          const SizedBox(height: AppSpacing.sm),
+          storageLocationDetailsCard,
+          const SizedBox(height: AppSpacing.sm),
+          modelGenerationCard,
+          if (externalModelCard != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            externalModelCard!,
+          ],
+          if (backendStatusCard != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            backendStatusCard!,
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -1114,20 +867,28 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
   @override
   void didUpdateWidget(covariant _HeatmapOverviewCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedZoneTypeFilterKey != widget.selectedZoneTypeFilterKey) {
-      _zoneTypeFilter = _zoneTypeFilterFromKey(widget.selectedZoneTypeFilterKey);
+    if (oldWidget.selectedZoneTypeFilterKey !=
+        widget.selectedZoneTypeFilterKey) {
+      _zoneTypeFilter = _zoneTypeFilterFromKey(
+        widget.selectedZoneTypeFilterKey,
+      );
     }
   }
 
   List<ViewerHeatmapEntry> _filteredEntries() {
     final source = <ViewerHeatmapEntry>[...widget.entries]
-      ..sort((a, b) => b.valueFor(widget.metric).compareTo(a.valueFor(widget.metric)));
-    return source.where((entry) {
-      if (_zoneTypeFilter == _ZoneTypeFilter.all) {
-        return true;
-      }
-      return _classifyHeatmapZoneType(entry.zoneName) == _zoneTypeFilter;
-    }).toList(growable: false);
+      ..sort(
+        (a, b) =>
+            b.valueFor(widget.metric).compareTo(a.valueFor(widget.metric)),
+      );
+    return source
+        .where((entry) {
+          if (_zoneTypeFilter == _ZoneTypeFilter.all) {
+            return true;
+          }
+          return _classifyHeatmapZoneType(entry.zoneName) == _zoneTypeFilter;
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -1143,10 +904,13 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
         ? 0
         : values.fold<double>(0, (sum, value) => sum + value) / values.length;
     final criticalCount = values.where((value) => value >= 0.85).length;
-    final highCount = values.where((value) => value >= 0.65 && value < 0.85).length;
+    final highCount = values
+        .where((value) => value >= 0.65 && value < 0.85)
+        .length;
     final lowCount = values.where((value) => value < 0.65).length;
     final topEntry = filteredEntries.isEmpty ? null : filteredEntries.first;
-    final topValue = topEntry?.valueFor(widget.metric).clamp(0, 1).toDouble() ?? 0;
+    final topValue =
+        topEntry?.valueFor(widget.metric).clamp(0, 1).toDouble() ?? 0;
 
     return Card(
       child: Padding(
@@ -1162,13 +926,13 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
                   child: Text(
                     context.tr('heatmapOverviewTitle'),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 _SeverityBadge(
                   label: context.tr(widget.metric.labelKey),
-                  color: _heatColorForValue(topValue),
+                  color: heatColorForValue(topValue),
                 ),
               ],
             ),
@@ -1189,8 +953,8 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
                 Text(
                   context.tr('heatmapZoneTypeLabel'),
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -1238,9 +1002,9 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
             if (topEntry != null)
               Text(
                 '${context.tr('heatmapTopZoneLabel')}: ${topEntry.zoneName}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
               )
             else
               Text(
@@ -1253,16 +1017,17 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
               child: LinearProgressIndicator(
                 minHeight: 10,
                 value: average.clamp(0, 1).toDouble(),
-                color: _heatColorForValue(average.toDouble()),
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                color: heatColorForValue(average.toDouble()),
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              context.tr(
-                'heatmapAverageLabel',
-                <String, Object>{'value': '${(average * 100).round()}%'},
-              ),
+              context.tr('heatmapAverageLabel', <String, Object>{
+                'value': '${(average * 100).round()}%',
+              }),
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -1273,17 +1038,17 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
                 _ZoneCountChip(
                   label: context.tr('severityCritical'),
                   count: criticalCount,
-                  color: _heatColorForValue(0.9),
+                  color: heatColorForValue(0.9),
                 ),
                 _ZoneCountChip(
                   label: context.tr('heatmapSeverityHigh'),
                   count: highCount,
-                  color: _heatColorForValue(0.7),
+                  color: heatColorForValue(0.7),
                 ),
                 _ZoneCountChip(
                   label: context.tr('heatmapSeverityLow'),
                   count: lowCount,
-                  color: _heatColorForValue(0.3),
+                  color: heatColorForValue(0.3),
                 ),
               ],
             ),
@@ -1293,7 +1058,9 @@ class _HeatmapOverviewCardState extends State<_HeatmapOverviewCard> {
               runSpacing: AppSpacing.sm,
               children: <Widget>[
                 OutlinedButton.icon(
-                  onPressed: topEntry == null ? null : () => widget.onFocusTopZone(topEntry),
+                  onPressed: topEntry == null
+                      ? null
+                      : () => widget.onFocusTopZone(topEntry),
                   icon: const Icon(Icons.center_focus_strong_rounded),
                   label: Text(context.tr('heatmapFocusTopZone')),
                 ),
@@ -1346,11 +1113,7 @@ class _ZoneCountChip extends StatelessWidget {
   }
 }
 
-enum _ZoneSeverityFilter {
-  all,
-  high,
-  critical,
-}
+enum _ZoneSeverityFilter { all, high, critical }
 
 extension _ZoneSeverityFilterX on _ZoneSeverityFilter {
   String get key {
@@ -1370,14 +1133,7 @@ extension _ZoneSeverityFilterX on _ZoneSeverityFilter {
   }
 }
 
-enum _ZoneTypeFilter {
-  all,
-  inbound,
-  picking,
-  shipping,
-  storage,
-  other,
-}
+enum _ZoneTypeFilter { all, inbound, picking, shipping, storage, other }
 
 extension _ZoneTypeFilterX on _ZoneTypeFilter {
   String get key {
@@ -1522,12 +1278,16 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
     if (oldWidget.metric != widget.metric) {
       _autoFocusIndex = 0;
     }
-    if (oldWidget.selectedSeverityFilterKey != widget.selectedSeverityFilterKey) {
+    if (oldWidget.selectedSeverityFilterKey !=
+        widget.selectedSeverityFilterKey) {
       _filter = _zoneSeverityFilterFromKey(widget.selectedSeverityFilterKey);
       _autoFocusIndex = 0;
     }
-    if (oldWidget.selectedZoneTypeFilterKey != widget.selectedZoneTypeFilterKey) {
-      _zoneTypeFilter = _zoneTypeFilterFromKey(widget.selectedZoneTypeFilterKey);
+    if (oldWidget.selectedZoneTypeFilterKey !=
+        widget.selectedZoneTypeFilterKey) {
+      _zoneTypeFilter = _zoneTypeFilterFromKey(
+        widget.selectedZoneTypeFilterKey,
+      );
       _autoFocusIndex = 0;
     }
     if (oldWidget.liveModeEnabled != widget.liveModeEnabled) {
@@ -1551,19 +1311,21 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
   List<ViewerHeatmapEntry> _filteredEntries() {
     final source = <ViewerHeatmapEntry>[...widget.entries]
       ..sort((a, b) => _entryValue(b).compareTo(_entryValue(a)));
-    return source.where((entry) {
-      final value = _entryValue(entry);
-      final matchesSeverity = switch (_filter) {
-        _ZoneSeverityFilter.all => true,
-        _ZoneSeverityFilter.high => value >= 0.65,
-        _ZoneSeverityFilter.critical => value >= 0.85,
-      };
-      final matchesZoneType = switch (_zoneTypeFilter) {
-        _ZoneTypeFilter.all => true,
-        _ => _classifyHeatmapZoneType(entry.zoneName) == _zoneTypeFilter,
-      };
-      return matchesSeverity && matchesZoneType;
-    }).toList(growable: false);
+    return source
+        .where((entry) {
+          final value = _entryValue(entry);
+          final matchesSeverity = switch (_filter) {
+            _ZoneSeverityFilter.all => true,
+            _ZoneSeverityFilter.high => value >= 0.65,
+            _ZoneSeverityFilter.critical => value >= 0.85,
+          };
+          final matchesZoneType = switch (_zoneTypeFilter) {
+            _ZoneTypeFilter.all => true,
+            _ => _classifyHeatmapZoneType(entry.zoneName) == _zoneTypeFilter,
+          };
+          return matchesSeverity && matchesZoneType;
+        })
+        .toList(growable: false);
   }
 
   double _entryValue(ViewerHeatmapEntry entry) {
@@ -1571,14 +1333,15 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
     if (!_liveModeEnabled) {
       return base;
     }
-    final zoneSeed = ((entry.zoneName.hashCode ^ entry.zoneId.hashCode) & 0x7FFFFFFF) % 1000;
+    final zoneSeed =
+        ((entry.zoneName.hashCode ^ entry.zoneId.hashCode) & 0x7FFFFFFF) % 1000;
     final phase = (_liveTick * 0.38) + (zoneSeed / 115.0);
     final modulation = math.sin(phase) * 0.06;
     final volatility = base >= 0.75
         ? 0.05
         : base >= 0.45
-            ? 0.035
-            : 0.02;
+        ? 0.035
+        : 0.02;
     final trend = math.cos((phase * 0.6) + (zoneSeed / 300)) * volatility;
     return (base + modulation + trend).clamp(0, 1).toDouble();
   }
@@ -1588,7 +1351,9 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
     if (!_liveModeEnabled || !mounted) {
       return;
     }
-    final interval = kIsWeb ? const Duration(seconds: 5) : const Duration(seconds: 2);
+    final interval = kIsWeb
+        ? const Duration(seconds: 5)
+        : const Duration(seconds: 2);
     _liveTimer = Timer.periodic(interval, (_) {
       if (!mounted) {
         return;
@@ -1605,7 +1370,9 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
     if (!_autoFocusEnabled || filtered.isEmpty) {
       return;
     }
-    final interval = kIsWeb ? const Duration(seconds: 9) : const Duration(seconds: 4);
+    final interval = kIsWeb
+        ? const Duration(seconds: 9)
+        : const Duration(seconds: 4);
     _autoFocusTimer = Timer.periodic(interval, (_) {
       if (!mounted) {
         return;
@@ -1648,52 +1415,35 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                       context.tr('heatmapCriticalZonesTitle'),
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xs,
-                          vertical: 2,
-                        ),
-                        child: Text(
-                          context.tr(widget.metric.labelKey),
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ),
+                    StatusPill(
+                      icon: Icons.speed_rounded,
+                      label: context.tr(widget.metric.labelKey),
+                      compact: true,
                     ),
                     if (_liveModeEnabled)
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.tertiaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.xs,
-                            vertical: 2,
-                          ),
-                          child: Text(context.tr('heatmapLiveBadge')),
-                        ),
+                      StatusPill(
+                        icon: Icons.sensors_rounded,
+                        label: context.tr('heatmapLiveBadge'),
+                        compact: true,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .tertiaryContainer,
+                        foregroundColor: Theme.of(context)
+                            .colorScheme
+                            .onTertiaryContainer,
                       ),
                     if (_autoFocusEnabled)
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primaryContainer
-                              .withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.xs,
-                            vertical: 2,
-                          ),
-                          child: Text(context.tr('heatmapAutoFocusActive')),
-                        ),
+                      StatusPill(
+                        icon: Icons.center_focus_strong_rounded,
+                        label: context.tr('heatmapAutoFocusActive'),
+                        compact: true,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                            .withValues(alpha: 0.8),
+                        foregroundColor: Theme.of(context)
+                            .colorScheme
+                            .onPrimaryContainer,
                       ),
                     IconButton.filledTonal(
                       tooltip: _liveModeEnabled
@@ -1709,7 +1459,9 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                         widget.onLiveModeChanged(nextValue);
                       },
                       icon: Icon(
-                        _liveModeEnabled ? Icons.sensors : Icons.sensors_off_outlined,
+                        _liveModeEnabled
+                            ? Icons.sensors
+                            : Icons.sensors_off_outlined,
                         size: 18,
                       ),
                     ),
@@ -1727,7 +1479,9 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                         widget.onAutoFocusChanged(nextValue);
                       },
                       icon: Icon(
-                        _autoFocusEnabled ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                        _autoFocusEnabled
+                            ? Icons.pause_circle_outline
+                            : Icons.play_circle_outline,
                         size: 18,
                       ),
                     ),
@@ -1748,7 +1502,9 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                       ),
                       ButtonSegment<_ZoneSeverityFilter>(
                         value: _ZoneSeverityFilter.critical,
-                        label: Text(_ZoneSeverityFilter.critical.label(context)),
+                        label: Text(
+                          _ZoneSeverityFilter.critical.label(context),
+                        ),
                       ),
                     ],
                     selected: <_ZoneSeverityFilter>{_filter},
@@ -1775,8 +1531,8 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                     Text(
                       context.tr('heatmapZoneTypeLabel'),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -1825,7 +1581,9 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                 const SizedBox(height: AppSpacing.xs),
                 if (filteredEntries.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.xs,
+                    ),
                     child: Text(
                       context.tr('heatmapNoZonesForSelectedFilters'),
                       style: Theme.of(context).textTheme.bodySmall,
@@ -1837,7 +1595,8 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: filteredEntries.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.xs),
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(width: AppSpacing.xs),
                       itemBuilder: (context, index) {
                         final entry = filteredEntries[index];
                         final value = _entryValue(entry);
@@ -1858,20 +1617,31 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                             child: Padding(
                               padding: EdgeInsets.symmetric(
                                 horizontal: AppSpacing.sm,
-                                vertical: isTablet ? AppSpacing.sm : AppSpacing.xs,
+                                vertical: isTablet
+                                    ? AppSpacing.sm
+                                    : AppSpacing.xs,
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: <Widget>[
-                                  Icon(Icons.adjust_rounded, size: 14, color: zoneColor),
+                                  Icon(
+                                    Icons.adjust_rounded,
+                                    size: 14,
+                                    color: zoneColor,
+                                  ),
                                   const SizedBox(width: 6),
                                   ConstrainedBox(
-                                    constraints: BoxConstraints(maxWidth: isTablet ? 210 : 160),
+                                    constraints: BoxConstraints(
+                                      maxWidth: isTablet ? 210 : 160,
+                                    ),
                                     child: Text(
                                       entry.zoneName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
                                             fontWeight: FontWeight.w700,
                                           ),
                                     ),
@@ -1884,17 +1654,24 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
                                   const SizedBox(width: 6),
                                   Text(
                                     '${(value * 100).round()}%',
-                                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
                                           color: zoneColor,
                                           fontWeight: FontWeight.w800,
                                         ),
                                   ),
                                   const SizedBox(width: 2),
                                   IconButton(
-                                    tooltip: context.tr('ticketOpenDetails'),
-                                    onPressed: () => widget.onOpenDetails(entry),
+                                    tooltip: 'Details',
+                                    onPressed: () =>
+                                        widget.onOpenDetails(entry),
                                     visualDensity: VisualDensity.compact,
-                                    icon: const Icon(Icons.info_outline, size: 18),
+                                    icon: const Icon(
+                                      Icons.info_outline,
+                                      size: 18,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1926,19 +1703,16 @@ class _CriticalZonesStripState extends State<_CriticalZonesStrip> {
   }
 
   Color _severityColor(double value) {
-    return _heatColorForValue(value);
+    return heatColorForValue(value);
   }
 
   Color _heatColor(double value) {
-    return _heatColorForValue(value);
+    return heatColorForValue(value);
   }
 }
 
 class _SeverityBadge extends StatelessWidget {
-  const _SeverityBadge({
-    required this.label,
-    required this.color,
-  });
+  const _SeverityBadge({required this.label, required this.color});
 
   final String label;
   final Color color;
@@ -1959,9 +1733,9 @@ class _SeverityBadge extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w700,
-              ),
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -2011,7 +1785,9 @@ class _ViewerActionPanel extends StatelessWidget {
           zonesVisible ? Icons.grid_off_outlined : Icons.grid_view_outlined,
         ),
         label: Text(
-          zonesVisible ? context.tr('viewerHideZones') : context.tr('viewerShowZones'),
+          zonesVisible
+              ? context.tr('viewerHideZones')
+              : context.tr('viewerShowZones'),
         ),
       ),
       FilledButton.icon(
@@ -2020,7 +1796,9 @@ class _ViewerActionPanel extends StatelessWidget {
           tourRunning ? Icons.pause_circle_outline : Icons.play_circle_outline,
         ),
         label: Text(
-          tourRunning ? context.tr('viewerPauseTour') : context.tr('viewerStartTour'),
+          tourRunning
+              ? context.tr('viewerPauseTour')
+              : context.tr('viewerStartTour'),
         ),
       ),
       PopupMenuButton<ViewerHeatmapMetric>(
@@ -2042,9 +1820,7 @@ class _ViewerActionPanel extends StatelessWidget {
               ),
             )
             .toList(growable: false),
-        child: _MetricMenuTrigger(
-          label: context.tr('heatmapMetricLabel'),
-        ),
+        child: _MetricMenuTrigger(label: context.tr('heatmapMetricLabel')),
       ),
       FilledButton.tonalIcon(
         onPressed: canUseControls ? onToggleHeatmap : null,
@@ -2052,11 +1828,15 @@ class _ViewerActionPanel extends StatelessWidget {
           heatmapVisible ? Icons.layers_clear_outlined : Icons.layers_outlined,
         ),
         label: Text(
-          heatmapVisible ? context.tr('viewerHideHeatmap') : context.tr('viewerShowHeatmap'),
+          heatmapVisible
+              ? context.tr('viewerHideHeatmap')
+              : context.tr('viewerShowHeatmap'),
         ),
       ),
       FilledButton.tonalIcon(
-        onPressed: canUseControls && canFocusCriticalZone ? onFocusCriticalZone : null,
+        onPressed: canUseControls && canFocusCriticalZone
+            ? onFocusCriticalZone
+            : null,
         icon: const Icon(Icons.center_focus_strong_outlined),
         label: Text(context.tr('viewerFocusCriticalZoneAction')),
       ),
@@ -2068,20 +1848,6 @@ class _ViewerActionPanel extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < AppBreakpoints.tablet;
-            final header = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  context.tr('viewerQuickActionsTitle'),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  context.tr('viewerQuickActionsHint'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            );
             final actions = compact
                 ? SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -2089,7 +1855,9 @@ class _ViewerActionPanel extends StatelessWidget {
                       children: controls
                           .map(
                             (widget) => Padding(
-                              padding: const EdgeInsets.only(right: AppSpacing.sm),
+                              padding: const EdgeInsets.only(
+                                right: AppSpacing.sm,
+                              ),
                               child: widget,
                             ),
                           )
@@ -2104,8 +1872,6 @@ class _ViewerActionPanel extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                header,
-                const SizedBox(height: AppSpacing.sm),
                 actions,
               ],
             );
@@ -2144,6 +1910,8 @@ class _ViewerUiState {
     required this.warehouseApiError,
     required this.isWarehouseOfflineMode,
     required this.isGeneratingModel,
+    required this.warehouseHeatmapLayer,
+    required this.externalModelPath,
   });
 
   final Warehouse? warehouse;
@@ -2172,6 +1940,8 @@ class _ViewerUiState {
   final String? warehouseApiError;
   final bool isWarehouseOfflineMode;
   final bool isGeneratingModel;
+  final List<WarehouseHeatmapLayerEntry> warehouseHeatmapLayer;
+  final String? externalModelPath;
 
   @override
   bool operator ==(Object other) {
@@ -2204,38 +1974,42 @@ class _ViewerUiState {
         other.lastWarehouseSyncAt == lastWarehouseSyncAt &&
         other.warehouseApiError == warehouseApiError &&
         other.isWarehouseOfflineMode == isWarehouseOfflineMode &&
-        other.isGeneratingModel == isGeneratingModel;
+        other.isGeneratingModel == isGeneratingModel &&
+        other.warehouseHeatmapLayer == warehouseHeatmapLayer &&
+        other.externalModelPath == externalModelPath;
   }
 
   @override
   int get hashCode => Object.hashAll(<Object?>[
-        warehouse,
-        canUseControls,
-        viewerType,
-        isWarehousesSyncing,
-        zonesVisible,
-        tourRunning,
-        heatmapVisible,
-        heatmapMetric,
-        heatmapZoneTypeFilterKey,
-        heatmapSeverityFilterKey,
-        heatmapLiveModeEnabled,
-        heatmapAutoFocusEnabled,
-        focusZoneName,
-        focusRequestId,
-        focusRackNumber,
-        focusLevelNumber,
-        focusSlotNumber,
-        focusLocationRequestId,
-        storageLocations,
-        selectedStorageLocation,
-        storagePrefs,
-        resetCount,
-        lastWarehouseSyncAt,
-        warehouseApiError,
-        isWarehouseOfflineMode,
-        isGeneratingModel,
-      ]);
+    warehouse,
+    canUseControls,
+    viewerType,
+    isWarehousesSyncing,
+    zonesVisible,
+    tourRunning,
+    heatmapVisible,
+    heatmapMetric,
+    heatmapZoneTypeFilterKey,
+    heatmapSeverityFilterKey,
+    heatmapLiveModeEnabled,
+    heatmapAutoFocusEnabled,
+    focusZoneName,
+    focusRequestId,
+    focusRackNumber,
+    focusLevelNumber,
+    focusSlotNumber,
+    focusLocationRequestId,
+    storageLocations,
+    selectedStorageLocation,
+    storagePrefs,
+    resetCount,
+    lastWarehouseSyncAt,
+    warehouseApiError,
+    isWarehouseOfflineMode,
+    isGeneratingModel,
+    warehouseHeatmapLayer,
+    externalModelPath,
+  ]);
 }
 
 class _ViewerHeaderBar extends StatelessWidget {
@@ -2305,8 +2079,8 @@ class _ViewerHeaderBar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       navButtons,
@@ -2321,8 +2095,8 @@ class _ViewerHeaderBar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     navButtons,
@@ -2347,10 +2121,7 @@ class _ViewerHeaderBar extends StatelessWidget {
                   isOfflineMode: isOfflineMode,
                   hasError: hasBackendIssue,
                 ),
-                _ViewerRefreshChip(
-                  isSyncing: isSyncing,
-                  onPressed: onRefresh,
-                ),
+                _ViewerRefreshChip(isSyncing: isSyncing, onPressed: onRefresh),
                 _ViewerLastSyncChip(lastSyncAt: lastSyncAt),
               ],
             ),
@@ -2378,9 +2149,12 @@ class _ViewerBackendStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasError = apiError != null && apiError!.trim().isNotEmpty;
-    final background = hasError ? colorScheme.errorContainer : colorScheme.secondaryContainer;
-    final foreground =
-        hasError ? colorScheme.onErrorContainer : colorScheme.onSecondaryContainer;
+    final background = hasError
+        ? colorScheme.errorContainer
+        : colorScheme.secondaryContainer;
+    final foreground = hasError
+        ? colorScheme.onErrorContainer
+        : colorScheme.onSecondaryContainer;
     return Card(
       color: background,
       child: Padding(
@@ -2391,7 +2165,9 @@ class _ViewerBackendStatusCard extends StatelessWidget {
             Row(
               children: <Widget>[
                 Icon(
-                  hasError ? Icons.warning_amber_rounded : Icons.cloud_off_outlined,
+                  hasError
+                      ? Icons.warning_amber_rounded
+                      : Icons.cloud_off_outlined,
                   color: foreground,
                   size: 20,
                 ),
@@ -2399,14 +2175,13 @@ class _ViewerBackendStatusCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     hasError
-                        ? context.tr(
-                            'warehousesSyncError',
-                            <String, Object>{'error': apiError!},
-                          )
+                        ? context.tr('warehousesSyncError', <String, Object>{
+                            'error': apiError!,
+                          })
                         : context.tr('viewerBackendOfflineInfo'),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: foreground,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: foreground),
                   ),
                 ),
               ],
@@ -2415,9 +2190,9 @@ class _ViewerBackendStatusCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 context.tr('viewerBackendOfflineInfo'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: foreground,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: foreground),
               ),
             ],
             if (hasError && showRetryAction) ...<Widget>[
@@ -2455,30 +2230,27 @@ class _ViewerBackendStatusChip extends StatelessWidget {
         : (hasError ? Icons.warning_amber_rounded : Icons.cloud_done_outlined);
     final background = isOfflineMode
         ? colorScheme.errorContainer
-        : (hasError ? colorScheme.tertiaryContainer : colorScheme.primaryContainer);
+        : (hasError
+              ? colorScheme.tertiaryContainer
+              : colorScheme.primaryContainer);
     final foreground = isOfflineMode
         ? colorScheme.onErrorContainer
-        : (hasError ? colorScheme.onTertiaryContainer : colorScheme.onPrimaryContainer);
+        : (hasError
+              ? colorScheme.onTertiaryContainer
+              : colorScheme.onPrimaryContainer);
 
-    return Chip(
-      avatar: Icon(icon, size: 18, color: foreground),
-      label: Text(
-        context.tr(labelKey),
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(color: foreground),
-      ),
+    return StatusPill(
+      icon: icon,
+      label: context.tr(labelKey),
       backgroundColor: background,
-      side: BorderSide(
-        color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-      ),
+      foregroundColor: foreground,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.45),
     );
   }
 }
 
 class _ViewerRefreshChip extends StatelessWidget {
-  const _ViewerRefreshChip({
-    required this.isSyncing,
-    required this.onPressed,
-  });
+  const _ViewerRefreshChip({required this.isSyncing, required this.onPressed});
 
   final bool isSyncing;
   final VoidCallback? onPressed;
@@ -2489,7 +2261,9 @@ class _ViewerRefreshChip extends StatelessWidget {
       onPressed: onPressed,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
       side: BorderSide(
-        color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.45),
+        color: Theme.of(
+          context,
+        ).colorScheme.outlineVariant.withValues(alpha: 0.45),
       ),
       avatar: isSyncing
           ? const SizedBox(
@@ -2504,9 +2278,7 @@ class _ViewerRefreshChip extends StatelessWidget {
 }
 
 class _ViewerLastSyncChip extends StatelessWidget {
-  const _ViewerLastSyncChip({
-    required this.lastSyncAt,
-  });
+  const _ViewerLastSyncChip({required this.lastSyncAt});
 
   final DateTime? lastSyncAt;
 
@@ -2515,26 +2287,15 @@ class _ViewerLastSyncChip extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final label = lastSyncAt == null
         ? context.tr('lastSyncUnknown')
-        : context.tr(
-            'lastSyncShort',
-            <String, Object>{'time': _formatRelativeTime(context, lastSyncAt!)},
-          );
-    return Chip(
-      avatar: Icon(
-        Icons.schedule_rounded,
-        size: 18,
-        color: colorScheme.onSurfaceVariant,
-      ),
-      label: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-      ),
+        : context.tr('lastSyncShort', <String, Object>{
+            'time': _formatRelativeTime(context, lastSyncAt!),
+          });
+    return StatusPill(
+      icon: Icons.schedule_rounded,
+      label: label,
       backgroundColor: colorScheme.surfaceContainerHighest,
-      side: BorderSide(
-        color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-      ),
+      foregroundColor: colorScheme.onSurfaceVariant,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.45),
     );
   }
 
@@ -2544,7 +2305,9 @@ class _ViewerLastSyncChip extends StatelessWidget {
       return context.tr('justNow');
     }
     if (diff.inMinutes < 60) {
-      return context.tr('minutesAgo', <String, Object>{'count': diff.inMinutes});
+      return context.tr('minutesAgo', <String, Object>{
+        'count': diff.inMinutes,
+      });
     }
     if (diff.inHours < 24) {
       return context.tr('hoursAgo', <String, Object>{'count': diff.inHours});
@@ -2563,6 +2326,7 @@ class _ViewerCanvas extends StatelessWidget {
     required this.heatmapVisible,
     required this.heatmapMetric,
     required this.heatmapData,
+    required this.warehouseHeatmapLayer,
     required this.generatedModel,
     required this.focusZoneName,
     required this.focusRequestId,
@@ -2571,6 +2335,7 @@ class _ViewerCanvas extends StatelessWidget {
     required this.focusSlotNumber,
     required this.focusLocationRequestId,
     required this.onZoneTap,
+    this.externalModelPath,
   });
 
   final ViewerAdapter adapter;
@@ -2581,6 +2346,7 @@ class _ViewerCanvas extends StatelessWidget {
   final bool heatmapVisible;
   final ViewerHeatmapMetric heatmapMetric;
   final List<ViewerHeatmapEntry> heatmapData;
+  final List<WarehouseHeatmapLayerEntry> warehouseHeatmapLayer;
   final WarehouseModelData? generatedModel;
   final String? focusZoneName;
   final int focusRequestId;
@@ -2589,14 +2355,29 @@ class _ViewerCanvas extends StatelessWidget {
   final int focusSlotNumber;
   final int focusLocationRequestId;
   final void Function(ViewerHeatmapEntry, ViewerHeatmapMetric) onZoneTap;
+  final String? externalModelPath;
 
   @override
   Widget build(BuildContext context) {
+    final useGlbViewer = Glb3DViewer.canRender(externalModelPath);
+    final useUnitySource = isUnitySceneSourcePath(externalModelPath);
     return Stack(
       children: <Widget>[
         Positioned.fill(
           child: RepaintBoundary(
-            child: adapter.type == ViewerType.nativePlaceholder
+            child: useGlbViewer
+                ? Glb3DViewer(
+                    modelPath: externalModelPath!,
+                    heatmapData: heatmapData,
+                    warehouseHeatmapLayer: warehouseHeatmapLayer,
+                    heatmapMetric: heatmapMetric,
+                    showHotspots:
+                        heatmapVisible || warehouseHeatmapLayer.isNotEmpty,
+                    hideGenericHallHotspots: true,
+                  )
+                : useUnitySource
+                ? UnityRuntimeView(scenePath: externalModelPath!)
+                : adapter.type == ViewerType.nativePlaceholder
                 ? NativeWarehouse3DView(
                     warehouse: warehouse,
                     model: generatedModel,
@@ -2605,6 +2386,7 @@ class _ViewerCanvas extends StatelessWidget {
                     heatmapVisible: heatmapVisible,
                     heatmapMetric: heatmapMetric,
                     heatmapData: heatmapData,
+                    warehouseHeatmapLayer: warehouseHeatmapLayer,
                     focusZoneName: focusZoneName,
                     focusRequestId: focusRequestId,
                     focusRackNumber: focusRackNumber,
@@ -2614,60 +2396,42 @@ class _ViewerCanvas extends StatelessWidget {
                     enableFirstPersonControls: false,
                   )
                 : generatedModel == null
-                    ? adapter.buildViewerCanvas(context, warehouse)
-                    : _GeneratedWarehouseCanvas(
-                        warehouse: warehouse,
-                        model: generatedModel!,
-                      ),
+                ? adapter.buildViewerCanvas(context, warehouse)
+                : _GeneratedWarehouseCanvas(
+                    warehouse: warehouse,
+                    model: generatedModel!,
+                  ),
           ),
         ),
-        if (zonesVisible)
+        if (useUnitySource)
           Positioned(
             top: AppSpacing.sm,
             right: AppSpacing.sm,
-            child: _OverlayBadge(
-              icon: Icons.grid_view_outlined,
-              label: context.tr('zonesVisible'),
-            ),
-          ),
-        if (tourRunning)
-          Positioned(
-            left: AppSpacing.sm,
-            bottom: AppSpacing.sm,
-            child: _OverlayBadge(
-              icon: Icons.directions_walk_outlined,
-              label: context.tr('tourActive'),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 340),
+              child: UnitySourceNotice(scenePath: externalModelPath!),
             ),
           ),
         if (heatmapVisible && heatmapData.isNotEmpty)
           Positioned.fill(
             child: RepaintBoundary(
-              child: _HeatmapZoneOverlay(
+              child: HeatmapZoneOverlay(
                 metric: heatmapMetric,
                 data: heatmapData,
                 onZoneTap: onZoneTap,
+                hideGenericHallZones: true,
               ),
-            ),
-          ),
-        if (heatmapVisible && heatmapData.isNotEmpty)
-          Positioned(
-            top: AppSpacing.sm,
-            left: AppSpacing.sm,
-            child: _HeatmapLegend(
-              metric: heatmapMetric,
-              data: heatmapData,
-              onZoneTap: onZoneTap,
             ),
           ),
         if (isGeneratingModel)
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.9),
               ),
-              child: const Center(
-                child: _ViewerGeneratingOverlay(),
-              ),
+              child: const Center(child: _ViewerGeneratingOverlay()),
             ),
           ),
       ],
@@ -2719,6 +2483,87 @@ class _ViewerGeneratingOverlay extends StatelessWidget {
   }
 }
 
+class _ExternalModelCard extends StatelessWidget {
+  const _ExternalModelCard({required this.modelPath});
+
+  final String modelPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final fileName = _fileNameFromPath(modelPath);
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(Icons.view_in_ar_rounded, color: colorScheme.primary),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    'Externes 3D-Modell eingebunden',
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              fileName,
+              style: textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              modelPath,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: () async {
+                    final uri = Uri.file(modelPath);
+                    final opened = await launchUrl(uri);
+                    if (!opened && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Modell-Datei konnte nicht geoeffnet werden.'),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: const Text('Modell oeffnen'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ModelGenerationCard extends StatelessWidget {
   const _ModelGenerationCard({
     required this.warehouse,
@@ -2755,16 +2600,18 @@ class _ModelGenerationCard extends StatelessWidget {
                         : context.tr('viewerModelStateMissing'),
                   ),
                   avatar: Icon(
-                    hasModel ? Icons.check_circle_outline : Icons.pending_outlined,
+                    hasModel
+                        ? Icons.check_circle_outline
+                        : Icons.pending_outlined,
                     size: 18,
                   ),
-                  backgroundColor:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
                   side: BorderSide(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .outlineVariant
-                        .withValues(alpha: 0.45),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outlineVariant.withValues(alpha: 0.45),
                   ),
                 ),
               ],
@@ -2791,12 +2638,12 @@ class _ModelGenerationCard extends StatelessWidget {
             if (hasModel) ...<Widget>[
               const SizedBox(height: AppSpacing.xs),
               Text(
-                context.tr(
-                  'viewerModelGeneratedAt',
-                  <String, Object>{
-                    'time': _formatRelativeTime(context, warehouse.generatedModel!.generatedAt),
-                  },
-                ),
+                context.tr('viewerModelGeneratedAt', <String, Object>{
+                  'time': _formatRelativeTime(
+                    context,
+                    warehouse.generatedModel!.generatedAt,
+                  ),
+                }),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -2812,7 +2659,9 @@ class _ModelGenerationCard extends StatelessWidget {
       return context.tr('justNow');
     }
     if (diff.inMinutes < 60) {
-      return context.tr('minutesAgo', <String, Object>{'count': diff.inMinutes});
+      return context.tr('minutesAgo', <String, Object>{
+        'count': diff.inMinutes,
+      });
     }
     if (diff.inHours < 24) {
       return context.tr('hoursAgo', <String, Object>{'count': diff.inHours});
@@ -2854,12 +2703,27 @@ class _GeneratedWarehouseCanvas extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: <Widget>[
-                _PlanChip(label: context.tr('warehouseLengthLabel'), value: '${model.warehouseLengthM} m'),
-                _PlanChip(label: context.tr('warehouseWidthLabel'), value: '${model.warehouseWidthM} m'),
-                _PlanChip(label: context.tr('warehouseHeightLabel'), value: '${model.warehouseHeightM} m'),
+                _PlanChip(
+                  label: context.tr('warehouseLengthLabel'),
+                  value: '${model.warehouseLengthM} m',
+                ),
+                _PlanChip(
+                  label: context.tr('warehouseWidthLabel'),
+                  value: '${model.warehouseWidthM} m',
+                ),
+                _PlanChip(
+                  label: context.tr('warehouseHeightLabel'),
+                  value: '${model.warehouseHeightM} m',
+                ),
                 _PlanChip(label: context.tr('rackRowsLabel'), value: '$rows'),
-                _PlanChip(label: context.tr('rackLevelsLabel'), value: '${model.shelfLevels}'),
-                _PlanChip(label: context.tr('viewerModelShelves'), value: '$rows x $columns'),
+                _PlanChip(
+                  label: context.tr('rackLevelsLabel'),
+                  value: '${model.shelfLevels}',
+                ),
+                _PlanChip(
+                  label: context.tr('viewerModelShelves'),
+                  value: '$rows x $columns',
+                ),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -2879,10 +2743,9 @@ class _GeneratedWarehouseCanvas extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              context.tr(
-                'viewerGeneratedCanvasSubtitle',
-                <String, Object>{'name': warehouse.name},
-              ),
+              context.tr('viewerGeneratedCanvasSubtitle', <String, Object>{
+                'name': warehouse.name,
+              }),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -2893,10 +2756,7 @@ class _GeneratedWarehouseCanvas extends StatelessWidget {
 }
 
 class _PlanChip extends StatelessWidget {
-  const _PlanChip({
-    required this.label,
-    required this.value,
-  });
+  const _PlanChip({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -2908,7 +2768,9 @@ class _PlanChip extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
       ),
       child: Padding(
@@ -2922,9 +2784,9 @@ class _PlanChip extends StatelessWidget {
             Text('$label: ', style: Theme.of(context).textTheme.bodySmall),
             Text(
               value,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -3004,10 +2866,14 @@ class _WarehousePlanPainter extends CustomPainter {
       final width = (zone.width.clamp(0.05, 1) * size.width).toDouble();
       final height = (zone.height.clamp(0.05, 1) * size.height).toDouble();
 
-      final rect = Rect.fromLTWH(left, top, width, height).intersect(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-      );
-      final fillPaint = Paint()..color = zoneFillColors[i % zoneFillColors.length];
+      final rect = Rect.fromLTWH(
+        left,
+        top,
+        width,
+        height,
+      ).intersect(Rect.fromLTWH(0, 0, size.width, size.height));
+      final fillPaint = Paint()
+        ..color = zoneFillColors[i % zoneFillColors.length];
       final strokePaint = Paint()
         ..color = colorScheme.secondary.withValues(alpha: 0.7)
         ..style = PaintingStyle.stroke
@@ -3024,132 +2890,6 @@ class _WarehousePlanPainter extends CustomPainter {
         oldDelegate.columns != columns ||
         oldDelegate.zones != zones ||
         oldDelegate.colorScheme != colorScheme;
-  }
-}
-
-class _HeatmapZoneOverlay extends StatelessWidget {
-  const _HeatmapZoneOverlay({
-    required this.metric,
-    required this.data,
-    required this.onZoneTap,
-  });
-
-  final ViewerHeatmapMetric metric;
-  final List<ViewerHeatmapEntry> data;
-  final void Function(ViewerHeatmapEntry, ViewerHeatmapMetric) onZoneTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 860
-            ? 4
-            : constraints.maxWidth >= 620
-                ? 3
-                : 2;
-        final maxItems = constraints.maxWidth >= 860
-            ? 14
-            : constraints.maxWidth >= 620
-                ? 10
-                : 6;
-        final itemWidth =
-            ((constraints.maxWidth - ((columns + 1) * AppSpacing.sm)) / columns)
-                .clamp(90.0, 220.0);
-        final sortedEntries = <ViewerHeatmapEntry>[...data]
-          ..sort((a, b) => b.valueFor(metric).compareTo(a.valueFor(metric)));
-        final visibleEntries = sortedEntries.take(maxItems).toList(growable: false);
-
-        return Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: visibleEntries
-                .map(
-                  (entry) => SizedBox(
-                    width: itemWidth,
-                    child: _HeatmapZoneTile(
-                      zoneName: entry.zoneName,
-                      value: entry.valueFor(metric),
-                      onTap: () => onZoneTap(entry, metric),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HeatmapZoneTile extends StatelessWidget {
-  const _HeatmapZoneTile({
-    required this.zoneName,
-    required this.value,
-    required this.onTap,
-  });
-
-  final String zoneName;
-  final double value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final safeValue = value.clamp(0, 1).toDouble();
-    final tileColor = _heatColor(safeValue);
-    final textColor = safeValue > 0.72 ? Colors.white : Colors.black87;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: tileColor.withValues(alpha: 0.33),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: tileColor.withValues(alpha: 0.74),
-              width: 1.2,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    zoneName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
-                        ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  '${(safeValue * 100).round()}%',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: textColor,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _heatColor(double value) {
-    return _heatColorForValue(value);
   }
 }
 
@@ -3182,10 +2922,9 @@ class _ZoneDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                context.tr(
-                  'heatmapLegendTitle',
-                  <String, Object>{'metric': context.tr(metric.labelKey)},
-                ),
+                context.tr('heatmapLegendTitle', <String, Object>{
+                  'metric': context.tr(metric.labelKey),
+                }),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -3256,15 +2995,12 @@ class _ZoneDetailsSheet extends StatelessWidget {
   }
 
   Color _metricColor(double value) {
-    return _heatColorForValue(value);
+    return heatColorForValue(value);
   }
 }
 
 class _ZoneMetricChip extends StatelessWidget {
-  const _ZoneMetricChip({
-    required this.label,
-    required this.value,
-  });
+  const _ZoneMetricChip({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -3287,187 +3023,9 @@ class _ZoneMetricChip extends StatelessWidget {
             Text('$label: ', style: Theme.of(context).textTheme.bodySmall),
             Text(
               value,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeatmapLegend extends StatelessWidget {
-  const _HeatmapLegend({
-    required this.metric,
-    required this.data,
-    required this.onZoneTap,
-  });
-
-  final ViewerHeatmapMetric metric;
-  final List<ViewerHeatmapEntry> data;
-  final void Function(ViewerHeatmapEntry, ViewerHeatmapMetric) onZoneTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final topZones = <ViewerHeatmapEntry>[...data]
-      ..sort((a, b) => b.valueFor(metric).compareTo(a.valueFor(metric)));
-    final visibleZones = topZones.take(4).toList(growable: false);
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 280),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Theme.of(context)
-              .colorScheme
-              .surfaceContainerLowest
-              .withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                context.tr(
-                  'heatmapLegendTitle',
-                  <String, Object>{'metric': context.tr(metric.labelKey)},
-                ),
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              ...visibleZones.map((entry) {
-                final value = entry.valueFor(metric).clamp(0, 1).toDouble();
-                final heatColor = _heatColor(value);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => onZoneTap(entry, metric),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xs,
-                          vertical: 4,
-                        ),
-                        child: Row(
-                          children: <Widget>[
-                            Icon(Icons.circle, size: 10, color: heatColor),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                entry.zoneName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            SizedBox(
-                              width: 72,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(999),
-                                child: LinearProgressIndicator(
-                                  minHeight: 7,
-                                  value: value,
-                                  color: heatColor,
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            SizedBox(
-                              width: 36,
-                              child: Text(
-                                '${(value * 100).round()}%',
-                                textAlign: TextAlign.right,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _heatColor(double value) {
-    return _heatColorForValue(value);
-  }
-}
-
-Color _heatColorForValue(double value) {
-  final safeValue = value.clamp(0, 1).toDouble();
-  if (safeValue >= 0.85) {
-    return Colors.red.shade700;
-  }
-  if (safeValue >= 0.65) {
-    return Colors.orange.shade700;
-  }
-  if (safeValue >= 0.45) {
-    return Colors.amber.shade700;
-  }
-  return Colors.green.shade700;
-}
-
-class _OverlayBadge extends StatelessWidget {
-  const _OverlayBadge({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerLowest
-            .withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 16),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -3499,115 +3057,6 @@ class _MetricMenuTrigger extends StatelessWidget {
             const Icon(Icons.tune, size: 18),
             const SizedBox(width: AppSpacing.xs),
             Text(label),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ViewerStatePanel extends StatelessWidget {
-  const _ViewerStatePanel({
-    required this.zonesVisible,
-    required this.tourRunning,
-    required this.heatmapVisible,
-    required this.heatmapMetric,
-    required this.resetCount,
-  });
-
-  final bool zonesVisible;
-  final bool tourRunning;
-  final bool heatmapVisible;
-  final ViewerHeatmapMetric heatmapMetric;
-  final int resetCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: <Widget>[
-            _StateChip(
-              icon: zonesVisible
-                  ? Icons.grid_view_outlined
-                  : Icons.grid_off_outlined,
-              label: zonesVisible
-                  ? context.tr('zonesVisible')
-                  : context.tr('zonesHidden'),
-              active: zonesVisible,
-            ),
-            _StateChip(
-              icon: tourRunning
-                  ? Icons.directions_walk_outlined
-                  : Icons.pause_circle_outline,
-              label: tourRunning ? context.tr('tourActive') : context.tr('tourPaused'),
-              active: tourRunning,
-            ),
-            _StateChip(
-              icon: heatmapVisible ? Icons.layers_outlined : Icons.layers_clear_outlined,
-              label: heatmapVisible
-                  ? context.tr(
-                      'heatmapActiveState',
-                      <String, Object>{'metric': context.tr(heatmapMetric.labelKey)},
-                    )
-                  : context.tr('heatmapInactiveState'),
-              active: heatmapVisible,
-            ),
-            _StateChip(
-              icon: Icons.refresh,
-              label: context.tr('resets', <String, Object>{'count': resetCount}),
-              active: false,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StateChip extends StatelessWidget {
-  const _StateChip({
-    required this.icon,
-    required this.label,
-    required this.active,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final backgroundColor =
-        active ? colorScheme.secondaryContainer : colorScheme.surfaceContainerHighest;
-    final foregroundColor =
-        active ? colorScheme.onSecondaryContainer : colorScheme.onSurface;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 16, color: foregroundColor),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: foregroundColor,
-                  ),
-            ),
           ],
         ),
       ),
@@ -3669,167 +3118,6 @@ class _WarehouseMeta extends StatelessWidget {
                 value: '${layout.heightM} m',
                 icon: Icons.height_outlined,
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ViewerHeroBanner extends StatelessWidget {
-  const _ViewerHeroBanner({
-    required this.warehouse,
-    required this.criticalZoneCount,
-    required this.canUseControls,
-  });
-
-  final Warehouse warehouse;
-  final int criticalZoneCount;
-  final bool canUseControls;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final metrics = <Widget>[
-      _HeroMetricChip(
-        icon: Icons.grid_view_rounded,
-        label: context.tr('zones'),
-        value: '${warehouse.zoneCount}',
-      ),
-      _HeroMetricChip(
-        icon: Icons.layers_outlined,
-        label: context.tr('kpiTotalSlots'),
-        value: '${warehouse.totalStorageSlots}',
-      ),
-      _HeroMetricChip(
-        icon: Icons.speed_outlined,
-        label: context.tr('kpiUtilization'),
-        value: '${warehouse.utilizationPercent}%',
-      ),
-      _HeroMetricChip(
-        icon: Icons.warning_amber_outlined,
-        label: 'Kritische Zonen',
-        value: '$criticalZoneCount',
-      ),
-      _HeroMetricChip(
-        icon: canUseControls ? Icons.tune : Icons.visibility_outlined,
-        label: 'Modus',
-        value: canUseControls ? 'Steuerung' : 'Beobachtung',
-      ),
-    ];
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            colorScheme.primaryContainer.withValues(alpha: 0.55),
-            colorScheme.secondaryContainer.withValues(alpha: 0.2),
-            colorScheme.surfaceContainerLowest,
-          ],
-        ),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'Viewer Control',
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '3D-Ansicht, Heatmap und Lagerplatz-Fokus in einem Arbeitsbereich.',
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 760;
-                return Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: compact ? metrics.take(4).toList() : metrics,
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              canUseControls ? 'Modus: Steuerung aktiv' : 'Modus: Beobachtung',
-              style: textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroMetricChip extends StatelessWidget {
-  const _HeroMetricChip({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 16, color: colorScheme.primary),
-            const SizedBox(width: 6),
-            Text(
-              '$label: ',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
           ],
         ),
       ),
@@ -3912,8 +3200,10 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
       _selectedLevel = widget.initialLevel;
       _selectedSlot = widget.initialSlot;
       _initFromWarehouse(widget.warehouse);
-      _slotController.text =
-          (_selectedSlot ?? 1).toString().padLeft(_slotDigits, '0');
+      _slotController.text = (_selectedSlot ?? 1).toString().padLeft(
+        _slotDigits,
+        '0',
+      );
       _codeController.text = _locationCode();
     }
   }
@@ -4020,8 +3310,10 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
       _slotValid = true;
       _codeValid = true;
     });
-    _slotController.text =
-        (_selectedSlot ?? 1).toString().padLeft(_slotDigits, '0');
+    _slotController.text = (_selectedSlot ?? 1).toString().padLeft(
+      _slotDigits,
+      '0',
+    );
     _codeController.text = _locationCode();
   }
 
@@ -4033,8 +3325,10 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
       _slotValid = true;
       _codeValid = true;
     });
-    _slotController.text =
-        (_selectedSlot ?? 1).toString().padLeft(_slotDigits, '0');
+    _slotController.text = (_selectedSlot ?? 1).toString().padLeft(
+      _slotDigits,
+      '0',
+    );
     _codeController.text = _locationCode();
     if (widget.onFocus != null) {
       widget.onFocus!.call(
@@ -4049,19 +3343,21 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
     final query = _filterQuery.trim().toLowerCase();
     final filtered = query.isEmpty
         ? widget.samples
-        : widget.samples.where((sample) {
-            final code = sample.displayCode.toLowerCase();
-            final rack = sample.rackNumber.toString();
-            final level = sample.levelNumber.toString();
-            final slot = sample.slotNumber.toString();
-            return code.contains(query) ||
-                rack == query ||
-                level == query ||
-                slot == query ||
-                sample.placeId.toLowerCase().contains(query) ||
-                sample.area.toLowerCase().contains(query) ||
-                sample.abcClass.toLowerCase().contains(query);
-          }).toList(growable: false);
+        : widget.samples
+              .where((sample) {
+                final code = sample.displayCode.toLowerCase();
+                final rack = sample.rackNumber.toString();
+                final level = sample.levelNumber.toString();
+                final slot = sample.slotNumber.toString();
+                return code.contains(query) ||
+                    rack == query ||
+                    level == query ||
+                    slot == query ||
+                    sample.placeId.toLowerCase().contains(query) ||
+                    sample.area.toLowerCase().contains(query) ||
+                    sample.abcClass.toLowerCase().contains(query);
+              })
+              .toList(growable: false);
     final sorted = filtered.toList(growable: false);
     sorted.sort((a, b) {
       if (_sortByAbc) {
@@ -4156,15 +3452,9 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
   (Color, Color) _abcChipColor(String abc, ColorScheme colorScheme) {
     switch (abc) {
       case 'A':
-        return (
-          colorScheme.errorContainer,
-          colorScheme.onErrorContainer,
-        );
+        return (colorScheme.errorContainer, colorScheme.onErrorContainer);
       case 'B':
-        return (
-          colorScheme.tertiaryContainer,
-          colorScheme.onTertiaryContainer,
-        );
+        return (colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer);
       case 'C':
         return (
           colorScheme.secondaryContainer,
@@ -4226,8 +3516,9 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                     ),
                     DecoratedBox(
                       decoration: BoxDecoration(
-                        color:
-                            colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
+                        color: colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.9,
+                        ),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Padding(
@@ -4238,7 +3529,11 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
-                            Icon(Icons.qr_code_2, size: 16, color: colorScheme.primary),
+                            Icon(
+                              Icons.qr_code_2,
+                              size: 16,
+                              color: colorScheme.primary,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               _locationCode(),
@@ -4294,22 +3589,21 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                     SizedBox(
                       width: fieldWidth,
                       child: DropdownButtonFormField<int>(
-                        value: _selectedRack ?? 1,
+                        initialValue: _selectedRack ?? 1,
                         decoration: InputDecoration(
                           labelText: context.tr('storageLocationRackLabel'),
                         ),
-                        items: List<DropdownMenuItem<int>>.generate(
-                          _rackCount,
-                          (index) {
-                            final value = index + 1;
-                            return DropdownMenuItem<int>(
-                              value: value,
-                              child: Text(
-                                '${context.tr('storageLocationRackLabel')} $value',
-                              ),
-                            );
-                          },
-                        ),
+                        items: List<DropdownMenuItem<int>>.generate(_rackCount, (
+                          index,
+                        ) {
+                          final value = index + 1;
+                          return DropdownMenuItem<int>(
+                            value: value,
+                            child: Text(
+                              '${context.tr('storageLocationRackLabel')} $value',
+                            ),
+                          );
+                        }),
                         onChanged: widget.canUseControls
                             ? (value) {
                                 if (value == null) {
@@ -4327,22 +3621,21 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                     SizedBox(
                       width: fieldWidth,
                       child: DropdownButtonFormField<int>(
-                        value: _selectedLevel ?? 1,
+                        initialValue: _selectedLevel ?? 1,
                         decoration: InputDecoration(
                           labelText: context.tr('storageLocationLevelLabel'),
                         ),
-                        items: List<DropdownMenuItem<int>>.generate(
-                          _levelCount,
-                          (index) {
-                            final value = index + 1;
-                            return DropdownMenuItem<int>(
-                              value: value,
-                              child: Text(
-                                '${context.tr('storageLocationLevelLabel')} $value',
-                              ),
-                            );
-                          },
-                        ),
+                        items: List<DropdownMenuItem<int>>.generate(_levelCount, (
+                          index,
+                        ) {
+                          final value = index + 1;
+                          return DropdownMenuItem<int>(
+                            value: value,
+                            child: Text(
+                              '${context.tr('storageLocationLevelLabel')} $value',
+                            ),
+                          );
+                        }),
                         onChanged: widget.canUseControls
                             ? (value) {
                                 if (value == null) {
@@ -4398,13 +3691,11 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                       ),
                     ),
                     _CountPill(
-                      label: context.tr(
-                        'storageLocationSamplesCount',
-                        <String, Object>{
-                          'count': _filteredSamples().length,
-                          'total': widget.samples.length,
-                        },
-                      ),
+                      label: context
+                          .tr('storageLocationSamplesCount', <String, Object>{
+                            'count': _filteredSamples().length,
+                            'total': widget.samples.length,
+                          }),
                     ),
                   ],
                 ),
@@ -4425,7 +3716,9 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                                 _filterQuery = '';
                                 _filterController.clear();
                               });
-                              context.read<AppState>().setStorageFilterQuery('');
+                              context.read<AppState>().setStorageFilterQuery(
+                                '',
+                              );
                             },
                             icon: const Icon(Icons.close),
                           ),
@@ -4456,13 +3749,15 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                         backgroundColor: chipColor.$1,
                         onPressed: widget.canUseControls
                             ? () {
-                              _filterController.text = sample.displayCode;
-                              setState(() => _filterQuery = sample.displayCode);
-                              context
-                                  .read<AppState>()
-                                  .setStorageFilterQuery(sample.displayCode);
-                              _applySample(sample);
-                            }
+                                _filterController.text = sample.displayCode;
+                                setState(
+                                  () => _filterQuery = sample.displayCode,
+                                );
+                                context.read<AppState>().setStorageFilterQuery(
+                                  sample.displayCode,
+                                );
+                                _applySample(sample);
+                              }
                             : null,
                       );
                     }).toList(),
@@ -4479,7 +3774,9 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                       onSelected: widget.canUseControls
                           ? (_) {
                               setState(() => _sortByAbc = true);
-                              context.read<AppState>().setStorageSortByAbc(true);
+                              context.read<AppState>().setStorageSortByAbc(
+                                true,
+                              );
                             }
                           : null,
                     ),
@@ -4489,7 +3786,9 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                       onSelected: widget.canUseControls
                           ? (_) {
                               setState(() => _sortByAbc = false);
-                              context.read<AppState>().setStorageSortByAbc(false);
+                              context.read<AppState>().setStorageSortByAbc(
+                                false,
+                              );
                             }
                           : null,
                     ),
@@ -4520,7 +3819,9 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                         ),
                         backgroundColor: chipColor.$1,
                         side: BorderSide(
-                          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                         onPressed: widget.canUseControls
                             ? () => _applySample(sample)
@@ -4531,45 +3832,65 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                 if (widget.samples.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppSpacing.sm),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        context.tr(
-                          'storageLocationVisibleCount',
-                          <String, Object>{
-                            'count': _visibleSamples().length,
-                            'total': _filteredSamples().length,
-                          },
-                        ),
-                        style: formTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                      Expanded(
+                        child: Text(
+                          context.tr(
+                            'storageLocationVisibleCount',
+                            <String, Object>{
+                              'count': _visibleSamples().length,
+                              'total': _filteredSamples().length,
+                            },
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: formTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: _visibleSampleCount >= _filteredSamples().length
-                            ? null
-                            : () {
-                                setState(() {
-                                  _visibleSampleCount += 12;
-                                });
-                                context
-                                    .read<AppState>()
-                                    .setStorageVisibleSampleCount(_visibleSampleCount);
-                              },
-                        child: Text(context.tr('storageLocationShowMore')),
-                      ),
-                      TextButton(
-                        onPressed: _visibleSampleCount <= 12
-                            ? null
-                            : () {
-                                setState(() {
-                                  _visibleSampleCount = 12;
-                                });
-                                context
-                                    .read<AppState>()
-                                    .setStorageVisibleSampleCount(_visibleSampleCount);
-                              },
-                        child: Text(context.tr('storageLocationShowLess')),
+                      const SizedBox(width: AppSpacing.xs),
+                      Flexible(
+                        child: OverflowBar(
+                          alignment: MainAxisAlignment.end,
+                          overflowAlignment: OverflowBarAlignment.end,
+                          spacing: 0,
+                          children: <Widget>[
+                            TextButton(
+                              onPressed:
+                                  _visibleSampleCount >=
+                                      _filteredSamples().length
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _visibleSampleCount += 12;
+                                      });
+                                      context
+                                          .read<AppState>()
+                                          .setStorageVisibleSampleCount(
+                                            _visibleSampleCount,
+                                          );
+                                    },
+                              child: Text(context.tr('storageLocationShowMore')),
+                            ),
+                            TextButton(
+                              onPressed: _visibleSampleCount <= 12
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _visibleSampleCount = 12;
+                                      });
+                                      context
+                                          .read<AppState>()
+                                          .setStorageVisibleSampleCount(
+                                            _visibleSampleCount,
+                                          );
+                                    },
+                              child: Text(context.tr('storageLocationShowLess')),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -4579,16 +3900,14 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        context.tr(
-                          'storageLocationSummary',
-                          <String, Object>{
-                            'rack': _selectedRack ?? 1,
-                            'level': _selectedLevel ?? 1,
-                            'slot': (_selectedSlot ?? 1)
-                                .toString()
-                                .padLeft(_slotDigits, '0'),
-                          },
-                        ),
+                        context.tr('storageLocationSummary', <String, Object>{
+                          'rack': _selectedRack ?? 1,
+                          'level': _selectedLevel ?? 1,
+                          'slot': (_selectedSlot ?? 1).toString().padLeft(
+                            _slotDigits,
+                            '0',
+                          ),
+                        }),
                         style: formTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -4609,9 +3928,10 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                                       <String, Object>{
                                         'rack': rack,
                                         'level': level,
-                                        'slot': slot
-                                            .toString()
-                                            .padLeft(_slotDigits, '0'),
+                                        'slot': slot.toString().padLeft(
+                                          _slotDigits,
+                                          '0',
+                                        ),
                                       },
                                     ),
                                   ),
@@ -4653,16 +3973,14 @@ class _MetaItem extends StatelessWidget {
         children: <Widget>[
           DecoratedBox(
             decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.9),
+              color: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: Theme.of(context)
-                    .colorScheme
-                    .outlineVariant
-                    .withValues(alpha: 0.45),
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.45),
               ),
             ),
             child: Padding(
@@ -4699,6 +4017,82 @@ class _StorageLocationDetailsCard extends StatelessWidget {
   final int fallbackLevel;
   final int fallbackSlot;
 
+  List<_LocationActionRecommendation> _buildRecommendations(
+    WarehouseStorageLocation sample,
+  ) {
+    final recommendations = <_LocationActionRecommendation>[];
+    final abc = sample.abcClass.trim().toUpperCase();
+    final idle = sample.daysSinceMovement ?? 0;
+    final moves30 = sample.movements30d ?? 0;
+    final status = sample.status.trim().toLowerCase();
+    final isEmpty = status.contains('frei') || status.contains('leer');
+    final isOccupied = status.contains('belegt') || status.contains('occupied');
+
+    if (idle >= 180 && moves30 <= 1) {
+      recommendations.add(
+        _LocationActionRecommendation(
+          icon: Icons.cleaning_services_outlined,
+          title: 'Bestandsbereinigung anstoßen',
+          summary:
+              'Platz seit langer Zeit ohne Bewegung. Prüfen auf Löschung/Abzug.',
+          dataBasis: 'Tage seit Bewegung, Bewegungen 30T, Status, Artikel-ID',
+          critical: true,
+        ),
+      );
+    }
+
+    if (idle >= 90 && isOccupied) {
+      recommendations.add(
+        _LocationActionRecommendation(
+          icon: Icons.swap_horiz_rounded,
+          title: 'Relocate / Retrieval prüfen',
+          summary:
+              'Langläufer erkannt. In Reserve umlagern oder gezielt auslagern.',
+          dataBasis:
+              'Tage seit Bewegung, ABC-Klasse, Platzcode, Bewegungen 30T',
+        ),
+      );
+    }
+
+    if ((abc == 'A' && sample.levelNumber >= 3) ||
+        (abc == 'B' && moves30 >= 20 && sample.levelNumber >= 2)) {
+      recommendations.add(
+        _LocationActionRecommendation(
+          icon: Icons.vertical_align_bottom_outlined,
+          title: 'Replenishment für Pick-Ebene',
+          summary:
+              'Schnelldreher liegt zu hoch. Für Kommissionierung nach unten ziehen.',
+          dataBasis: 'ABC-Klasse, Ebene, Picks 30T, Pick-Strategie',
+        ),
+      );
+    }
+
+    if ((abc == 'A' && (idle >= 45 || moves30 <= 2)) ||
+        (abc == 'C' && moves30 >= 25)) {
+      recommendations.add(
+        _LocationActionRecommendation(
+          icon: Icons.auto_graph_outlined,
+          title: 'ABC-Klassifizierung neu bewerten',
+          summary: 'Umschlag passt nicht zur aktuellen ABC-Zuordnung.',
+          dataBasis: 'ABC-Klasse, Picks 30T, Tage seit Bewegung, Artikel-ID',
+        ),
+      );
+    }
+
+    if (isEmpty) {
+      recommendations.add(
+        _LocationActionRecommendation(
+          icon: Icons.inventory_2_outlined,
+          title: 'Putaway-Kandidat',
+          summary: 'Freier Platz kann für Einlagerung genutzt werden.',
+          dataBasis: 'Status, Zone/Bereich, Putaway-Regeln, Artikelprofil',
+        ),
+      );
+    }
+
+    return recommendations;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -4716,6 +4110,10 @@ class _StorageLocationDetailsCard extends StatelessWidget {
       abcClass: selected?.abcClass ?? '',
       status: selected?.status ?? '',
     ).displayCode;
+
+    final recommendations = hasSelection
+        ? _buildRecommendations(selected!)
+        : const <_LocationActionRecommendation>[];
 
     return Card(
       child: Padding(
@@ -4774,11 +4172,27 @@ class _StorageLocationDetailsCard extends StatelessWidget {
                   ),
                   _DetailChip(
                     label: context.tr('storageLocationFieldAbc'),
-                    value: selected!.abcClass.isEmpty ? '-' : selected!.abcClass,
+                    value: selected!.abcClass.isEmpty
+                        ? '-'
+                        : selected!.abcClass,
                   ),
                   _DetailChip(
                     label: context.tr('storageLocationFieldStatus'),
                     value: selected!.status.isEmpty ? '-' : selected!.status,
+                  ),
+                  _DetailChip(
+                    label: 'Artikel',
+                    value: selected!.articleId.isEmpty
+                        ? '-'
+                        : selected!.articleId,
+                  ),
+                  _DetailChip(
+                    label: 'Bewegungen (30T)',
+                    value: selected!.movements30d?.toString() ?? '-',
+                  ),
+                  _DetailChip(
+                    label: 'Tage ohne Bewegung',
+                    value: selected!.daysSinceMovement?.toString() ?? '-',
                   ),
                   _DetailChip(
                     label: context.tr('storageLocationFieldRack'),
@@ -4794,6 +4208,33 @@ class _StorageLocationDetailsCard extends StatelessWidget {
                   ),
                 ],
               ),
+            if (recommendations.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Empfohlene Maßnahmen',
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Konkrete nächste Schritte inkl. benötigter Datenbasis.',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Column(
+                children: recommendations
+                    .map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: _LocationActionRecommendationTile(item: item),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ],
           ],
         ),
       ),
@@ -4826,13 +4267,77 @@ class _DetailChip extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.labelLarge,
+            Text(label, style: Theme.of(context).textTheme.labelSmall),
+            Text(value, style: Theme.of(context).textTheme.labelLarge),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationActionRecommendation {
+  const _LocationActionRecommendation({
+    required this.icon,
+    required this.title,
+    required this.summary,
+    required this.dataBasis,
+    this.critical = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String summary;
+  final String dataBasis;
+  final bool critical;
+}
+
+class _LocationActionRecommendationTile extends StatelessWidget {
+  const _LocationActionRecommendationTile({required this.item});
+
+  final _LocationActionRecommendation item;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = item.critical ? AppColors.error : AppColors.brandBlue;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(item.icon, size: 18, color: accent),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    item.title,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.summary,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Daten: ${item.dataBasis}',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -4853,19 +4358,14 @@ class _CountPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
           vertical: AppSpacing.xs,
         ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
+        child: Text(label, style: Theme.of(context).textTheme.labelMedium),
       ),
     );
   }

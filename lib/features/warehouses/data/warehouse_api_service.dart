@@ -3,7 +3,14 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../models/order_volume_point.dart';
+import '../../../models/pick_activity_heatmap.dart';
+import '../../../models/relocation_candidate.dart';
+import '../../../models/replenishment_candidate.dart';
+import '../../../models/warehouse_heatmap_layer.dart';
 import '../../../models/warehouse.dart';
+import '../../../models/warehouse_operations_profile.dart';
+import '../../../models/warehouse_trend.dart';
 
 class WarehouseCreateRequest {
   const WarehouseCreateRequest({
@@ -57,25 +64,44 @@ class WarehouseCreateRequest {
 
 class WarehouseApiService {
   WarehouseApiService({
-    required this.baseUrl,
+    required String baseUrl,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  })  : _baseUrl = baseUrl,
+        _client = client ?? http.Client();
 
-  final String baseUrl;
+  String _baseUrl;
   final http.Client _client;
 
-  Uri _uri(String path) => Uri.parse('$baseUrl$path');
+  String get baseUrl => _baseUrl;
+
+  void setBaseUrl(String value) {
+    var normalized = value.trim();
+    // Haengt oft versehentlich am Ende (z. B. "http://localhost:8000+").
+    normalized = normalized.replaceAll(RegExp(r'[+\s]+$'), '');
+    if (!normalized.startsWith('http://') &&
+        !normalized.startsWith('https://')) {
+      normalized = 'http://$normalized';
+    }
+    if (normalized.isEmpty) {
+      return;
+    }
+    _baseUrl = normalized;
+  }
+
+  Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
   Future<http.Response> _request(Future<http.Response> pending) async {
     try {
-      return await pending.timeout(const Duration(seconds: 12));
+      return await pending.timeout(const Duration(seconds: 30));
     } on TimeoutException {
       throw const WarehouseApiException(
-        'API nicht erreichbar (Timeout). Bitte Backend starten und URL prüfen.',
+        'API nicht erreichbar (Timeout). Backend und URL pruefen. '
+        'Android-Emulator: http://10.0.2.2:8000, echtes Geraet: http://<PC-IP>:8000.',
       );
     } on http.ClientException catch (error) {
       throw WarehouseApiException(
-        'API-Verbindung fehlgeschlagen: ${error.message}',
+        'API-Verbindung fehlgeschlagen: ${error.message}. '
+        'Android-Emulator: http://10.0.2.2:8000, echtes Geraet: http://<PC-IP>:8000.',
       );
     }
   }
@@ -186,6 +212,416 @@ class WarehouseApiService {
     return _parseModel(modelPayload);
   }
 
+  Future<Map<String, WarehouseOperationsProfile>> fetchOperationsProfiles() async {
+    final warehouses = await fetchWarehouses();
+    final result = <String, WarehouseOperationsProfile>{};
+    for (final warehouse in warehouses) {
+      final response =
+          await _request(_client.get(_uri('/warehouses/${warehouse.id}/operations-profile')));
+      _ensureSuccess(response, expectedStatusCodes: <int>{200});
+      final decoded = _decodeJson(response.body);
+      if (decoded is! Map) {
+        throw const WarehouseApiException(
+          'Ungueltige Antwort fuer /operations-profile.',
+        );
+      }
+      final payload = Map<String, Object?>.from(decoded.cast<Object?, Object?>());
+      result[warehouse.id] = WarehouseOperationsProfile(
+        warehouseId: warehouse.id,
+        dockCount: _toInt(payload['dock_count'], fallback: 0),
+        activeDocks: _toInt(payload['active_docks'], fallback: 0),
+        blockedSlots: _toInt(payload['blocked_slots'], fallback: 0),
+        reservedSlots: _toInt(payload['reserved_slots'], fallback: 0),
+        slaTargetPercent: _toInt(payload['sla_target_percent'], fallback: 0),
+        slaCurrentPercent: _toInt(payload['sla_current_percent'], fallback: 0),
+        avgDwellMinutes: _toInt(payload['avg_dwell_minutes'], fallback: 0),
+        coldZoneCount: _toInt(payload['cold_zone_count'], fallback: 0),
+        ambientZoneCount: _toInt(payload['ambient_zone_count'], fallback: 0),
+        hazardousZoneCount: _toInt(payload['hazardous_zone_count'], fallback: 0),
+        highBaySlots: _toInt(payload['high_bay_slots'], fallback: 0),
+        blockStorageSlots: _toInt(payload['block_storage_slots'], fallback: 0),
+        shuttleSlots: _toInt(payload['shuttle_slots'], fallback: 0),
+        floorStorageSlots: _toInt(payload['floor_storage_slots'], fallback: 0),
+        safetyIncidentsMonth: _toInt(payload['safety_incidents_month'], fallback: 0),
+        qualityHolds: _toInt(payload['quality_holds'], fallback: 0),
+      );
+    }
+    return result;
+  }
+
+  Future<List<WarehouseStorageLocation>> fetchStorageLocations({
+    required String warehouseId,
+    int limit = 120,
+  }) async {
+    final response = await _request(
+      _client.get(_uri('/warehouses/$warehouseId/storage-locations?limit=$limit')),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! List) {
+      throw const WarehouseApiException(
+        'Ungueltige Antwort fuer /storage-locations.',
+      );
+    }
+    return decoded
+        .whereType<Map>()
+        .map(
+          (item) => Map<String, Object?>.from(item.cast<Object?, Object?>()),
+        )
+        .map(_toStorageLocation)
+        .toList(growable: false);
+  }
+
+  Future<List<WarehouseTrendPoint>> fetchThroughputTrend({
+    required String warehouseId,
+    int days = 14,
+  }) async {
+    final response = await _request(
+      _client.get(_uri('/warehouses/$warehouseId/throughput-trend?days=$days')),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! List) {
+      throw const WarehouseApiException(
+        'Ungueltige Antwort fuer /throughput-trend.',
+      );
+    }
+    final points = <WarehouseTrendPoint>[];
+    for (final item in decoded.whereType<Map>()) {
+      final payload = Map<String, Object?>.from(item.cast<Object?, Object?>());
+      final rawDate = payload['date']?.toString() ?? '';
+      final parsed = DateTime.tryParse(rawDate);
+      if (parsed == null) {
+        continue;
+      }
+      points.add(
+        WarehouseTrendPoint(
+          date: DateTime(parsed.year, parsed.month, parsed.day),
+          value: _toInt(payload['value'], fallback: 0),
+        ),
+      );
+    }
+    points.sort((a, b) => a.date.compareTo(b.date));
+    return points;
+  }
+
+  Future<List<OrderVolumePoint>> fetchOrderVolumeTrend({
+    required String warehouseId,
+    int days = 30,
+  }) async {
+    final response = await _request(
+      _client.get(_uri('/warehouses/$warehouseId/order-volume-trend?days=$days')),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! List) {
+      throw const WarehouseApiException(
+        'Ungueltige Antwort fuer /order-volume-trend.',
+      );
+    }
+    final points = <OrderVolumePoint>[];
+    for (final item in decoded.whereType<Map>()) {
+      final payload = Map<String, Object?>.from(item.cast<Object?, Object?>());
+      final rawDate = payload['date']?.toString() ?? '';
+      final parsed = DateTime.tryParse(rawDate);
+      if (parsed == null) {
+        continue;
+      }
+      points.add(
+        OrderVolumePoint(
+          date: DateTime(parsed.year, parsed.month, parsed.day),
+          orders: _toInt(payload['orders'], fallback: 0),
+          positions: _toInt(payload['positions'], fallback: 0),
+          quantity: _toInt(payload['quantity'], fallback: 0),
+        ),
+      );
+    }
+    points.sort((a, b) => a.date.compareTo(b.date));
+    return points;
+  }
+
+  Future<PickActivityHeatmap> fetchPickActivityHeatmap({
+    required String warehouseId,
+  }) async {
+    final response = await _request(
+      _client.get(_uri('/warehouses/$warehouseId/pick-activity-heatmap')),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! Map) {
+      throw const WarehouseApiException(
+        'Ungueltige Antwort fuer /pick-activity-heatmap.',
+      );
+    }
+    final payload = Map<String, Object?>.from(decoded.cast<Object?, Object?>());
+    final cellsRaw = payload['cells'] is List
+        ? payload['cells'] as List
+        : const <Object>[];
+    final cells = <PickActivityCell>[];
+    for (final raw in cellsRaw.whereType<Map>()) {
+      final cell = Map<String, Object?>.from(raw.cast<Object?, Object?>());
+      cells.add(
+        PickActivityCell(
+          weekday: _toInt(cell['weekday'], fallback: 0),
+          hour: _toInt(cell['hour'], fallback: 0),
+          picks: _toInt(cell['picks'], fallback: 0),
+        ),
+      );
+    }
+    return PickActivityHeatmap(
+      minDate: DateTime.tryParse(payload['min_date']?.toString() ?? ''),
+      maxDate: DateTime.tryParse(payload['max_date']?.toString() ?? ''),
+      maxPicks: _toInt(payload['max_picks'], fallback: 0),
+      cells: cells,
+    );
+  }
+
+  Future<List<WarehouseHeatmapLayerEntry>> fetchWarehouseHeatmapLayer({
+    int limit = 500,
+  }) async {
+    final paths = <String>['/heatmap', '/warehouse-analytics-api/heatmap'];
+    Object? lastError;
+    List? decodedList;
+    for (final path in paths) {
+      try {
+        final response = await _request(_client.get(_uri(path)));
+        _ensureSuccess(response, expectedStatusCodes: <int>{200});
+        final decoded = _decodeJson(response.body);
+        if (decoded is List) {
+          decodedList = decoded;
+          break;
+        }
+        throw WarehouseApiException('Ungueltige Antwort fuer $path.');
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (decodedList == null) {
+      throw WarehouseApiException(
+        'Heatmap-Layer konnte nicht geladen werden. Letzter Fehler: $lastError',
+      );
+    }
+    final entries = <WarehouseHeatmapLayerEntry>[];
+    for (final item in decodedList.whereType<Map>()) {
+      final payload = Map<String, Object?>.from(item.cast<Object?, Object?>());
+      entries.add(
+        WarehouseHeatmapLayerEntry(
+          platzId: '${payload['PLATZ_ID'] ?? payload['platz_id'] ?? ''}'.trim(),
+          regal: _toInt(payload['REGAL'] ?? payload['regal'], fallback: 0),
+          fach: _toInt(payload['FACH'] ?? payload['fach'], fallback: 0),
+          ebene: _toInt(payload['EBENE'] ?? payload['ebene'], fallback: 0),
+          utilization: _toDouble(
+            payload['UTILIZATION'] ?? payload['utilization'],
+            fallback: 0,
+          ),
+          heatmapColor:
+              '${payload['HEATMAP_COLOR'] ?? payload['heatmap_color'] ?? ''}'
+                  .trim()
+                  .toUpperCase(),
+        ),
+      );
+      if (entries.length >= limit) {
+        break;
+      }
+    }
+    return entries;
+  }
+
+  Future<RelocationCandidateSummary> fetchRelocationCandidates({
+    required String warehouseId,
+    int limit = 12,
+  }) async {
+    final response = await _request(
+      _client.get(
+        _uri('/warehouses/$warehouseId/relocation-candidates?limit=$limit'),
+      ),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! Map) {
+      throw const WarehouseApiException(
+        'Ungueltige Antwort fuer /relocation-candidates.',
+      );
+    }
+    final payload = Map<String, Object?>.from(decoded.cast<Object?, Object?>());
+    final summary = payload['summary'] is Map
+        ? Map<String, Object?>.from(
+            (payload['summary'] as Map).cast<Object?, Object?>(),
+          )
+        : <String, Object?>{};
+
+    List<RelocationCandidate> parseList(Object? value) {
+      if (value is! List) {
+        return const <RelocationCandidate>[];
+      }
+      return value
+          .whereType<Map>()
+          .map(
+            (entry) => Map<String, Object?>.from(
+              entry.cast<Object?, Object?>(),
+            ),
+          )
+          .map(_toCandidate)
+          .toList(growable: false);
+    }
+
+    return RelocationCandidateSummary(
+      unusedA: _toInt(summary['unused_a'], fallback: 0),
+      hotC: _toInt(summary['hot_c'], fallback: 0),
+      highLevelA: _toInt(summary['high_level_a'], fallback: 0),
+      highPickThreshold:
+          _toInt(payload['high_pick_threshold'], fallback: 100),
+      highLevel: _toInt(payload['high_level'], fallback: 4),
+      unusedAPlaces: parseList(payload['unused_a_places']),
+      hotCPlaces: parseList(payload['hot_c_places']),
+      highLevelAPlaces: parseList(payload['high_level_a_places']),
+    );
+  }
+
+  RelocationCandidate _toCandidate(Map<String, Object?> payload) {
+    return RelocationCandidate(
+      placeId: '${payload['place_id'] ?? ''}'.trim(),
+      rackNumber:
+          _toInt(payload['rack_number'] ?? payload['rackNumber'], fallback: 0),
+      levelNumber: _toInt(
+        payload['level_number'] ?? payload['levelNumber'],
+        fallback: 0,
+      ),
+      slotNumber: _toInt(
+        payload['slot_number'] ?? payload['slotNumber'],
+        fallback: 0,
+      ),
+      picks: _toInt(payload['picks'], fallback: 0),
+      abcClass: '${payload['abc_class'] ?? payload['abcClass'] ?? 'C'}'
+          .trim()
+          .toUpperCase(),
+      reason: '${payload['reason'] ?? ''}'.trim(),
+    );
+  }
+
+  Future<ReplenishmentCandidateSummary> fetchReplenishmentCandidates({
+    required String warehouseId,
+    int limit = 12,
+  }) async {
+    final response = await _request(
+      _client.get(
+        _uri('/warehouses/$warehouseId/replenishment-candidates?limit=$limit'),
+      ),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! Map) {
+      throw const WarehouseApiException(
+        'Ungueltige Antwort fuer /replenishment-candidates.',
+      );
+    }
+    final payload = Map<String, Object?>.from(decoded.cast<Object?, Object?>());
+    final summary = payload['summary'] is Map
+        ? Map<String, Object?>.from(
+            (payload['summary'] as Map).cast<Object?, Object?>(),
+          )
+        : <String, Object?>{};
+
+    List<ReplenishmentCandidate> parseList(Object? value) {
+      if (value is! List) {
+        return const <ReplenishmentCandidate>[];
+      }
+      return value
+          .whereType<Map>()
+          .map(
+            (entry) => Map<String, Object?>.from(
+              entry.cast<Object?, Object?>(),
+            ),
+          )
+          .map(_toReplenishmentCandidate)
+          .toList(growable: false);
+    }
+
+    return ReplenishmentCandidateSummary(
+      urgent: _toInt(summary['urgent'], fallback: 0),
+      overdue: _toInt(summary['overdue'], fallback: 0),
+      medium: _toInt(summary['medium'], fallback: 0),
+      pickThreshold: _toInt(payload['pick_threshold'], fallback: 50),
+      mediumPickThreshold:
+          _toInt(payload['medium_pick_threshold'], fallback: 20),
+      overdueDays: _toInt(payload['overdue_days'], fallback: 14),
+      pickLevel: _toInt(payload['pick_level'], fallback: 2),
+      urgentPlaces: parseList(payload['urgent_places']),
+      overduePlaces: parseList(payload['overdue_places']),
+      mediumPlaces: parseList(payload['medium_places']),
+    );
+  }
+
+  ReplenishmentCandidate _toReplenishmentCandidate(
+    Map<String, Object?> payload,
+  ) {
+    return ReplenishmentCandidate(
+      placeId: '${payload['place_id'] ?? ''}'.trim(),
+      rackNumber:
+          _toInt(payload['rack_number'] ?? payload['rackNumber'], fallback: 0),
+      levelNumber: _toInt(
+        payload['level_number'] ?? payload['levelNumber'],
+        fallback: 0,
+      ),
+      slotNumber: _toInt(
+        payload['slot_number'] ?? payload['slotNumber'],
+        fallback: 0,
+      ),
+      picks: _toInt(payload['picks'], fallback: 0),
+      daysEmpty: _toInt(payload['days_empty'] ?? payload['daysEmpty'], fallback: 0),
+      leerDatum: '${payload['leer_datum'] ?? payload['leerDatum'] ?? ''}'.trim(),
+      reason: '${payload['reason'] ?? ''}'.trim(),
+    );
+  }
+
+  Future<Map<String, List<WarehouseAbcArticleSummary>>> fetchAbcArticles({
+    required String warehouseId,
+    int limit = 1200,
+  }) async {
+    final response = await _request(
+      _client.get(_uri('/warehouses/$warehouseId/abc-articles?limit=$limit')),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! List) {
+      throw const WarehouseApiException('Ungueltige Antwort fuer /abc-articles.');
+    }
+    final items = decoded
+        .whereType<Map>()
+        .map(
+          (entry) => Map<String, Object?>.from(entry.cast<Object?, Object?>()),
+        )
+        .map(_toAbcSummary)
+        .toList(growable: false);
+    return <String, List<WarehouseAbcArticleSummary>>{
+      warehouseId: items,
+    };
+  }
+
+  Future<Map<String, List<WarehouseAbcSlotSummary>>> fetchAbcSlots({
+    required String warehouseId,
+    int limit = 10000,
+  }) async {
+    final response = await _request(
+      _client.get(_uri('/warehouses/$warehouseId/abc-slots?limit=$limit')),
+    );
+    _ensureSuccess(response, expectedStatusCodes: <int>{200});
+    final decoded = _decodeJson(response.body);
+    if (decoded is! List) {
+      throw const WarehouseApiException('Ungueltige Antwort fuer /abc-slots.');
+    }
+    final items = decoded
+        .whereType<Map>()
+        .map(
+          (entry) => Map<String, Object?>.from(entry.cast<Object?, Object?>()),
+        )
+        .map(_toAbcSlotSummary)
+        .toList(growable: false);
+    return <String, List<WarehouseAbcSlotSummary>>{
+      warehouseId: items,
+    };
+  }
+
   Warehouse _toWarehouse(Map<String, Object?> payload) {
     final layoutPayload = payload['layout'] is Map
         ? Map<String, Object?>.from((payload['layout'] as Map).cast<Object?, Object?>())
@@ -266,6 +702,36 @@ class WarehouseApiService {
       );
     }
 
+    final explicitTotalSlots = _toInt(
+      payload['total_storage_slots'] ?? payload['totalStorageSlots'],
+      fallback: 0,
+    );
+    final explicitOccupiedSlots = _toInt(
+      payload['occupied_storage_slots'] ?? payload['occupiedStorageSlots'],
+      fallback: 0,
+    );
+    final explicitOverloadedSlots = _toInt(
+      payload['overloaded_storage_slots'] ?? payload['overloadedStorageSlots'],
+      fallback: 0,
+    );
+    final explicitArticleCount = _toInt(
+      payload['article_count'] ?? payload['articleCount'],
+      fallback: 0,
+    );
+    final explicitInbound = _toInt(
+      payload['inbound_per_day'] ?? payload['inboundPerDay'],
+      fallback: 0,
+    );
+    final explicitThroughput = _toInt(
+      payload['throughput_per_day'] ?? payload['throughputPerDay'],
+      fallback: 0,
+    );
+    final explicitPickRate = _toInt(
+      payload['pick_rate_per_hour'] ?? payload['pickRatePerHour'],
+      fallback: 0,
+    );
+    final explicitAbc = _parseAbcAnalysis(payload['abc_analysis']);
+
     return Warehouse(
       id: '${payload['id'] ?? ''}',
       name: '${payload['name'] ?? 'Lager'}',
@@ -273,21 +739,118 @@ class WarehouseApiService {
       zoneCount: zoneCount,
       status: warehouseStatusFromApi(payload['status']?.toString()),
       description: '${payload['description'] ?? ''}',
-      totalStorageSlots: aggregatedTotalSlots > 0 ? aggregatedTotalSlots : metrics.totalSlots,
-      occupiedStorageSlots: aggregatedOccupiedSlots,
-      articleCount: aggregatedArticles,
-      abcAnalysis: AbcAnalysis(
-        aCount: aggregatedA,
-        bCount: aggregatedB,
-        cCount: aggregatedC,
-      ),
-      inboundPerDay: aggregatedInbound,
-      throughputPerDay: aggregatedThroughput,
-      pickRatePerHour: aggregatedPickRate,
+      totalStorageSlots: explicitTotalSlots > 0
+          ? explicitTotalSlots
+          : (aggregatedTotalSlots > 0 ? aggregatedTotalSlots : metrics.totalSlots),
+      occupiedStorageSlots: explicitOccupiedSlots > 0
+          ? explicitOccupiedSlots
+          : aggregatedOccupiedSlots,
+      overloadedStorageSlots: explicitOverloadedSlots,
+      articleCount: explicitArticleCount > 0 ? explicitArticleCount : aggregatedArticles,
+      abcAnalysis: explicitAbc ??
+          AbcAnalysis(
+            aCount: aggregatedA,
+            bCount: aggregatedB,
+            cCount: aggregatedC,
+          ),
+      inboundPerDay: explicitInbound > 0 ? explicitInbound : aggregatedInbound,
+      throughputPerDay: explicitThroughput > 0
+          ? explicitThroughput
+          : aggregatedThroughput,
+      pickRatePerHour:
+          explicitPickRate > 0 ? explicitPickRate : aggregatedPickRate,
       zones: warehouseZones,
       layoutSpec: layoutSpec,
       generatedModel: generatedModel,
     );
+  }
+
+  WarehouseStorageLocation _toStorageLocation(Map<String, Object?> payload) {
+    return WarehouseStorageLocation(
+      placeId: '${payload['place_id'] ?? payload['placeId'] ?? ''}'.trim(),
+      area: '${payload['area'] ?? ''}',
+      rackNumber: _toInt(payload['rack_number'] ?? payload['rackNumber'], fallback: 0),
+      levelNumber:
+          _toInt(payload['level_number'] ?? payload['levelNumber'], fallback: 0),
+      slotNumber:
+          _toInt(payload['slot_number'] ?? payload['slotNumber'], fallback: 0),
+      abcClass: '${payload['abc_class'] ?? payload['abcClass'] ?? 'C'}'
+          .trim()
+          .toUpperCase(),
+      status: '${payload['status'] ?? 'Frei'}',
+      articleId: '${payload['article_id'] ?? payload['articleId'] ?? ''}'.trim(),
+      daysSinceMovement: _toNullableInt(
+        payload['days_since_movement'] ?? payload['daysSinceMovement'],
+      ),
+      movements30d: _toNullableInt(payload['movements_30d'] ?? payload['movements30d']),
+    );
+  }
+
+  WarehouseAbcArticleSummary _toAbcSummary(Map<String, Object?> payload) {
+    return WarehouseAbcArticleSummary(
+      articleId: '${payload['article_id'] ?? payload['articleId'] ?? ''}'.trim(),
+      articleDescription:
+          '${payload['article_description'] ?? payload['articleDescription'] ?? ''}'
+              .trim(),
+      abcClass: '${payload['abc_class'] ?? payload['abcClass'] ?? 'C'}'
+          .trim()
+          .toUpperCase(),
+      slotCount: _toInt(payload['slot_count'] ?? payload['slotCount'], fallback: 0),
+      movements30d:
+          _toInt(payload['movements_30d'] ?? payload['movements30d'], fallback: 0),
+      maxIdleDays:
+          _toInt(payload['max_idle_days'] ?? payload['maxIdleDays'], fallback: 0),
+    );
+  }
+
+  WarehouseAbcSlotSummary _toAbcSlotSummary(Map<String, Object?> payload) {
+    return WarehouseAbcSlotSummary(
+      placeId: '${payload['place_id'] ?? payload['placeId'] ?? ''}'.trim(),
+      halle: '${payload['halle'] ?? ''}'.trim(),
+      bereich: '${payload['bereich'] ?? ''}'.trim(),
+      regal: '${payload['regal'] ?? ''}'.trim(),
+      fach: '${payload['fach'] ?? ''}'.trim(),
+      ebene: '${payload['ebene'] ?? ''}'.trim(),
+      anzPicks: _toInt(payload['anz_picks'] ?? payload['anzPicks'], fallback: 0),
+      cumulativePct: _toDouble(
+        payload['cumulative_pct'] ?? payload['cumulativePct'],
+        fallback: 0,
+      ),
+      abcCalc: '${payload['abc_calc'] ?? payload['abcCalc'] ?? ''}'
+          .trim()
+          .toUpperCase(),
+      abcClass: '${payload['abc_class'] ?? payload['abcClass'] ?? ''}'
+          .trim()
+          .toUpperCase(),
+      articleId: '${payload['article_id'] ?? payload['articleId'] ?? ''}'.trim(),
+      articleDescription:
+          '${payload['article_description'] ?? payload['articleDescription'] ?? ''}'
+              .trim(),
+      maxLhm: _toDouble(payload['max_lhm'] ?? payload['maxLhm'], fallback: 0),
+      istLhm: _toDouble(payload['ist_lhm'] ?? payload['istLhm'], fallback: 0),
+      freeCapacity: _toDouble(
+        payload['free_capacity'] ?? payload['freeCapacity'],
+        fallback: 0,
+      ),
+      utilizationPct: _toDouble(
+        payload['utilization_pct'] ?? payload['utilizationPct'],
+        fallback: 0,
+      ),
+    );
+  }
+
+  AbcAnalysis? _parseAbcAnalysis(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    final payload = Map<String, Object?>.from(value.cast<Object?, Object?>());
+    final a = _toInt(payload['a_count'] ?? payload['aCount'], fallback: -1);
+    final b = _toInt(payload['b_count'] ?? payload['bCount'], fallback: -1);
+    final c = _toInt(payload['c_count'] ?? payload['cCount'], fallback: -1);
+    if (a < 0 || b < 0 || c < 0) {
+      return null;
+    }
+    return AbcAnalysis(aCount: a, bCount: b, cCount: c);
   }
 
   WarehouseModelData _parseModel(Map<String, Object?> payload) {
@@ -494,6 +1057,22 @@ class WarehouseApiService {
       return int.tryParse(value.trim()) ?? fallback;
     }
     return fallback;
+  }
+
+  int? _toNullableInt(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.round();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
   }
 
   double? _toNormalizedRatio(Object? value) {

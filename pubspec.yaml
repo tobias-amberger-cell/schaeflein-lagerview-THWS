@@ -38,8 +38,16 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.3.3
   http: ^1.2.2
-  csv: ^6.0.0
+  dio: ^5.7.0
   google_fonts: ^6.2.1
+  url_launcher: ^6.3.2
+  file_selector: ^1.0.3
+  path_provider: ^2.1.5
+  sqlite3: ^2.4.6
+  sqlite3_flutter_libs: ^0.5.26
+  flutter_3d_controller: ^2.0.0
+  flutter_unity_widget: ^2022.2.1
+  data_table_2: ^2.5.16
 
 dev_dependencies:
   flutter_test:
@@ -65,8 +73,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/schaeflein_logo.jpg
-    - assets/data/warehouse_ai_master.csv
-    - assets/data/df_platz_reduced.csv
-    - assets/data/df_palette_reduced.csv
-    - assets/data/df_order_reduced.csv
-    - assets/data/df_tpa_reduced.csv
+    - assets/layouts/elringklinger_etzberg14_layout.png
+    - assets/unity_source/Scenes/SampleScene.unity
+    - assets/models/SampleScene_fixed.glb

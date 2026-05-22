@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -7,10 +8,17 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../models/viewer_heatmap.dart';
+import '../../../../models/warehouse.dart';
+import '../../../../shared/widgets/abc_analysis_bar.dart';
 import '../../../../shared/widgets/empty_state.dart';
+import '../../../../shared/widgets/status_pill.dart';
 import '../../domain/viewer_adapter_factory.dart';
 import '../../domain/viewer_type.dart';
+import '../widgets/glb_3d_viewer.dart';
+import '../widgets/heatmap_zone_overlay.dart';
 import '../widgets/native_warehouse_3d_view.dart';
+import '../widgets/unity_runtime_view.dart';
+import '../widgets/unity_source_notice.dart';
 
 class ViewerTourFullscreenScreen extends StatefulWidget {
   const ViewerTourFullscreenScreen({super.key});
@@ -21,33 +29,51 @@ class ViewerTourFullscreenScreen extends StatefulWidget {
 }
 
 class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen> {
+  // Legende kann unabhängig von der restlichen Steuerleiste ein-/ausgeblendet werden.
   bool _showLegend = false;
+  // "UI-Chrome" steuert Header + Dock + Hilfsanzeigen.
   bool _showUiChrome = false;
+  // Timer blendet UI nach Inaktivität automatisch aus.
+  Timer? _chromeAutoHideTimer;
+  // Einmaliger Hinweis für Nutzer, dass Tippen das Menü einblendet.
+  bool _showTapHint = true;
 
   @override
   void initState() {
     super.initState();
+    // Immersiver Modus für echte Vollbild-Nutzung.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
+      // Heatmap beim Tour-Start einschalten, damit das Overlay sofort sichtbar ist.
+      // Der Nutzer kann sie ueber das Dock weiterhin ausblenden.
+      final appState = context.read<AppState>();
+      if (!appState.viewerHeatmapVisible) {
+        appState.setViewerHeatmapVisible(true);
+      }
       setState(() {
         _showUiChrome = true;
       });
+      // Nach App-Start kurz zeigen und dann automatisch verstecken.
+      _armChromeAutoHide();
     });
   }
 
   @override
   void dispose() {
+    // Timer sauber schließen, sonst läuft er nach Screen-Wechsel weiter.
+    _chromeAutoHideTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Alles auf das aktuell aktive Lager ausrichten.
     final appState = context.watch<AppState>();
-    final warehouse = appState.selectedWarehouse;
+    final warehouse = appState.riskFocusWarehouse;
     final media = MediaQuery.of(context);
     final topInset = media.padding.top;
     final bottomInset = media.padding.bottom;
@@ -61,16 +87,28 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
     final isNarrowPhone = media.size.width < 640;
 
     if (warehouse == null) {
+      unawaited(appState.syncWarehouses(force: true));
       return EmptyState(
         icon: Icons.view_in_ar_outlined,
-        title: context.tr('emptyViewerTitle'),
-        message: context.tr('emptyViewerMessage'),
-        actionLabel: context.tr('toWarehouseList'),
-        onAction: () => context.go('/warehouses'),
+        title: '3D Ansicht wird vorbereitet',
+        message: appState.isWarehousesSyncing
+            ? 'Lagerdaten werden aus der API geladen...'
+            : (appState.warehouseApiError?.trim().isNotEmpty ?? false)
+                ? appState.warehouseApiError!.trim()
+                : 'Keine Lagerdaten aus der API gefunden. Bitte API pruefen und erneut laden.',
+        actionLabel: appState.isWarehousesSyncing ? null : context.tr('retry'),
+        onAction: appState.isWarehousesSyncing
+            ? null
+            : () => appState.syncWarehouses(force: true),
       );
     }
 
     final adapter = ViewerAdapterFactory.create(appState.viewerType);
+    final externalModelPath =
+        appState.getExternalModelPathForWarehouse(warehouse.id);
+    final useGlbViewer = Glb3DViewer.canRender(externalModelPath);
+    final useUnitySource = isUnitySceneSourcePath(externalModelPath);
+    unawaited(appState.ensureWarehouseHeatmapLayerLoaded());
 
     return PopScope(
       canPop: true,
@@ -79,32 +117,115 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
           appState.setViewerTourRunning(false);
         }
       },
-      child: Stack(
-        children: <Widget>[
-          Positioned.fill(
-            child: adapter.type == ViewerType.nativePlaceholder
-                ? NativeWarehouse3DView(
-                    warehouse: warehouse,
-                    model: warehouse.generatedModel,
-                    tourRunning: true,
-                    zonesVisible: appState.viewerZonesVisible,
-                    heatmapVisible: appState.viewerHeatmapVisible,
-                    heatmapMetric: appState.viewerHeatmapMetric,
-                    heatmapData: appState.viewerHeatmapData,
-                    focusZoneName: appState.viewerFocusZoneName,
-                    focusRequestId: appState.viewerFocusRequestId,
-                    focusRackNumber: appState.viewerFocusRackNumber,
-                    focusLevelNumber: appState.viewerFocusLevelNumber,
-                    focusSlotNumber: appState.viewerFocusSlotNumber,
-                    focusLocationRequestId: appState.viewerFocusLocationRequestId,
-                    enableFirstPersonControls: true,
-                    topOverlayReservedSpace: headerReservedHeight + topInset + AppSpacing.sm,
-                    bottomOverlayReservedSpace: dockHeight + AppSpacing.md,
-                    cameraToggleBottom: true,
-                    showOperatorPanel: false,
-                  )
-                : adapter.buildViewerCanvas(context, warehouse),
-          ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        // Tap auf freie Fläche toggelt die komplette UI-Chrome.
+        onTap: _toggleUiChromeVisibility,
+        child: Stack(
+          children: <Widget>[
+          // Im GLB-Modus den 3D-Viewer eingrenzen, damit oberhalb und unterhalb
+          // Platz fuer Heatmap- und ABC-Overlays bleibt. Sonst rendert das
+          // model-viewer-DOM-Element auf Web ueber den Flutter-Widgets und
+          // verdeckt sie (Platform-View-Z-Order).
+          if (useGlbViewer) ...<Widget>[
+            Positioned(
+              top: headerTop +
+                  headerReservedHeight +
+                  AppSpacing.sm +
+                  (appState.viewerHeatmapVisible &&
+                          appState.viewerHeatmapData.isNotEmpty
+                      ? 140
+                      : 0),
+              left: AppSpacing.sm,
+              right: AppSpacing.sm,
+              bottom: dockBottom + dockHeight + AppSpacing.md + 80,
+              child: Glb3DViewer(
+                modelPath: externalModelPath!,
+                heatmapData: appState.viewerHeatmapData,
+                warehouseHeatmapLayer: appState.warehouseHeatmapLayer,
+                heatmapMetric: appState.viewerHeatmapMetric,
+                showHotspots: appState.viewerHeatmapVisible ||
+                    appState.warehouseHeatmapLayer.isNotEmpty,
+                hideGenericHallHotspots: true,
+              ),
+            ),
+            if (appState.viewerHeatmapVisible &&
+                appState.viewerHeatmapData.isNotEmpty)
+              Positioned(
+                top: headerTop + headerReservedHeight + AppSpacing.sm,
+                left: AppSpacing.sm,
+                right: AppSpacing.sm,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surface
+                        .withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outlineVariant
+                          .withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: HeatmapZoneOverlay(
+                    metric: appState.viewerHeatmapMetric,
+                    data: appState.viewerHeatmapData,
+                    hideGenericHallZones: true,
+                  ),
+                ),
+              ),
+            Positioned(
+              left: AppSpacing.sm,
+              right: AppSpacing.sm,
+              bottom: dockBottom + dockHeight + AppSpacing.sm,
+              child: _TourAbcSummaryCard(warehouse: warehouse),
+            ),
+          ] else if (useUnitySource)
+            Positioned.fill(
+              child: UnityRuntimeView(scenePath: externalModelPath!),
+            )
+          else
+            Positioned.fill(
+              child: adapter.type == ViewerType.nativePlaceholder
+                  ? NativeWarehouse3DView(
+                      warehouse: warehouse,
+                      model: warehouse.generatedModel,
+                      tourRunning: true,
+                      zonesVisible: appState.viewerZonesVisible,
+                      heatmapVisible: appState.viewerHeatmapVisible,
+                      heatmapMetric: appState.viewerHeatmapMetric,
+                      heatmapData: appState.viewerHeatmapData,
+                      focusZoneName: appState.viewerFocusZoneName,
+                      focusRequestId: appState.viewerFocusRequestId,
+                      focusRackNumber: appState.viewerFocusRackNumber,
+                      focusLevelNumber: appState.viewerFocusLevelNumber,
+                      focusSlotNumber: appState.viewerFocusSlotNumber,
+                      focusLocationRequestId:
+                          appState.viewerFocusLocationRequestId,
+                      enableFirstPersonControls: true,
+                      // Reserviert Platz fuer Overlays, damit UI und 3D nicht kollidieren.
+                      topOverlayReservedSpace:
+                          headerReservedHeight + topInset + AppSpacing.sm,
+                      bottomOverlayReservedSpace: dockHeight + AppSpacing.md,
+                      cameraToggleBottom: true,
+                      showOperatorPanel: false,
+                    )
+                  : adapter.buildViewerCanvas(context, warehouse),
+            ),
+          if (useUnitySource)
+            Positioned(
+              top: headerTop + AppSpacing.sm,
+              right: AppSpacing.sm,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: UnitySourceNotice(
+                  scenePath: externalModelPath!,
+                  compact: true,
+                ),
+              ),
+            ),
           Positioned(
             top: 0,
             left: 0,
@@ -139,18 +260,19 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
                 heatmapVisible: appState.viewerHeatmapVisible,
                 heatmapMetricLabel: context.tr(appState.viewerHeatmapMetric.labelKey),
                 onClose: () => _closeTour(context, appState),
-                onToggleLegend: () => setState(() => _showLegend = !_showLegend),
+                onToggleLegend: _toggleLegend,
                 showLegend: _showLegend,
               ),
             ),
           ),
           isNarrowPhone
+              // Auf sehr schmalen Geräten mittig statt rechts andocken.
               ? Positioned(
                   left: AppSpacing.sm,
                   right: AppSpacing.sm,
                   bottom: bottomInset + legendBottomOffset,
                   child: _AnimatedOverlay(
-                    visible: _showLegend,
+                    visible: _showLegend && _showUiChrome,
                     offset: const Offset(0, 0.08),
                     child: _FullscreenLegendCard(
                       heatmapVisible: appState.viewerHeatmapVisible,
@@ -161,7 +283,7 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
                   right: AppSpacing.sm,
                   bottom: bottomInset + legendBottomOffset,
                   child: _AnimatedOverlay(
-                    visible: _showLegend,
+                    visible: _showLegend && _showUiChrome,
                     offset: const Offset(0, 0.08),
                     child: _FullscreenLegendCard(
                       heatmapVisible: appState.viewerHeatmapVisible,
@@ -181,30 +303,107 @@ class _ViewerTourFullscreenScreenState extends State<ViewerTourFullscreenScreen>
                 heatmapVisible: appState.viewerHeatmapVisible,
                 showLegend: _showLegend,
                 onToggleZones: () {
+                  // Jede Nutzeraktion "berührt" die UI und startet Auto-Hide neu.
+                  _touchUi();
                   final next = !appState.viewerZonesVisible;
                   appState.setViewerZonesVisible(next);
                 },
                 onToggleHeatmap: () {
+                  _touchUi();
                   final next = !appState.viewerHeatmapVisible;
                   appState.setViewerHeatmapVisible(next);
                 },
                 onReset: () {
+                  _touchUi();
+                  // Viewer-Filter zurücksetzen und Tour-Kontext aktiv halten.
                   appState.resetViewerState();
                   appState.setViewerTourRunning(true);
                 },
-                onToggleLegend: () => setState(() => _showLegend = !_showLegend),
+                onToggleLegend: _toggleLegend,
               ),
             ),
           ),
-        ],
+          if (!_showUiChrome)
+            // Minimale Wiederherstellungsaktion, wenn alles ausgeblendet ist.
+            Positioned(
+              top: headerTop,
+              right: AppSpacing.sm,
+              child: IconButton.filledTonal(
+                tooltip: 'Menue einblenden',
+                onPressed: _toggleUiChromeVisibility,
+                icon: const Icon(Icons.visibility_outlined),
+              ),
+            ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: dockBottom + dockHeight + AppSpacing.sm,
+            child: IgnorePointer(
+              child: _AnimatedOverlay(
+                // Tap-Hinweis nur solange anzeigen, bis Nutzer mit UI interagiert.
+                visible: !_showUiChrome && _showTapHint,
+                child: const _FullscreenTapHint(),
+              ),
+            ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  void _toggleUiChromeVisibility() {
+    // Benutzerwunsch hat Vorrang: sofort umschalten.
+    setState(() {
+      _showUiChrome = !_showUiChrome;
+      _showTapHint = false;
+    });
+    if (_showUiChrome) {
+      _armChromeAutoHide();
+    } else {
+      _chromeAutoHideTimer?.cancel();
+    }
+  }
+
+  void _toggleLegend() {
+    // Legendentoggle zählt als Interaktion und hält die UI sichtbar.
+    _touchUi();
+    setState(() {
+      _showLegend = !_showLegend;
+    });
+  }
+
+  void _touchUi() {
+    // Weckt die UI auf und entfernt den Erst-Hinweis beim ersten Kontakt.
+    if (!_showUiChrome) {
+      setState(() {
+        _showUiChrome = true;
+        _showTapHint = false;
+      });
+    } else if (_showTapHint) {
+      setState(() {
+        _showTapHint = false;
+      });
+    }
+    _armChromeAutoHide();
+  }
+
+  void _armChromeAutoHide([Duration duration = const Duration(seconds: 5)]) {
+    // Immer genau ein aktiver Timer; alte Instanz vorher stoppen.
+    _chromeAutoHideTimer?.cancel();
+    _chromeAutoHideTimer = Timer(duration, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showUiChrome = false;
+      });
+    });
+  }
   void _closeTour(BuildContext context, AppState appState) {
+    // Tour-Flag zurücksetzen und unabhaengig von der Stack-Tiefe sicher zurueck.
     appState.setViewerTourRunning(false);
-    if (context.canPop()) {
-      context.pop();
+    if (!context.mounted) {
       return;
     }
     context.go('/viewer');
@@ -224,6 +423,7 @@ class _AnimatedOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sichtbarkeit wird weich animiert statt hart ein-/ausgeblendet.
     return IgnorePointer(
       ignoring: !visible,
       child: AnimatedSlide(
@@ -248,6 +448,7 @@ class _FullscreenLegendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Legende ist bewusst scrollbar, damit sie auch bei kleinen Displays vollständig bleibt.
     final colorScheme = Theme.of(context).colorScheme;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.32;
     return ConstrainedBox(
@@ -300,11 +501,15 @@ class _FullscreenLegendCard extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    'Kurz erklärt: Wischen dreht, Zwei Finger zoomen.',
+                    'Kurz erklaert: Wischen dreht, zwei Finger zoomen.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   Text(
-                    'FP-Modus: Linker Stick = Bewegung, rechter = Blick.',
+                    'FP-Modus: Links bewegen, rechts Blickrichtung steuern.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    'Steuerleisten blenden sich nach kurzer Zeit aus.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -408,6 +613,7 @@ class _TourHeaderBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Header zeigt Tour-Kontext + zentrale Quick-Status-Infos.
     final colorScheme = Theme.of(context).colorScheme;
     final width = MediaQuery.sizeOf(context).width;
     final showStatusChips = width >= 980;
@@ -479,28 +685,12 @@ class _TourStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 14),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
-        ),
-      ),
+    return StatusPill(
+      icon: icon,
+      label: label,
+      backgroundColor: colorScheme.surfaceContainerHighest,
+      foregroundColor: colorScheme.onSurfaceVariant,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.4),
     );
   }
 }
@@ -528,6 +718,7 @@ class _TourControlDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dock bündelt alle manipulierenden Viewer-Aktionen.
     final colorScheme = Theme.of(context).colorScheme;
     final controls = <Widget>[
       _DockActionButton(
@@ -612,6 +803,7 @@ class _DockActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Einheitlicher Button für aktiven/inaktiven Steuerstatus.
     final colorScheme = Theme.of(context).colorScheme;
     final background = active
         ? colorScheme.primaryContainer.withValues(alpha: 0.8)
@@ -689,6 +881,76 @@ class _LegendBadge extends StatelessWidget {
             Text(
               text,
               style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FullscreenTapHint extends StatelessWidget {
+  const _FullscreenTapHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surface.withValues(alpha: 0.86),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          child: Text('Tippen fuer Menue'),
+        ),
+      ),
+    );
+  }
+}
+
+class _TourAbcSummaryCard extends StatelessWidget {
+  const _TourAbcSummaryCard({required this.warehouse});
+
+  final Warehouse warehouse;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final abc = warehouse.abcAnalysis;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              context.tr('tourAbcSummaryTitle'),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            AbcAnalysisBar(
+              aCount: abc.aCount,
+              bCount: abc.bCount,
+              cCount: abc.cCount,
+              height: 10,
             ),
           ],
         ),

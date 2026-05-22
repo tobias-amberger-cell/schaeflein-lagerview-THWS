@@ -322,9 +322,9 @@ class AppLocalizations {
           'Bitte ein gueltiges Format wie R01-E03-F010 eingeben.',
       'storageLocationSamplesTitle': 'Echte Lagerplätze (Beispiel)',
       'storageLocationSamplesSubtitle':
-          'Kleine Stichprobe direkt aus den CSV-Daten.',
+          'Kleine Stichprobe direkt aus warehouse.db.',
       'storageLocationSamplesEmpty':
-          'Noch keine echten Lagerplätze aus CSV geladen.',
+          'Noch keine echten Lagerplätze aus warehouse.db geladen.',
       'storageLocationSamplesCount': '{count} von {total}',
       'storageLocationVisibleCount': '{count} von {total} sichtbar',
       'storageLocationShowMore': 'Mehr anzeigen',
@@ -738,6 +738,213 @@ class AppLocalizations {
       'accessDeniedTitle': 'Kein Zugriff',
       'accessDeniedMessage':
           'Deine Rolle hat keine Berechtigung fuer diese Seite ({path}).',
+      // Order volume card
+      'orderVolumeTitle': 'Auftragsvolumen',
+      'orderVolumeSubtitle': 'Eingehende Auftraege je Tag aus warehouse.db.',
+      'orderVolumeEmpty': 'Keine Auftragsdaten gefunden.',
+      'orderVolumePerDay': 'Ø/Tag',
+      'orderVolumeOrdersUnit': 'Auftraege',
+      'orderVolumePeak': 'Peak',
+      'orderVolumePositionsTotal': 'Positionen gesamt',
+      // Pick activity heatmap
+      'pickActivityTitle': 'Pick-Aktivitaet nach Stunde',
+      'pickActivitySubtitle': 'Picks pro Wochentag und Stunde aus warehouse.db.',
+      'pickActivityRange': 'Picks pro Wochentag und Stunde · {from} – {to}',
+      'pickActivityEmpty': 'Keine Pick-Daten gefunden.',
+      'pickActivityTooltip': '{day} {hour}:00 · {picks} Picks',
+      'pickActivityTotalPicks': 'Picks gesamt',
+      'pickActivityPeakLabel': 'Spitze',
+      'pickActivityAvgActive': 'Ø je aktiver Stunde',
+      'pickActivityActiveCells': 'Aktive Stunden',
+      'pickActivityDaySumHeader': 'Tagessumme',
+      'weekdayShortSun': 'So',
+      'weekdayShortMon': 'Mo',
+      'weekdayShortTue': 'Di',
+      'weekdayShortWed': 'Mi',
+      'weekdayShortThu': 'Do',
+      'weekdayShortFri': 'Fr',
+      'weekdayShortSat': 'Sa',
+      // Relocation candidates panel
+      'relocationEmpty': 'Keine Umlager-Kandidaten gefunden.',
+      'relocationDataTitle': 'Konkrete Vorschlaege aus der warehouse.db',
+      'relocationUnusedAChip': 'Premium-Plaetze ungenutzt',
+      'relocationUnusedANote': 'A-Klasse mit 0 Picks',
+      'relocationHotCChip': 'Hochfrequente C-Plaetze',
+      'relocationHotCNote': '>= {n} Picks',
+      'relocationHighLevelAChip': 'A auf hoher Ebene',
+      'relocationHighLevelANote': 'Ebene >= {n}',
+      'relocationHotCTitle': 'Hochfrequente C-Plaetze umklassifizieren',
+      'relocationHotCSubtitle':
+          'Diese Plaetze haben sehr viele Picks, sind aber als C eingestuft.',
+      'relocationHighLevelATitle': 'A-Plaetze nach unten holen',
+      'relocationHighLevelASubtitle':
+          'A-Klasse Plaetze auf hohen Ebenen mit aktiver Pickfrequenz.',
+      'relocationUnusedATitle': 'Ungenutzte Premium-Plaetze freimachen',
+      'relocationUnusedASubtitle':
+          'A-Plaetze ohne Picks - Platz fuer hochfrequente Artikel.',
+      'relocationPicksUnit': 'P',
+      'relocationMoreCount': '+{n} weitere',
+      // Umlagern action reasons
+      'umlagernReasonCapacity': 'Auslastung/Stau erhoeht',
+      'umlagernReasonHotC': '{n} C-Plaetze mit >= {threshold} Picks',
+      'umlagernReasonUnusedA': '{n} A-Plaetze ungenutzt',
+      'umlagernReasonOk':
+          'Optional: aktuell keine akute Ueberlast erkennbar.',
+      'umlagernReasonRecommended': 'Empfohlen: {parts}.',
+      // Dashboard sections (new)
+      'dashboardSectionOrderVolume': 'Auftragsvolumen',
+      'dashboardSectionOrderVolumeSubtitle':
+          'Eingehende Auftraege je Tag aus warehouse.db.',
+      'dashboardSectionPickActivity': 'Pick-Aktivitaet',
+      'dashboardSectionPickActivitySubtitle':
+          'Picks pro Wochentag und Stunde.',
+      // Tour overlay
+      'tourAbcSummaryTitle': 'ABC-Verteilung',
+      // DB status chip
+      'dbStatusLoading': 'warehouse.db laedt...',
+      'dbStatusConnected': 'warehouse.db verbunden',
+      'dbStatusError': 'warehouse.db nicht erreichbar',
+      // Replenishment / Einlagern panel
+      'replenishmentEmpty': 'Keine Replenishment-Kandidaten gefunden.',
+      'replenishmentDataTitle': 'Konkrete Vorschlaege aus der warehouse.db',
+      'replenishmentUrgentChip': 'Dringend leer',
+      'replenishmentUrgentNote': 'Pickplatz, >= {n} Picks',
+      'replenishmentOverdueChip': 'Ueberfaellig',
+      'replenishmentOverdueNote': '>= {n} Tage leer',
+      'replenishmentMediumChip': 'Mittlere Frequenz',
+      'replenishmentMediumNote': '{min}-{max} Picks',
+      'replenishmentUrgentTitle': 'Dringend nachfuellen',
+      'replenishmentUrgentSubtitle':
+          'Aktive Pickplaetze sind leer und brauchen sofort Nachschub.',
+      'replenishmentOverdueTitle': 'Ueberfaellige Replenishments',
+      'replenishmentOverdueSubtitle':
+          'Plaetze sind seit Tagen leer trotz hoher Pickfrequenz.',
+      'replenishmentMediumTitle': 'Demnaechst nachfuellen',
+      'replenishmentMediumSubtitle':
+          'Pickplaetze mit mittlerer Frequenz - bald in den Replenishment-Lauf.',
+      'replenishmentDaysEmpty': '{n} Tage',
+      // Dashboard sections (Einlagern reasons)
+      'einlagernReasonUrgent': '{n} dringend leere Pickplaetze',
+      'einlagernReasonOverdue':
+          '{n} ueberfaellig (>= {days} Tage leer)',
+      'einlagernReasonOk':
+          'Optional: aktuell keine kritischen Replenishment-Lueckenerkennbar.',
+      'einlagernReasonRecommended': 'Empfohlen: {parts}.',
+      // Auslagern panel + action reasons
+      'retrievalEmpty': 'Keine Auslager-/Bereinigungs-Kandidaten gefunden.',
+      'retrievalDataTitle': 'Konkrete Auslager-Vorschlaege aus der warehouse.db',
+      'retrievalCriticalChip': 'Kritisch alt',
+      'retrievalCriticalNote': '>= {n} Tage ohne Bewegung',
+      'retrievalStaleChip': 'Bereinigung noetig',
+      'retrievalStaleNote': '>= {n} Tage ohne Bewegung',
+      'retrievalObserveChip': 'Beobachten',
+      'retrievalObserveNote': '>= {n} Tage ohne Bewegung',
+      'retrievalCriticalTitle': 'Sofort auslagern/klaeren',
+      'retrievalCriticalSubtitle':
+          'Sehr alte Positionen blockieren Flaeche und sollten priorisiert werden.',
+      'retrievalStaleTitle': 'Bereinigung einplanen',
+      'retrievalStaleSubtitle':
+          'Diese Positionen sind alt und sollten in den naechsten Lauf.',
+      'retrievalObserveTitle': 'Zur Beobachtung vormerken',
+      'retrievalObserveSubtitle':
+          'Noch nicht kritisch, aber mit erhoehter Liegedauer.',
+      'auslagernReasonCritical':
+          '{n} Positionen >= {days} Tage ohne Bewegung',
+      'auslagernReasonShare': '{n}% der Plaetze sind Langlieger',
+      'auslagernReasonOk':
+          'Optional: aktuell keine kritischen Auslager-Signale.',
+      'auslagernReasonRecommended': 'Empfohlen: {parts}.',
+      // ABC adjustment panel + action reasons
+      'abcAdjustEmpty': 'Keine ABC-Artikelkandidaten gefunden.',
+      'abcAdjustDataTitle': 'ABC-Umklassifizierungs-Vorschlaege aus warehouse.db',
+      'abcAdjustPromoteChip': 'Hochstufen',
+      'abcAdjustPromoteNote': 'C mit >= {n} Bewegungen/30T',
+      'abcAdjustDemoteChip': 'Runterstufen',
+      'abcAdjustDemoteNote': 'A mit <= {picks} Bewegungen oder >= {days} Idle-Tage',
+      'abcAdjustReviewChip': 'Review',
+      'abcAdjustReviewNote': 'B-Klasse mit auffaelligem Profil',
+      'abcAdjustPromoteTitle': 'C-Klasse fuer Hochstufung',
+      'abcAdjustPromoteSubtitle':
+          'Diese C-Artikel zeigen hohe Aktivitaet und sollten naeher an A/B geprueft werden.',
+      'abcAdjustDemoteTitle': 'A-Klasse fuer Runterstufung',
+      'abcAdjustDemoteSubtitle':
+          'Diese A-Artikel sind inaktiv oder langsam und blockieren Premium-Flaechen.',
+      'abcAdjustReviewTitle': 'B-Klasse manuell pruefen',
+      'abcAdjustReviewSubtitle':
+          'Grenzfaelle zwischen Aktivitaet und Liegedauer fuer den naechsten Zyklus.',
+      'abcAdjustMetrics':
+          'Klasse {abc} - {moves} Bewegungen/30T - {slots} Plaetze - {days} Tage idle',
+      'abcAdjustReasonPromote': '{n} C-Artikel mit >= {picks} Bewegungen',
+      'abcAdjustReasonDemote':
+          '{n} A-Artikel mit <= {picks} Bewegungen oder >= {days} Idle-Tagen',
+      'abcAdjustReasonCShare': 'C-Anteil ist weiterhin hoch',
+      'abcAdjustReasonOk':
+          'Optional: aktuell keine starken Signale fuer ABC-Umklassifizierung.',
+      'abcAdjustReasonRecommended': 'Empfohlen: {parts}.',
+      'abcAdjustExecuteLabel': 'ABC-Abgleich starten',
+      'abcAdjustExecuteDoneLabel': 'ABC-Abgleich aktualisiert',
+      'abcAdjustExecuteSummary':
+          '{total} Kandidaten markiert ({promote} hoch, {demote} runter, {review} review).',
+      'abcAdjustExecuteSummaryEmpty':
+          'Keine Kandidaten erkannt; Verteilung wirkt stabil.',
+      // Floor replenishment strategy panel + action reasons
+      'floorReplenishmentEmpty': 'Keine Bodenplatz-Nachschubkandidaten gefunden.',
+      'floorReplenishmentDataTitle':
+          'Bodenplatz-Replenishment aus warehouse.db (Ebene <= {n})',
+      'floorReplenishmentUrgentChip': 'Dringend',
+      'floorReplenishmentOverdueChip': 'Ueberfaellig',
+      'floorReplenishmentMediumChip': 'Demnaechst',
+      'floorReplenishmentUrgentTitle': 'Bodenplaetze sofort nachfuellen',
+      'floorReplenishmentUrgentSubtitle':
+          'Aktive Bodenplaetze mit hoher Picklast sind leer.',
+      'floorReplenishmentOverdueTitle': 'Ueberfaellige Bodenplatz-Nachschuebe',
+      'floorReplenishmentOverdueSubtitle':
+          'Leere Bodenplaetze mit langer Liegedauer priorisieren.',
+      'floorReplenishmentMediumTitle': 'Bodenplaetze naechste Welle',
+      'floorReplenishmentMediumSubtitle':
+          'Mittlere Frequenz fuer den naechsten Nachschublauf vormerken.',
+      'floorReplenishmentReasonOverdue': '{n} ueberfaellige Bodenplaetze',
+      'floorReplenishmentReasonUrgent': '{n} dringende Bodenplaetze',
+      'floorReplenishmentReasonPeakLoad': 'hohe Picklast auf der Flaeche',
+      'floorReplenishmentReasonOk':
+          'Optional: aktuell keine kritischen Bodenplatz-Signale.',
+      'floorReplenishmentReasonRecommended': 'Empfohlen: {parts}.',
+      'floorReplenishmentExecuteLabel': 'Bodenplatz-Nachschub starten',
+      'floorReplenishmentExecuteDoneLabel': 'Bodenplatz-Nachschub aktualisiert',
+      'floorReplenishmentExecuteSummary':
+          '{total} Bodenplatz-Kandidaten ({urgent} dringend, {overdue} ueberfaellig, {medium} demnaechst).',
+      'floorReplenishmentExecuteSummaryEmpty':
+          'Keine Bodenplatz-Kandidaten erkannt.',
+      // Putaway strategy panel + action reasons
+      'putawayEmpty': 'Keine Einlager-Kandidaten gefunden.',
+      'putawayDataTitle': 'Einlager-Vorschlaege aus warehouse.db',
+      'putawayFastLaneChip': 'Fast-Lane',
+      'putawayFastLaneNote': 'freie A/B bis Ebene {n}',
+      'putawayReserveChip': 'Reserve',
+      'putawayReserveNote': 'freie C ab Ebene {n}',
+      'putawayBlockedChip': 'Gesperrt',
+      'putawayBlockedNote': 'vor Einlagerung pruefen',
+      'putawayFastLaneTitle': 'Schnelldreher-Ziele',
+      'putawayFastLaneSubtitle':
+          'Freie A/B-Plaetze in niedrigen Ebenen fuer schnelle Einlagerung.',
+      'putawayReserveTitle': 'Reserve-Ziele',
+      'putawayReserveSubtitle':
+          'Freie C-Plaetze in hoeheren Ebenen fuer langsamere Artikel.',
+      'putawayBlockedTitle': 'Gesperrte Plaetze pruefen',
+      'putawayBlockedSubtitle':
+          'Diese Plaetze sind nicht direkt einlagerfaehig.',
+      'putawayTileMeta': 'ABC {abc} - Ebene {level} - Status {status}',
+      'putawayReasonInboundBacklog': 'Wareneingang uebersteigt Ausgang',
+      'putawayReasonNoFastLane': 'keine freien A/B-Fast-Lane-Plaetze erkannt',
+      'putawayReasonBlockedSlots': '{n} gesperrte Plaetze im Sample',
+      'putawayReasonOk': 'Optional: Einlagerfluss wirkt aktuell stabil.',
+      'putawayReasonRecommended': 'Empfohlen: {parts}.',
+      'putawayExecuteLabel': 'Einlagerung planen',
+      'putawayExecuteDoneLabel': 'Einlagerung aktualisiert',
+      'putawayExecuteSummary':
+          '{total} Zielplaetze markiert ({fast} Fast-Lane, {reserve} Reserve, {blocked} gesperrt).',
+      'putawayExecuteSummaryEmpty':
+          'Keine Einlager-Zielplaetze erkannt.',
     },
     'en': <String, String>{
       'dashboard': 'Dashboard',
@@ -1004,7 +1211,7 @@ class AppLocalizations {
       'storageLocationCodeInvalid':
           'Please enter a valid format like R01-E03-F010.',
       'storageLocationSamplesTitle': 'Sample storage locations',
-      'storageLocationSamplesSubtitle': 'Small sample pulled from CSV data.',
+      'storageLocationSamplesSubtitle': 'Small sample pulled from warehouse.db.',
       'storageLocationSamplesEmpty':
           'No sample storage locations loaded yet.',
       'storageLocationSamplesCount': '{count} of {total}',
@@ -1416,6 +1623,211 @@ class AppLocalizations {
       'accessDeniedTitle': 'Access denied',
       'accessDeniedMessage':
           'Your role is not allowed to open this page ({path}).',
+      // Order volume card
+      'orderVolumeTitle': 'Order volume',
+      'orderVolumeSubtitle': 'Incoming orders per day from warehouse.db.',
+      'orderVolumeEmpty': 'No order data found.',
+      'orderVolumePerDay': 'Avg/day',
+      'orderVolumeOrdersUnit': 'orders',
+      'orderVolumePeak': 'Peak',
+      'orderVolumePositionsTotal': 'Total positions',
+      // Pick activity heatmap
+      'pickActivityTitle': 'Pick activity by hour',
+      'pickActivitySubtitle': 'Picks per weekday and hour from warehouse.db.',
+      'pickActivityRange': 'Picks per weekday and hour · {from} – {to}',
+      'pickActivityEmpty': 'No pick data found.',
+      'pickActivityTooltip': '{day} {hour}:00 · {picks} picks',
+      'pickActivityTotalPicks': 'Total picks',
+      'pickActivityPeakLabel': 'Peak',
+      'pickActivityAvgActive': 'Avg / active hour',
+      'pickActivityActiveCells': 'Active hours',
+      'pickActivityDaySumHeader': 'Day total',
+      'weekdayShortSun': 'Sun',
+      'weekdayShortMon': 'Mon',
+      'weekdayShortTue': 'Tue',
+      'weekdayShortWed': 'Wed',
+      'weekdayShortThu': 'Thu',
+      'weekdayShortFri': 'Fri',
+      'weekdayShortSat': 'Sat',
+      // Relocation candidates panel
+      'relocationEmpty': 'No relocation candidates found.',
+      'relocationDataTitle': 'Concrete suggestions from warehouse.db',
+      'relocationUnusedAChip': 'Premium spots unused',
+      'relocationUnusedANote': 'A class with 0 picks',
+      'relocationHotCChip': 'High-pick C spots',
+      'relocationHotCNote': '>= {n} picks',
+      'relocationHighLevelAChip': 'A on high level',
+      'relocationHighLevelANote': 'Level >= {n}',
+      'relocationHotCTitle': 'Reclassify high-pick C spots',
+      'relocationHotCSubtitle':
+          'These spots have many picks but are classified as C.',
+      'relocationHighLevelATitle': 'Move A spots to lower levels',
+      'relocationHighLevelASubtitle':
+          'A-class spots on high levels with active pick frequency.',
+      'relocationUnusedATitle': 'Free up unused premium spots',
+      'relocationUnusedASubtitle':
+          'A spots without picks - room for high-pick articles.',
+      'relocationPicksUnit': 'P',
+      'relocationMoreCount': '+{n} more',
+      // Umlagern action reasons
+      'umlagernReasonCapacity': 'Utilization/congestion elevated',
+      'umlagernReasonHotC': '{n} C spots with >= {threshold} picks',
+      'umlagernReasonUnusedA': '{n} A spots unused',
+      'umlagernReasonOk': 'Optional: no acute overload detected.',
+      'umlagernReasonRecommended': 'Recommended: {parts}.',
+      // Dashboard sections (new)
+      'dashboardSectionOrderVolume': 'Order volume',
+      'dashboardSectionOrderVolumeSubtitle':
+          'Incoming orders per day from warehouse.db.',
+      'dashboardSectionPickActivity': 'Pick activity',
+      'dashboardSectionPickActivitySubtitle':
+          'Picks per weekday and hour.',
+      // Tour overlay
+      'tourAbcSummaryTitle': 'ABC distribution',
+      // DB status chip
+      'dbStatusLoading': 'Loading warehouse.db...',
+      'dbStatusConnected': 'warehouse.db connected',
+      'dbStatusError': 'warehouse.db unreachable',
+      // Replenishment / Einlagern panel
+      'replenishmentEmpty': 'No replenishment candidates found.',
+      'replenishmentDataTitle': 'Concrete suggestions from warehouse.db',
+      'replenishmentUrgentChip': 'Empty urgent',
+      'replenishmentUrgentNote': 'Pick spot, >= {n} picks',
+      'replenishmentOverdueChip': 'Overdue',
+      'replenishmentOverdueNote': '>= {n} days empty',
+      'replenishmentMediumChip': 'Medium frequency',
+      'replenishmentMediumNote': '{min}-{max} picks',
+      'replenishmentUrgentTitle': 'Refill urgently',
+      'replenishmentUrgentSubtitle':
+          'Active pick spots are empty and need replenishment now.',
+      'replenishmentOverdueTitle': 'Overdue replenishments',
+      'replenishmentOverdueSubtitle':
+          'Spots have been empty for days despite high pick activity.',
+      'replenishmentMediumTitle': 'Refill soon',
+      'replenishmentMediumSubtitle':
+          'Pick spots with medium frequency - schedule for next run.',
+      'replenishmentDaysEmpty': '{n} days',
+      // Dashboard sections (Einlagern reasons)
+      'einlagernReasonUrgent': '{n} urgent empty pick spots',
+      'einlagernReasonOverdue': '{n} overdue (>= {days} days empty)',
+      'einlagernReasonOk':
+          'Optional: no critical replenishment gaps detected.',
+      'einlagernReasonRecommended': 'Recommended: {parts}.',
+      // Retrieval panel + action reasons
+      'retrievalEmpty': 'No retrieval/cleanup candidates found.',
+      'retrievalDataTitle': 'Concrete retrieval suggestions from warehouse.db',
+      'retrievalCriticalChip': 'Critical aged',
+      'retrievalCriticalNote': '>= {n} days without movement',
+      'retrievalStaleChip': 'Cleanup needed',
+      'retrievalStaleNote': '>= {n} days without movement',
+      'retrievalObserveChip': 'Observe',
+      'retrievalObserveNote': '>= {n} days without movement',
+      'retrievalCriticalTitle': 'Retrieval/clarification now',
+      'retrievalCriticalSubtitle':
+          'Very old positions block capacity and should be prioritized.',
+      'retrievalStaleTitle': 'Plan cleanup run',
+      'retrievalStaleSubtitle':
+          'These positions are stale and should be handled in the next wave.',
+      'retrievalObserveTitle': 'Mark for observation',
+      'retrievalObserveSubtitle':
+          'Not critical yet, but with increased dwell time.',
+      'auslagernReasonCritical': '{n} positions >= {days} days without movement',
+      'auslagernReasonShare': '{n}% of slots are slow movers',
+      'auslagernReasonOk':
+          'Optional: no critical retrieval signals detected.',
+      'auslagernReasonRecommended': 'Recommended: {parts}.',
+      // ABC adjustment panel + action reasons
+      'abcAdjustEmpty': 'No ABC article candidates found.',
+      'abcAdjustDataTitle': 'ABC reclassification suggestions from warehouse.db',
+      'abcAdjustPromoteChip': 'Promote',
+      'abcAdjustPromoteNote': 'C with >= {n} movements/30d',
+      'abcAdjustDemoteChip': 'Demote',
+      'abcAdjustDemoteNote':
+          'A with <= {picks} movements or >= {days} idle days',
+      'abcAdjustReviewChip': 'Review',
+      'abcAdjustReviewNote': 'B class with notable profile',
+      'abcAdjustPromoteTitle': 'Promote C-class candidates',
+      'abcAdjustPromoteSubtitle':
+          'These C articles show high activity and should be reviewed towards A/B.',
+      'abcAdjustDemoteTitle': 'Demote A-class candidates',
+      'abcAdjustDemoteSubtitle':
+          'These A articles are inactive or slow and block premium space.',
+      'abcAdjustReviewTitle': 'Review B-class manually',
+      'abcAdjustReviewSubtitle':
+          'Borderline cases between movement and dwell time for the next cycle.',
+      'abcAdjustMetrics':
+          'Class {abc} - {moves} movements/30d - {slots} slots - {days} idle days',
+      'abcAdjustReasonPromote': '{n} C articles with >= {picks} movements',
+      'abcAdjustReasonDemote':
+          '{n} A articles with <= {picks} movements or >= {days} idle days',
+      'abcAdjustReasonCShare': 'C-share remains elevated',
+      'abcAdjustReasonOk':
+          'Optional: no strong ABC reclassification signal detected.',
+      'abcAdjustReasonRecommended': 'Recommended: {parts}.',
+      'abcAdjustExecuteLabel': 'Start ABC alignment',
+      'abcAdjustExecuteDoneLabel': 'ABC alignment refreshed',
+      'abcAdjustExecuteSummary':
+          '{total} candidates marked ({promote} up, {demote} down, {review} review).',
+      'abcAdjustExecuteSummaryEmpty':
+          'No candidates detected; distribution looks stable.',
+      // Floor replenishment strategy panel + action reasons
+      'floorReplenishmentEmpty': 'No floor-slot replenishment candidates found.',
+      'floorReplenishmentDataTitle':
+          'Floor-slot replenishment from warehouse.db (level <= {n})',
+      'floorReplenishmentUrgentChip': 'Urgent',
+      'floorReplenishmentOverdueChip': 'Overdue',
+      'floorReplenishmentMediumChip': 'Soon',
+      'floorReplenishmentUrgentTitle': 'Refill floor slots now',
+      'floorReplenishmentUrgentSubtitle':
+          'Active floor slots with high pick load are empty.',
+      'floorReplenishmentOverdueTitle': 'Overdue floor-slot replenishments',
+      'floorReplenishmentOverdueSubtitle':
+          'Prioritize empty floor slots with long empty duration.',
+      'floorReplenishmentMediumTitle': 'Next-wave floor slots',
+      'floorReplenishmentMediumSubtitle':
+          'Queue medium-frequency slots for the next replenishment run.',
+      'floorReplenishmentReasonOverdue': '{n} overdue floor slots',
+      'floorReplenishmentReasonUrgent': '{n} urgent floor slots',
+      'floorReplenishmentReasonPeakLoad': 'high pick load on floor area',
+      'floorReplenishmentReasonOk':
+          'Optional: no critical floor-slot signal detected.',
+      'floorReplenishmentReasonRecommended': 'Recommended: {parts}.',
+      'floorReplenishmentExecuteLabel': 'Start floor replenishment',
+      'floorReplenishmentExecuteDoneLabel': 'Floor replenishment refreshed',
+      'floorReplenishmentExecuteSummary':
+          '{total} floor-slot candidates ({urgent} urgent, {overdue} overdue, {medium} soon).',
+      'floorReplenishmentExecuteSummaryEmpty':
+          'No floor-slot candidates detected.',
+      // Putaway strategy panel + action reasons
+      'putawayEmpty': 'No putaway candidates found.',
+      'putawayDataTitle': 'Putaway suggestions from warehouse.db',
+      'putawayFastLaneChip': 'Fast lane',
+      'putawayFastLaneNote': 'free A/B up to level {n}',
+      'putawayReserveChip': 'Reserve',
+      'putawayReserveNote': 'free C from level {n}',
+      'putawayBlockedChip': 'Blocked',
+      'putawayBlockedNote': 'check before putaway',
+      'putawayFastLaneTitle': 'Fast-mover targets',
+      'putawayFastLaneSubtitle':
+          'Free low-level A/B slots for quick inbound putaway.',
+      'putawayReserveTitle': 'Reserve targets',
+      'putawayReserveSubtitle':
+          'Free higher-level C slots for slower-moving items.',
+      'putawayBlockedTitle': 'Review blocked slots',
+      'putawayBlockedSubtitle':
+          'These slots are not directly available for putaway.',
+      'putawayTileMeta': 'ABC {abc} - Level {level} - Status {status}',
+      'putawayReasonInboundBacklog': 'Inbound exceeds outbound',
+      'putawayReasonNoFastLane': 'no free A/B fast-lane slots detected',
+      'putawayReasonBlockedSlots': '{n} blocked slots in sample',
+      'putawayReasonOk': 'Optional: putaway flow currently looks stable.',
+      'putawayReasonRecommended': 'Recommended: {parts}.',
+      'putawayExecuteLabel': 'Plan putaway',
+      'putawayExecuteDoneLabel': 'Putaway refreshed',
+      'putawayExecuteSummary':
+          '{total} target slots marked ({fast} fast lane, {reserve} reserve, {blocked} blocked).',
+      'putawayExecuteSummaryEmpty':
+          'No putaway target slots detected.',
     },
   };
 }

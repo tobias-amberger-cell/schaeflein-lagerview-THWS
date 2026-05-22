@@ -1,5 +1,5 @@
 package de.schaeflein.lagerview
 
-import io.flutter.embedding.android.FlutterActivity
+import io.xraph.plugin.flutter_unity_widget.FlutterUnityActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity : FlutterUnityActivity()

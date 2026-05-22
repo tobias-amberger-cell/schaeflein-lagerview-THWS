@@ -77,19 +77,16 @@ class DashboardHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Lagerleitstand',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
+                        'Lagerstatus',
+                        style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        'Fokuslager, Heatmap und operative Leistungsdaten.',
-                        style:
-                            Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                        'Aktueller Status fuer Fokuslager und Kennzahlen.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -105,9 +102,7 @@ class DashboardHero extends StatelessWidget {
                               warehouse?.name ?? 'Kein Fokuslager gewählt',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelLarge
+                              style: Theme.of(context).textTheme.labelLarge
                                   ?.copyWith(
                                     fontWeight: FontWeight.w700,
                                     color: colorScheme.onSurfaceVariant,
@@ -186,11 +181,10 @@ class DashboardHero extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     'Datenstand: $lastSyncLabel',
-                    style:
-                        Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: syncColor,
-                              fontWeight: FontWeight.w700,
-                            ),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: syncColor,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -218,9 +212,7 @@ class DashboardHero extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: isSyncing ? null : onSync,
           icon: const Icon(Icons.refresh_rounded, size: 18),
-          label: Text(
-            isSyncing ? 'Sync läuft...' : 'Daten aktualisieren',
-          ),
+          label: Text(isSyncing ? 'Sync läuft...' : 'Daten aktualisieren'),
         ),
       ],
     );
@@ -245,7 +237,9 @@ class _HeroChip extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
@@ -279,15 +273,15 @@ class _HeroChip extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 value,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ],
           ),

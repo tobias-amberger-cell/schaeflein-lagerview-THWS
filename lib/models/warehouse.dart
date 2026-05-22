@@ -51,6 +51,7 @@ class Warehouse {
     required this.description,
     required this.totalStorageSlots,
     required this.occupiedStorageSlots,
+    this.overloadedStorageSlots = 0,
     required this.articleCount,
     required this.abcAnalysis,
     required this.inboundPerDay,
@@ -69,6 +70,7 @@ class Warehouse {
   final String description;
   final int totalStorageSlots;
   final int occupiedStorageSlots;
+  final int overloadedStorageSlots;
   final int articleCount;
   final AbcAnalysis abcAnalysis;
   final int inboundPerDay;
@@ -99,6 +101,7 @@ class Warehouse {
     String? description,
     int? totalStorageSlots,
     int? occupiedStorageSlots,
+    int? overloadedStorageSlots,
     int? articleCount,
     AbcAnalysis? abcAnalysis,
     int? inboundPerDay,
@@ -117,6 +120,8 @@ class Warehouse {
       description: description ?? this.description,
       totalStorageSlots: totalStorageSlots ?? this.totalStorageSlots,
       occupiedStorageSlots: occupiedStorageSlots ?? this.occupiedStorageSlots,
+      overloadedStorageSlots:
+          overloadedStorageSlots ?? this.overloadedStorageSlots,
       articleCount: articleCount ?? this.articleCount,
       abcAnalysis: abcAnalysis ?? this.abcAnalysis,
       inboundPerDay: inboundPerDay ?? this.inboundPerDay,
@@ -262,6 +267,9 @@ class WarehouseStorageLocation {
     required this.slotNumber,
     required this.abcClass,
     required this.status,
+    this.articleId = '',
+    this.daysSinceMovement,
+    this.movements30d,
   });
 
   final String placeId;
@@ -271,9 +279,68 @@ class WarehouseStorageLocation {
   final int slotNumber;
   final String abcClass;
   final String status;
+  final String articleId;
+  final int? daysSinceMovement;
+  final int? movements30d;
 
   String get displayCode =>
       'R${rackNumber.toString().padLeft(2, "0")}-'
       'E${levelNumber.toString().padLeft(2, "0")}-'
       'F${slotNumber.toString().padLeft(3, "0")}';
+}
+
+class WarehouseAbcArticleSummary {
+  const WarehouseAbcArticleSummary({
+    required this.articleId,
+    required this.articleDescription,
+    required this.abcClass,
+    required this.slotCount,
+    required this.movements30d,
+    required this.maxIdleDays,
+  });
+
+  final String articleId;
+  final String articleDescription;
+  final String abcClass;
+  final int slotCount;
+  final int movements30d;
+  final int maxIdleDays;
+}
+
+class WarehouseAbcSlotSummary {
+  const WarehouseAbcSlotSummary({
+    required this.placeId,
+    required this.halle,
+    required this.bereich,
+    required this.regal,
+    required this.fach,
+    required this.ebene,
+    required this.anzPicks,
+    required this.cumulativePct,
+    required this.abcCalc,
+    required this.abcClass,
+    required this.articleId,
+    required this.articleDescription,
+    this.maxLhm = 0,
+    this.istLhm = 0,
+    this.freeCapacity = 0,
+    this.utilizationPct = 0,
+  });
+
+  final String placeId;
+  final String halle;
+  final String bereich;
+  final String regal;
+  final String fach;
+  final String ebene;
+  final int anzPicks;
+  final double cumulativePct;
+  final String abcCalc;
+  final String abcClass;
+  final String articleId;
+  final String articleDescription;
+  final double maxLhm;
+  final double istLhm;
+  final double freeCapacity;
+  final double utilizationPct;
 }

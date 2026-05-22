@@ -1,25 +1,29 @@
-import 'package:flutter/widgets.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 
 import '../constants/app_constants.dart';
-import '../../data/warehouse_dummy_data.dart';
-import '../../data/warehouse_operations_dummy_data.dart';
+import '../services/database_service.dart';
 import '../../features/warehouses/data/warehouse_api_service.dart';
 import '../../features/warehouses/data/warehouse_csv_service.dart';
+import '../../models/order_volume_point.dart';
+import '../../models/pick_activity_heatmap.dart';
+import '../../models/relocation_candidate.dart';
+import '../../models/replenishment_candidate.dart';
 import '../../models/viewer_heatmap.dart';
+import '../../models/warehouse_heatmap_layer.dart';
 import '../../models/warehouse.dart';
 import '../../models/warehouse_trend.dart';
 import '../../models/warehouse_operations_profile.dart';
 
-import 'control_tower_state_mixin.dart';
 import 'notification_state_mixin.dart';
 import 'settings_state_mixin.dart';
-import 'tour_state_mixin.dart';
+
 import 'viewer_state_mixin.dart';
 
-export 'control_tower_state_mixin.dart';
 export 'notification_state_mixin.dart';
 export 'settings_state_mixin.dart' show AutoEscalationPreset, AutoEscalationPresetLabel;
-export 'tour_state_mixin.dart';
+
 export 'viewer_state_mixin.dart';
 
 class RiskAlertAcknowledgement {
@@ -44,26 +48,27 @@ class AppState extends ChangeNotifier
     with
         SettingsStateMixin,
         NotificationStateMixin,
-        TourStateMixin,
-        ControlTowerStateMixin,
         ViewerStateMixin {
-  static const String _csvDataDir =
-      String.fromEnvironment('CSV_DATA_DIR', defaultValue: '');
-
   AppState() {
     initNotifications();
-    initTours();
-    seedControlTowerData();
+    // DB-Pfad-Auswahl pre-fuellen, damit der Dropdown im Header schon
+    // selektierbar ist, bevor der erste Sync durch ist.
+    _availableDatabasePaths.addAll(<String>{
+      AppConstants.apiBaseUrl,
+      'http://localhost:8000',
+      'http://127.0.0.1:8000',
+      'http://10.0.2.2:8000',
+    });
+    _activeDatabasePath = _warehouseApiService.baseUrl;
   }
 
-  // ── Auth ──────────────────────────────────────────────────────────────
+  // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   bool _isAuthenticated = false;
   String _userName = 'Warehouse Operator';
   String _userEmail = 'operator@schaeflein.de';
 
   bool get isAuthenticated => _isAuthenticated;
-  @override
   String get userName => _userName;
   String get userEmail => _userEmail;
 
@@ -83,18 +88,17 @@ class AppState extends ChangeNotifier
     notifyListeners();
   }
 
-  // ── Warehouse ─────────────────────────────────────────────────────────
+  // â”€â”€ Warehouse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   final List<Warehouse> _warehouses = <Warehouse>[];
   final Map<String, WarehouseOperationsProfile> _operationsProfiles =
-      <String, WarehouseOperationsProfile>{...kWarehouseOperationsProfiles};
+      <String, WarehouseOperationsProfile>{};
   final Set<String> _favoriteWarehouseIds = <String>{};
   final WarehouseApiService _warehouseApiService = WarehouseApiService(
     baseUrl: AppConstants.apiBaseUrl,
   );
-  final WarehouseCsvService _warehouseCsvService = WarehouseCsvService(
-    dataDirectory: _csvDataDir.isEmpty ? null : _csvDataDir,
-  );
+  final WarehouseCsvService _warehouseCsvService = WarehouseCsvService();
+  final DatabaseService _databaseService = createDatabaseService();
 
   String _warehouseSearchQuery = '';
   WarehouseStatus? _warehouseStatusFilter;
@@ -103,10 +107,50 @@ class AppState extends ChangeNotifier
   DateTime? _lastWarehouseSyncAt;
   bool _isWarehousesSyncing = false;
   String? _warehouseApiError;
+  // StandardmÃ¤ÃŸig offline-first: Daten primÃ¤r aus lokaler warehouse.db laden.
   bool _warehouseOfflineMode = false;
+  bool _localDatabasePrepared = false;
+  String? _localDatabaseBootstrapError;
   final Set<String> _modelGenerationInProgress = <String>{};
   List<WarehouseTrendPoint> _throughputTrend = <WarehouseTrendPoint>[];
+  List<OrderVolumePoint> _orderVolumeTrend = <OrderVolumePoint>[];
+  PickActivityHeatmap _pickActivityHeatmap = PickActivityHeatmap.empty;
+  List<WarehouseHeatmapLayerEntry> _warehouseHeatmapLayer =
+      const <WarehouseHeatmapLayerEntry>[];
+  RelocationCandidateSummary _relocationCandidates =
+      RelocationCandidateSummary.empty;
+  ReplenishmentCandidateSummary _replenishmentCandidates =
+      ReplenishmentCandidateSummary.empty;
+  final Map<String, List<WarehouseAbcArticleSummary>> _warehouseAbcArticlesMap =
+      <String, List<WarehouseAbcArticleSummary>>{};
+  final Map<String, List<WarehouseAbcSlotSummary>> _warehouseAbcSlotsMap =
+      <String, List<WarehouseAbcSlotSummary>>{};
+  final Map<String, String> _warehouseExternalModelPathMap =
+      <String, String>{};
+  final Set<String> _storageLoadInProgress = <String>{};
+  bool _abcLoadInProgress = false;
+  bool _abcSlotsLoadInProgress = false;
+  bool _orderVolumeLoadInProgress = false;
+  bool _pickActivityLoadInProgress = false;
+  bool _warehouseHeatmapLayerLoadInProgress = false;
+  bool _relocationLoadInProgress = false;
+  bool _replenishmentLoadInProgress = false;
+  final List<String> _availableDatabasePaths = <String>[];
+  String? _activeDatabasePath;
   bool _hasLoadedThroughputTrend = false;
+  int _loadedThroughputDays = 0;
+  bool _hasLoadedOrderVolume = false;
+  bool _hasLoadedPickActivity = false;
+  bool _hasLoadedWarehouseHeatmapLayer = false;
+  bool _hasLoadedRelocation = false;
+  bool _hasLoadedReplenishment = false;
+  int _dashboardKpiHorizonDays = 30;
+  final Set<String> _dashboardSelectedHalls = <String>{};
+  final Set<String> _dashboardSelectedAbcClasses = <String>{};
+  double _dashboardUtilizationFilterMin = 0;
+  double _dashboardUtilizationFilterMax = 150;
+  bool _dashboardOnlyOccupied = false;
+  int _dashboardTopArticlesLimit = 100;
 
   String get warehouseSearchQuery => _warehouseSearchQuery;
   WarehouseStatus? get warehouseStatusFilter => _warehouseStatusFilter;
@@ -126,12 +170,168 @@ class AppState extends ChangeNotifier
   bool get isWarehousesSyncing => _isWarehousesSyncing;
   String? get warehouseApiError => _warehouseApiError;
   bool get isWarehouseOfflineMode => _warehouseOfflineMode;
+  String? get localDatabaseBootstrapError => _localDatabaseBootstrapError;
   bool hasModelGenerationInProgress(String warehouseId) =>
       _modelGenerationInProgress.contains(warehouseId);
   bool get hasWarehouseFilters =>
       _warehouseSearchQuery.isNotEmpty || _warehouseStatusFilter != null;
   List<WarehouseTrendPoint> get throughputTrend =>
       List<WarehouseTrendPoint>.unmodifiable(_throughputTrend);
+  List<OrderVolumePoint> get orderVolumeTrend =>
+      List<OrderVolumePoint>.unmodifiable(_orderVolumeTrend);
+  PickActivityHeatmap get pickActivityHeatmap => _pickActivityHeatmap;
+  List<WarehouseHeatmapLayerEntry> get warehouseHeatmapLayer =>
+      List<WarehouseHeatmapLayerEntry>.unmodifiable(_warehouseHeatmapLayer);
+  RelocationCandidateSummary get relocationCandidates => _relocationCandidates;
+  ReplenishmentCandidateSummary get replenishmentCandidates =>
+      _replenishmentCandidates;
+  int get dashboardKpiHorizonDays => _dashboardKpiHorizonDays;
+  Set<String> get dashboardSelectedHalls =>
+      Set<String>.unmodifiable(_dashboardSelectedHalls);
+  Set<String> get dashboardSelectedAbcClasses =>
+      Set<String>.unmodifiable(_dashboardSelectedAbcClasses);
+  double get dashboardUtilizationFilterMin => _dashboardUtilizationFilterMin;
+  double get dashboardUtilizationFilterMax => _dashboardUtilizationFilterMax;
+  bool get dashboardOnlyOccupied => _dashboardOnlyOccupied;
+  int get dashboardTopArticlesLimit => _dashboardTopArticlesLimit;
+  bool get hasDashboardStorageFilters =>
+      _dashboardSelectedHalls.isNotEmpty ||
+      _dashboardSelectedAbcClasses.isNotEmpty ||
+      _dashboardOnlyOccupied;
+  bool get hasDashboardUtilizationFilter =>
+      _dashboardUtilizationFilterMin > 0 || _dashboardUtilizationFilterMax < 150;
+  List<String> get availableDatabasePaths =>
+      List<String>.unmodifiable(_availableDatabasePaths);
+  String? get activeDatabasePath => _activeDatabasePath;
+
+  List<WarehouseAbcArticleSummary> getAbcArticlesForWarehouse(
+    String warehouseId,
+  ) {
+    final entries = _warehouseAbcArticlesMap[warehouseId];
+    if (entries == null) {
+      return const <WarehouseAbcArticleSummary>[];
+    }
+    return List<WarehouseAbcArticleSummary>.unmodifiable(entries);
+  }
+
+  List<WarehouseAbcSlotSummary> getAbcSlotsForWarehouse(String warehouseId) {
+    final entries = _warehouseAbcSlotsMap[warehouseId];
+    if (entries == null) {
+      return const <WarehouseAbcSlotSummary>[];
+    }
+    return List<WarehouseAbcSlotSummary>.unmodifiable(entries);
+  }
+
+  Future<void> ensureStorageLocationsLoadedForWarehouse(
+    String warehouseId, {
+    int limit = 120,
+  }) async {
+    if (warehouseId.trim().isEmpty) {
+      return;
+    }
+    if (_storageLoadInProgress.contains(warehouseId)) {
+      return;
+    }
+    final existing = warehouseStorageLocationMap[warehouseId];
+    if (existing != null && existing.isNotEmpty) {
+      return;
+    }
+    _storageLoadInProgress.add(warehouseId);
+    try {
+      final samples = _warehouseOfflineMode
+          ? await _loadStorageLocationsFromDisk(
+              warehouseId: warehouseId,
+              limit: limit,
+              dbPath: _activeDatabasePath,
+            )
+          : await _warehouseApiService.fetchStorageLocations(
+              warehouseId: warehouseId,
+              limit: limit,
+            );
+      if (samples.isNotEmpty) {
+        warehouseStorageLocationMap[warehouseId] = samples;
+      }
+    } catch (_) {
+      // no-op: UI nutzt Fallbacks, bis Daten verfuegbar sind.
+    } finally {
+      _storageLoadInProgress.remove(warehouseId);
+      notifyListeners();
+    }
+  }
+
+  Future<void> ensureAbcArticlesLoadedForWarehouse({
+    required String warehouseId,
+    int limit = 10000,
+  }) async {
+    if (warehouseId.trim().isEmpty || _abcLoadInProgress) {
+      return;
+    }
+    final existing = _warehouseAbcArticlesMap[warehouseId];
+    if (existing != null && existing.isNotEmpty) {
+      return;
+    }
+    _abcLoadInProgress = true;
+    try {
+      final data = _warehouseOfflineMode
+          ? await _loadAbcArticlesFromDisk(
+              dbPath: _activeDatabasePath,
+              limit: limit,
+            )
+          : await _warehouseApiService.fetchAbcArticles(
+              warehouseId: warehouseId,
+              limit: limit,
+            );
+      if (data.isNotEmpty) {
+        _warehouseAbcArticlesMap
+          ..clear()
+          ..addAll(data);
+      }
+    } catch (_) {
+      // no-op: Karte zeigt bis dahin Sample-basierte Fallbacks.
+    } finally {
+      _abcLoadInProgress = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> ensureAbcSlotsLoadedForWarehouse({
+    required String warehouseId,
+    int limit = 20000,
+  }) async {
+    if (warehouseId.trim().isEmpty || _abcSlotsLoadInProgress) {
+      return;
+    }
+    final existing = _warehouseAbcSlotsMap[warehouseId];
+    if (existing != null && existing.isNotEmpty) {
+      return;
+    }
+    _abcSlotsLoadInProgress = true;
+    try {
+      final data = _warehouseOfflineMode
+          ? await _loadAbcSlotsFromDisk(
+              dbPath: _activeDatabasePath,
+              limit: limit,
+            )
+          : await _warehouseApiService.fetchAbcSlots(
+              warehouseId: warehouseId,
+              limit: limit,
+            );
+      if (data.isNotEmpty) {
+        _warehouseAbcSlotsMap
+          ..clear()
+          ..addAll(data);
+      }
+    } catch (_) {
+      // no-op
+    } finally {
+      _abcSlotsLoadInProgress = false;
+      notifyListeners();
+    }
+  }
+
+  String? getExternalModelPathForWarehouse(String warehouseId) {
+    return _warehouseExternalModelPathMap[warehouseId];
+  }
 
   List<Warehouse> get filteredWarehouses {
     final query = _warehouseSearchQuery.toLowerCase();
@@ -159,31 +359,7 @@ class AppState extends ChangeNotifier
     if (fromData != null) {
       return fromData;
     }
-    final warehouse = getWarehouseById(warehouseId);
-    if (warehouse == null) {
-      return const WarehouseOperationsProfile(
-        warehouseId: 'unknown',
-        dockCount: 0,
-        activeDocks: 0,
-        blockedSlots: 0,
-        reservedSlots: 0,
-        slaTargetPercent: 95,
-        slaCurrentPercent: 95,
-        avgDwellMinutes: 0,
-        coldZoneCount: 0,
-        ambientZoneCount: 0,
-        hazardousZoneCount: 0,
-        highBaySlots: 0,
-        blockStorageSlots: 0,
-        shuttleSlots: 0,
-        floorStorageSlots: 0,
-        safetyIncidentsMonth: 0,
-        qualityHolds: 0,
-      );
-    }
-    final generated = _buildFallbackOperationsProfile(warehouse);
-    _operationsProfiles[warehouseId] = generated;
-    return generated;
+    return _emptyOperationsProfile(warehouseId);
   }
 
   void selectWarehouse(Warehouse warehouse) {
@@ -201,6 +377,91 @@ class AppState extends ChangeNotifier
   void setWarehouseStatusFilter(WarehouseStatus? status) {
     _warehouseStatusFilter = status;
     notifyListeners();
+  }
+
+  void setDashboardKpiHorizonDays(int days) {
+    if (days == _dashboardKpiHorizonDays) {
+      return;
+    }
+    _dashboardKpiHorizonDays = days;
+    notifyListeners();
+  }
+
+  void setDashboardSelectedHalls(Iterable<String> halls) {
+    final normalized = halls
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    if (setEquals(normalized, _dashboardSelectedHalls)) {
+      return;
+    }
+    _dashboardSelectedHalls
+      ..clear()
+      ..addAll(normalized);
+    notifyListeners();
+  }
+
+  void setDashboardSelectedAbcClasses(Iterable<String> classes) {
+    final normalized = classes
+        .map((value) => value.trim().toUpperCase())
+        .where((value) => value == 'A' || value == 'B' || value == 'C')
+        .toSet();
+    if (setEquals(normalized, _dashboardSelectedAbcClasses)) {
+      return;
+    }
+    _dashboardSelectedAbcClasses
+      ..clear()
+      ..addAll(normalized);
+    notifyListeners();
+  }
+
+  void setDashboardUtilizationFilter({
+    required double min,
+    required double max,
+  }) {
+    final nextMin = min.clamp(0.0, 150.0).toDouble();
+    final nextMax = max.clamp(0.0, 150.0).toDouble();
+    final safeMin = nextMin <= nextMax ? nextMin : nextMax;
+    final safeMax = nextMax >= nextMin ? nextMax : nextMin;
+    if (_dashboardUtilizationFilterMin == safeMin &&
+        _dashboardUtilizationFilterMax == safeMax) {
+      return;
+    }
+    _dashboardUtilizationFilterMin = safeMin;
+    _dashboardUtilizationFilterMax = safeMax;
+    notifyListeners();
+  }
+
+  void setDashboardOnlyOccupied(bool value) {
+    if (_dashboardOnlyOccupied == value) {
+      return;
+    }
+    _dashboardOnlyOccupied = value;
+    notifyListeners();
+  }
+
+  void setDashboardTopArticlesLimit(int value) {
+    final next = value.clamp(5, 100).toInt();
+    if (_dashboardTopArticlesLimit == next) {
+      return;
+    }
+    _dashboardTopArticlesLimit = next;
+    notifyListeners();
+  }
+
+  Future<bool> useDatabaseFile(String dbFilePath) async {
+    final nextBaseUrl = dbFilePath.trim();
+    if (nextBaseUrl.isEmpty) {
+      return false;
+    }
+    _activeDatabasePath = nextBaseUrl;
+    _warehouseApiError = null;
+    if (!_looksLikeDatabasePath(nextBaseUrl)) {
+      _warehouseApiService.setBaseUrl(nextBaseUrl);
+    }
+    notifyListeners();
+    await syncWarehouses(force: true);
+    return _warehouses.isNotEmpty;
   }
 
   void clearWarehouseFilters() {
@@ -226,96 +487,132 @@ class AppState extends ChangeNotifier
     return true;
   }
 
-  // ── Warehouse Sync ────────────────────────────────────────────────────
-
-  Future<void> syncWarehouses() async {
-    if (_isWarehousesSyncing) {
+  Future<void> prepareLocalDatabaseIfNeeded() async {
+    if (_localDatabasePrepared || kIsWeb) {
       return;
+    }
+    _localDatabasePrepared = true;
+    final result = await _databaseService.ensureDatabaseReady();
+    if (result.isSuccess) {
+      final dbPath = result.databasePath!.trim();
+      _activeDatabasePath = dbPath;
+      _warehouseOfflineMode = true;
+      _localDatabaseBootstrapError = null;
+      if (!_availableDatabasePaths.contains(dbPath)) {
+        _availableDatabasePaths.add(dbPath);
+      }
+      notifyListeners();
+      return;
+    }
+
+    _localDatabaseBootstrapError = result.errorMessage;
+    if (_localDatabaseBootstrapError != null &&
+        _localDatabaseBootstrapError!.trim().isNotEmpty) {
+      debugPrint(_localDatabaseBootstrapError);
+    }
+  }
+
+  // â”€â”€ Warehouse Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  Future<void> syncWarehouses({bool force = false}) async {
+    if (_isWarehousesSyncing) {
+      if (!force) {
+        while (_isWarehousesSyncing) {
+          await Future<void>.delayed(const Duration(milliseconds: 60));
+        }
+        return;
+      }
+      while (_isWarehousesSyncing) {
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+      }
     }
     _isWarehousesSyncing = true;
     _hasLoadedThroughputTrend = false;
+    _hasLoadedOrderVolume = false;
+    _hasLoadedPickActivity = false;
+    _hasLoadedWarehouseHeatmapLayer = false;
+    _hasLoadedRelocation = false;
+    _hasLoadedReplenishment = false;
+    _orderVolumeTrend = const <OrderVolumePoint>[];
+    _pickActivityHeatmap = PickActivityHeatmap.empty;
+    _warehouseHeatmapLayer = const <WarehouseHeatmapLayerEntry>[];
+    _relocationCandidates = RelocationCandidateSummary.empty;
+    _replenishmentCandidates = ReplenishmentCandidateSummary.empty;
     _warehouseApiError = null;
     notifyListeners();
 
     List<Warehouse> next = <Warehouse>[];
-    var loaded = false;
-    var loadedFromCsv = false;
     try {
-      if (!_warehouseOfflineMode) {
-        try {
-          next = await _warehouseApiService.fetchWarehouses();
-          loaded = next.isNotEmpty;
-          _warehouseApiError = null;
-        } on WarehouseApiException catch (error) {
-          _warehouseApiError = error.message;
-          _warehouseOfflineMode = true;
-        } catch (error) {
-          _warehouseApiError = error.toString();
-          _warehouseOfflineMode = true;
-        }
-      }
-
-      if (!loaded) {
-        try {
-          final csvWarehouses =
-              await _warehouseCsvService.loadWarehousesFromDisk();
-          if (csvWarehouses.isNotEmpty) {
-            next = csvWarehouses;
-            loaded = true;
-            loadedFromCsv = true;
+      final source = _activeDatabasePath?.trim();
+      final wantsLocalDbSource = source != null &&
+          source.isNotEmpty &&
+          _looksLikeDatabasePath(source);
+      if (source != null &&
+          source.isNotEmpty &&
+          _looksLikeDatabasePath(source)) {
+        if (kIsWeb) {
+          // Web kann keine lokale SQLite-Datei direkt lesen.
+          // Statt Crash: API probieren und klare Meldung setzen.
+          try {
+            next = await _fetchWarehousesWithFallback();
+            _warehouseApiError = null;
+            _warehouseOfflineMode = false;
+            _activeDatabasePath = _warehouseApiService.baseUrl;
+          } catch (error) {
+            next = <Warehouse>[];
+            _warehouseApiError =
+                'DB-only Modus ist im Web nicht direkt moeglich. Nutze eine API-URL (z. B. http://localhost:8000). Letzter API-Fehler: $error';
+            _warehouseOfflineMode = false;
           }
+        } else {
+          next = await _loadWarehousesFromDisk(source);
+          _warehouseApiError = null;
+          _warehouseOfflineMode = true;
+        }
+      } else {
+        try {
+          next = await _fetchWarehousesWithFallback();
+          _warehouseApiError = null;
+          _warehouseOfflineMode = false;
         } catch (error) {
-          final prefix =
-              _warehouseApiError == null ? '' : '${_warehouseApiError}\n';
-          _warehouseApiError =
-              '${prefix}CSV-Laden fehlgeschlagen: $error';
+          if (kIsWeb) {
+            next = <Warehouse>[];
+            _warehouseApiError = 'API-Laden fehlgeschlagen: $error';
+            _warehouseOfflineMode = false;
+          } else {
+            next = await _loadWarehousesFromDisk(source);
+            _warehouseApiError = next.isEmpty
+                ? 'API-Laden fehlgeschlagen: $error'
+                : null;
+            _warehouseOfflineMode = true;
+          }
         }
       }
-
-      if (!loaded) {
-        next = kDummyWarehouses.toList(growable: false);
+      if (kIsWeb && wantsLocalDbSource) {
+        // Verhindert, dass bei Web-Session eine lokale .db als aktive Quelle stehen bleibt.
+        _activeDatabasePath = _warehouseApiService.baseUrl;
       }
-
-      _warehouseOfflineMode =
-          loadedFromCsv ? true : _warehouseOfflineMode;
+      unawaited(_refreshDatabaseSelectors());
       _warehouses
         ..clear()
         ..addAll(next);
-      if (loadedFromCsv && next.isNotEmpty) {
-        try {
-          warehouseStorageLocationMap.clear();
-          for (final warehouse in next) {
-            final samples =
-                await _warehouseCsvService.loadStorageLocationsFromDisk(
-              limit: 120,
-              warehouseId: warehouse.id,
-            );
-            if (samples.isNotEmpty) {
-              warehouseStorageLocationMap[warehouse.id] = samples;
-            }
-          }
-          if (warehouseStorageLocationMap.isEmpty) {
-            final fallback = await _warehouseCsvService
-                .loadStorageLocationsFromDisk(limit: 120);
-            if (fallback.isNotEmpty) {
-              warehouseStorageLocationMap[next.first.id] = fallback;
-            }
-          }
-        } catch (_) {
-          warehouseStorageLocationMap.clear();
-        }
-        try {
-          final csvProfiles =
-              await _warehouseCsvService.loadOperationsProfilesFromDisk();
-          if (csvProfiles.isNotEmpty) {
-            _operationsProfiles.addAll(csvProfiles);
-          }
-        } catch (_) {
-          // Keep fallback profiles
-        }
+      warehouseStorageLocationMap.clear();
+      _warehouseAbcArticlesMap.clear();
+
+      if (next.isNotEmpty) {
+        _syncWarehouseSelections();
+        _lastWarehouseSyncAt = DateTime.now();
+        notifyListeners();
+        unawaited(_warmupWarehouseAuxiliaryData(next));
       } else {
+        _warehouseApiError ??= 'Keine API-Daten verfuegbar.';
+        _operationsProfiles.clear();
         warehouseStorageLocationMap.clear();
+        _warehouseAbcArticlesMap.clear();
+        _warehouseExternalModelPathMap.clear();
+        _activeDatabasePath = _warehouseApiService.baseUrl;
       }
+
       _syncWarehouseSelections();
       _lastWarehouseSyncAt = DateTime.now();
     } finally {
@@ -324,65 +621,339 @@ class AppState extends ChangeNotifier
     }
   }
 
-  Future<void> syncWarehousesFromCsv() async {
-    final csvWarehouses =
-        await _warehouseCsvService.loadWarehousesFromDisk();
-    if (csvWarehouses.isEmpty) {
-      return;
+  Future<List<Warehouse>> _fetchWarehousesWithFallback() async {
+    final original = _warehouseApiService.baseUrl;
+    final tried = <String>{};
+    final candidates = <String>[
+      original,
+      if (original.contains('localhost'))
+        original.replaceFirst('localhost', '127.0.0.1'),
+      if (original.contains('localhost'))
+        original.replaceFirst('localhost', '10.0.2.2'),
+      if (original.contains('127.0.0.1'))
+        original.replaceFirst('127.0.0.1', 'localhost'),
+      if (original.contains('127.0.0.1'))
+        original.replaceFirst('127.0.0.1', '10.0.2.2'),
+      if (original.contains('10.0.2.2'))
+        original.replaceFirst('10.0.2.2', 'localhost'),
+      if (original.contains('10.0.2.2'))
+        original.replaceFirst('10.0.2.2', '127.0.0.1'),
+    ];
+
+    Object? lastError;
+    for (final raw in candidates) {
+      final candidate = raw.trim();
+      if (candidate.isEmpty || tried.contains(candidate)) {
+        continue;
+      }
+      tried.add(candidate);
+      _warehouseApiService.setBaseUrl(candidate);
+      try {
+        final data = await _warehouseApiService.fetchWarehouses();
+        _activeDatabasePath = _warehouseApiService.baseUrl;
+        return data;
+      } catch (error) {
+        lastError = error;
+      }
     }
-    _hasLoadedThroughputTrend = false;
-    _warehouses
+
+    _warehouseApiService.setBaseUrl(original);
+    throw lastError ?? Exception('Keine API-Quelle erreichbar.');
+  }
+
+  Future<void> _refreshDatabaseSelectors() async {
+    final currentBaseUrl = _activeDatabasePath?.trim().isNotEmpty == true
+        ? _activeDatabasePath!.trim()
+        : _warehouseApiService.baseUrl;
+    final localDbPaths = await _warehouseCsvService.loadAvailableDatabasePathsFromDisk();
+    _availableDatabasePaths
       ..clear()
-      ..addAll(csvWarehouses);
-    warehouseStorageLocationMap.clear();
-    for (final warehouse in csvWarehouses) {
-      final samples =
-          await _warehouseCsvService.loadStorageLocationsFromDisk(
-        limit: 120,
-        warehouseId: warehouse.id,
+      ..addAll(
+        <String>{
+          currentBaseUrl,
+          AppConstants.apiBaseUrl,
+          'http://localhost:8000',
+          'http://127.0.0.1:8000',
+          'http://10.0.2.2:8000',
+          ...localDbPaths,
+        },
       );
-      if (samples.isNotEmpty) {
-        warehouseStorageLocationMap[warehouse.id] = samples;
-      }
-    }
-    if (warehouseStorageLocationMap.isEmpty) {
-      final fallback = await _warehouseCsvService
-          .loadStorageLocationsFromDisk(limit: 120);
-      if (fallback.isNotEmpty) {
-        warehouseStorageLocationMap[csvWarehouses.first.id] = fallback;
-      }
-    }
-    try {
-      final csvProfiles =
-          await _warehouseCsvService.loadOperationsProfilesFromDisk();
-      if (csvProfiles.isNotEmpty) {
-        _operationsProfiles.addAll(csvProfiles);
-      }
-    } catch (_) {
-      // Keep fallback profiles
-    }
-    _warehouseOfflineMode = true;
-    _syncWarehouseSelections();
-    _lastWarehouseSyncAt = DateTime.now();
+    _activeDatabasePath = currentBaseUrl;
     notifyListeners();
   }
 
+  Future<void> _warmupWarehouseAuxiliaryData(
+    List<Warehouse> warehouses,
+  ) async {
+    try {
+      _warehouseAbcArticlesMap.clear();
+      const preferredModelPath = 'assets/models/SampleScene_fixed.glb';
+
+      _warehouseExternalModelPathMap.clear();
+      String? sharedModelPath;
+      try {
+        final modelPaths = await _loadExternalModelPathsFromDisk(_activeDatabasePath);
+        _warehouseExternalModelPathMap.addAll(modelPaths);
+        if (modelPaths.isNotEmpty) {
+          sharedModelPath = modelPaths.values.first;
+        }
+      } catch (_) {
+        // no-op: Fallback unten greift.
+      }
+
+      if (sharedModelPath != null && sharedModelPath.trim().isNotEmpty) {
+        for (final warehouse in warehouses) {
+          _warehouseExternalModelPathMap.putIfAbsent(
+            warehouse.id,
+            () => sharedModelPath!,
+          );
+        }
+      } else if (!_warehouseOfflineMode) {
+        for (final warehouse in warehouses) {
+          // API-Fallback, wenn lokal keine Modellquelle gefunden wurde.
+          _warehouseExternalModelPathMap[warehouse.id] =
+              preferredModelPath;
+        }
+      }
+
+      // Nutzerwunsch: explizit das angelieferte SampleScene-Modell verwenden.
+      // Damit wird eine versehentlich priorisierte, vereinfachte GLB-Datei
+      // (z. B. warehouse.model.glb) nicht mehr als Hauptquelle genutzt.
+      for (final warehouse in warehouses) {
+        _warehouseExternalModelPathMap[warehouse.id] = preferredModelPath;
+      }
+
+      try {
+        final dbProfiles = _warehouseOfflineMode
+            ? await _loadOperationsProfilesFromDisk(_activeDatabasePath)
+            : await _warehouseApiService.fetchOperationsProfiles();
+        _operationsProfiles
+          ..clear()
+          ..addAll(dbProfiles);
+        for (final warehouse in warehouses) {
+          _operationsProfiles.putIfAbsent(
+            warehouse.id,
+            () => _emptyOperationsProfile(warehouse.id),
+          );
+        }
+      } catch (_) {
+        _operationsProfiles.clear();
+        for (final warehouse in warehouses) {
+          _operationsProfiles[warehouse.id] =
+              _emptyOperationsProfile(warehouse.id);
+        }
+      }
+
+      final focusWarehouseId = riskFocusWarehouse?.id;
+      if (focusWarehouseId != null && focusWarehouseId.isNotEmpty) {
+        unawaited(
+          ensureStorageLocationsLoadedForWarehouse(
+            focusWarehouseId,
+            limit: 120,
+          ),
+        );
+      }
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<void> syncWarehousesFromCsv() async {
+    final localDbPath =
+        _activeDatabasePath?.trim().isNotEmpty == true &&
+            _looksLikeDatabasePath(_activeDatabasePath!)
+        ? _activeDatabasePath!.trim()
+        : await _warehouseCsvService.loadActiveDatabasePathFromDisk();
+    if (localDbPath == null || localDbPath.trim().isEmpty) {
+      _warehouseApiError = 'Keine lokale warehouse.db gefunden.';
+      notifyListeners();
+      return;
+    }
+    await useDatabaseFile(localDbPath);
+  }
+
   Future<void> syncWarehousesFromApi() async {
-    _warehouseOfflineMode = false;
-    await syncWarehouses();
+    await syncWarehouses(force: true);
   }
 
   Future<List<WarehouseTrendPoint>> loadThroughputTrend(
       {int days = 14}) async {
-    if (_hasLoadedThroughputTrend && _throughputTrend.isNotEmpty) {
+    if (_hasLoadedThroughputTrend &&
+        _loadedThroughputDays == days &&
+        _throughputTrend.isNotEmpty) {
       return _throughputTrend;
     }
-    final trend = await _warehouseCsvService.loadThroughputTrendFromDisk(
-        days: days);
+    final warehouse = riskFocusWarehouse;
+    if (warehouse == null) {
+      return const <WarehouseTrendPoint>[];
+    }
+    final trend = _warehouseOfflineMode
+        ? await _warehouseCsvService.loadThroughputTrendFromDisk(days: days)
+        : await _warehouseApiService.fetchThroughputTrend(
+            warehouseId: warehouse.id,
+            days: days,
+          );
     _throughputTrend = trend;
     _hasLoadedThroughputTrend = true;
+    _loadedThroughputDays = days;
     notifyListeners();
     return _throughputTrend;
+  }
+
+  Future<List<OrderVolumePoint>> ensureOrderVolumeTrendLoaded({
+    int days = 30,
+    bool force = false,
+  }) async {
+    // Short-Circuit auf _hasLoaded allein - sonst Endlos-Refetch bei leerer Antwort.
+    if (!force && _hasLoadedOrderVolume) {
+      return _orderVolumeTrend;
+    }
+    if (_orderVolumeLoadInProgress) {
+      return _orderVolumeTrend;
+    }
+    final warehouse = riskFocusWarehouse;
+    if (warehouse == null || _warehouseOfflineMode) {
+      // Offline-Pfad fuer Auftragsdaten existiert nicht; Karte bleibt leer.
+      return const <OrderVolumePoint>[];
+    }
+    _orderVolumeLoadInProgress = true;
+    try {
+      final points = await _warehouseApiService.fetchOrderVolumeTrend(
+        warehouseId: warehouse.id,
+        days: days,
+      );
+      _orderVolumeTrend = points;
+      _hasLoadedOrderVolume = true;
+    } catch (_) {
+      // Karte zeigt bei Fehler leeren Zustand.
+    } finally {
+      _orderVolumeLoadInProgress = false;
+      notifyListeners();
+    }
+    return _orderVolumeTrend;
+  }
+
+  Future<ReplenishmentCandidateSummary> ensureReplenishmentCandidatesLoaded({
+    bool force = false,
+    int limit = 12,
+  }) async {
+    if (!force && _hasLoadedReplenishment) {
+      return _replenishmentCandidates;
+    }
+    if (_replenishmentLoadInProgress) {
+      return _replenishmentCandidates;
+    }
+    final warehouse = riskFocusWarehouse;
+    if (warehouse == null || _warehouseOfflineMode) {
+      return ReplenishmentCandidateSummary.empty;
+    }
+    _replenishmentLoadInProgress = true;
+    try {
+      final summary = await _warehouseApiService.fetchReplenishmentCandidates(
+        warehouseId: warehouse.id,
+        limit: limit,
+      );
+      _replenishmentCandidates = summary;
+      _hasLoadedReplenishment = true;
+    } catch (_) {
+      // Bei Fehler bleibt der bisherige Wert erhalten.
+    } finally {
+      _replenishmentLoadInProgress = false;
+      notifyListeners();
+    }
+    return _replenishmentCandidates;
+  }
+
+  Future<RelocationCandidateSummary> ensureRelocationCandidatesLoaded({
+    bool force = false,
+    int limit = 12,
+  }) async {
+    if (!force && _hasLoadedRelocation) {
+      return _relocationCandidates;
+    }
+    if (_relocationLoadInProgress) {
+      return _relocationCandidates;
+    }
+    final warehouse = riskFocusWarehouse;
+    if (warehouse == null || _warehouseOfflineMode) {
+      return RelocationCandidateSummary.empty;
+    }
+    _relocationLoadInProgress = true;
+    try {
+      final summary = await _warehouseApiService.fetchRelocationCandidates(
+        warehouseId: warehouse.id,
+        limit: limit,
+      );
+      _relocationCandidates = summary;
+      _hasLoadedRelocation = true;
+    } catch (_) {
+      // Bei Fehler bleibt der bisherige Wert erhalten.
+    } finally {
+      _relocationLoadInProgress = false;
+      notifyListeners();
+    }
+    return _relocationCandidates;
+  }
+
+  Future<PickActivityHeatmap> ensurePickActivityHeatmapLoaded({
+    bool force = false,
+  }) async {
+    if (!force && _hasLoadedPickActivity) {
+      return _pickActivityHeatmap;
+    }
+    if (_pickActivityLoadInProgress) {
+      return _pickActivityHeatmap;
+    }
+    final warehouse = riskFocusWarehouse;
+    if (warehouse == null || _warehouseOfflineMode) {
+      return PickActivityHeatmap.empty;
+    }
+    _pickActivityLoadInProgress = true;
+    try {
+      final heatmap = await _warehouseApiService.fetchPickActivityHeatmap(
+        warehouseId: warehouse.id,
+      );
+      _pickActivityHeatmap = heatmap;
+      _hasLoadedPickActivity = true;
+    } catch (_) {
+      // Bei Fehler bleibt der bisherige Wert (oder empty) erhalten.
+    } finally {
+      _pickActivityLoadInProgress = false;
+      notifyListeners();
+    }
+    return _pickActivityHeatmap;
+  }
+
+  Future<List<WarehouseHeatmapLayerEntry>> ensureWarehouseHeatmapLayerLoaded({
+    bool force = false,
+    int limit = 500,
+  }) async {
+    if (!force && _hasLoadedWarehouseHeatmapLayer) {
+      return _warehouseHeatmapLayer;
+    }
+    if (_warehouseHeatmapLayerLoadInProgress) {
+      return _warehouseHeatmapLayer;
+    }
+    if (_warehouseOfflineMode) {
+      return const <WarehouseHeatmapLayerEntry>[];
+    }
+    _warehouseHeatmapLayerLoadInProgress = true;
+    try {
+      final entries = await _warehouseApiService.fetchWarehouseHeatmapLayer(
+        limit: limit,
+      );
+      _warehouseHeatmapLayer = entries;
+      _hasLoadedWarehouseHeatmapLayer = true;
+    } catch (error) {
+      // Bei Fehler bleibt der bisherige Wert erhalten.
+      if (kDebugMode) {
+        debugPrint('Heatmap-Layer load failed: $error');
+      }
+    } finally {
+      _warehouseHeatmapLayerLoadInProgress = false;
+      notifyListeners();
+    }
+    return _warehouseHeatmapLayer;
   }
 
   Future<bool> syncWarehouseModelFromApi(
@@ -428,8 +999,9 @@ class AppState extends ChangeNotifier
 
     try {
       if (_warehouseOfflineMode) {
-        final model = _buildFallbackModel(warehouse);
-        _replaceWarehouse(warehouse.copyWith(generatedModel: model));
+        _warehouseApiError =
+            'Model-Generierung ist ohne Backend deaktiviert. Bitte vorhandenes 3D-Modell verwenden.';
+        return false;
       } else {
         final updated =
             await _warehouseApiService.generateModel(warehouseId);
@@ -458,28 +1030,9 @@ class AppState extends ChangeNotifier
     if (!canManageWarehouses) {
       return false;
     }
-    final currentWarehouse = getWarehouseById(warehouseId);
-    if (currentWarehouse == null) {
-      return false;
-    }
-    if (currentWarehouse.status == status) {
-      return true;
-    }
-    final updated = currentWarehouse.copyWith(status: status);
-    _replaceWarehouse(updated);
-    if (_warehouseOfflineMode) {
-      return true;
-    }
-    try {
-      await _warehouseApiService.updateWarehouse(
-        warehouseId,
-        _buildCreateRequest(updated),
-      );
-      return true;
-    } on WarehouseApiException catch (error) {
-      _warehouseApiError = error.message;
-      return false;
-    }
+    _warehouseApiError = 'API ist derzeit read-only (kein Status-Update).';
+    notifyListeners();
+    return false;
   }
 
   Future<bool> createWarehouse({
@@ -500,45 +1053,9 @@ class AppState extends ChangeNotifier
     if (!canManageWarehouses) {
       return false;
     }
-    _warehouseApiError = null;
-
-    final newWarehouse = _buildWarehouseFromInput(
-      id: 'local-${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      location: location,
-      status: status,
-      description: description,
-      lengthM: lengthM,
-      widthM: widthM,
-      heightM: heightM,
-      rackRowCount: rackRowCount,
-      rackLengthM: rackLengthM,
-      rackWidthM: rackWidthM,
-      rackLevels: rackLevels,
-      aisleWidthM: aisleWidthM,
-      zoneNames: zoneNames,
-    );
-
-    if (_warehouseOfflineMode) {
-      _warehouses.insert(0, newWarehouse);
-      selectWarehouse(newWarehouse);
-      notifyListeners();
-      return true;
-    }
-
-    try {
-      final created = await _warehouseApiService.createWarehouse(
-        _buildCreateRequest(newWarehouse),
-      );
-      _warehouses.insert(0, created);
-      selectWarehouse(created);
-      notifyListeners();
-      return true;
-    } on WarehouseApiException catch (error) {
-      _warehouseApiError = error.message;
-      _warehouseOfflineMode = true;
-      return false;
-    }
+    _warehouseApiError = 'API ist derzeit read-only (kein neues Lager anlegen).';
+    notifyListeners();
+    return false;
   }
 
   Future<bool> updateWarehouse({
@@ -560,82 +1077,21 @@ class AppState extends ChangeNotifier
     if (!canManageWarehouses) {
       return false;
     }
-    final current = getWarehouseById(warehouseId);
-    if (current == null) {
-      return false;
-    }
-
-    final updated = _buildWarehouseFromInput(
-      id: warehouseId,
-      name: name,
-      location: location,
-      status: status,
-      description: description,
-      lengthM: lengthM,
-      widthM: widthM,
-      heightM: heightM,
-      rackRowCount: rackRowCount,
-      rackLengthM: rackLengthM,
-      rackWidthM: rackWidthM,
-      rackLevels: rackLevels,
-      aisleWidthM: aisleWidthM,
-      zoneNames: zoneNames,
-    ).copyWith(
-      occupiedStorageSlots: current.occupiedStorageSlots,
-      articleCount: current.articleCount,
-      inboundPerDay: current.inboundPerDay,
-      throughputPerDay: current.throughputPerDay,
-      pickRatePerHour: current.pickRatePerHour,
-    );
-
-    _replaceWarehouse(updated);
-
-    if (_warehouseOfflineMode) {
-      return true;
-    }
-
-    try {
-      final apiWarehouse = await _warehouseApiService.updateWarehouse(
-        warehouseId,
-        _buildCreateRequest(updated),
-      );
-      _replaceWarehouse(apiWarehouse);
-      return true;
-    } on WarehouseApiException catch (error) {
-      _warehouseApiError = error.message;
-      return false;
-    }
+    _warehouseApiError = 'API ist derzeit read-only (kein Lager-Update).';
+    notifyListeners();
+    return false;
   }
 
   Future<bool> deleteWarehouse(String warehouseId) async {
     if (!canManageWarehouses) {
       return false;
     }
-    _warehouses.removeWhere((warehouse) => warehouse.id == warehouseId);
-    _favoriteWarehouseIds.remove(warehouseId);
-    if (_selectedWarehouse?.id == warehouseId) {
-      _selectedWarehouse = null;
-    }
-    if (_lastOpenedWarehouse?.id == warehouseId) {
-      _lastOpenedWarehouse = null;
-    }
-    _syncWarehouseSelections();
+    _warehouseApiError = 'API ist derzeit read-only (kein Lager-Loeschen).';
     notifyListeners();
-
-    if (_warehouseOfflineMode) {
-      return true;
-    }
-
-    try {
-      await _warehouseApiService.deleteWarehouse(warehouseId);
-      return true;
-    } on WarehouseApiException catch (error) {
-      _warehouseApiError = error.message;
-      return false;
-    }
+    return false;
   }
 
-  // ── Private helpers ───────────────────────────────────────────────────
+  // â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _syncWarehouseSelections() {
     if (_warehouses.isEmpty) {
@@ -644,12 +1100,8 @@ class AppState extends ChangeNotifier
       viewerHeatmapItems.clear();
       return;
     }
-    if (_selectedWarehouse == null) {
-      _selectedWarehouse = _warehouses.first;
-    }
-    if (_lastOpenedWarehouse == null) {
-      _lastOpenedWarehouse = _selectedWarehouse;
-    }
+    _selectedWarehouse ??= _warehouses.first;
+    _lastOpenedWarehouse ??= _selectedWarehouse;
     rebuildHeatmapData(_selectedWarehouse!);
   }
 
@@ -670,186 +1122,110 @@ class AppState extends ChangeNotifier
     notifyListeners();
   }
 
-  Warehouse _buildWarehouseFromInput({
-    required String id,
-    required String name,
-    required String location,
-    required WarehouseStatus status,
-    required String description,
-    required double lengthM,
-    required double widthM,
-    required double heightM,
-    required int rackRowCount,
-    required double rackLengthM,
-    required double rackWidthM,
-    required int rackLevels,
-    required double aisleWidthM,
-    required List<String> zoneNames,
-  }) {
-    final normalizedZoneNames =
-        zoneNames.where((name) => name.trim().isNotEmpty).toList();
-    final zoneCount =
-        normalizedZoneNames.isEmpty ? 1 : normalizedZoneNames.length;
-    final totalSlots =
-        (rackRowCount * rackLevels * 120).clamp(400, 40000);
-    final occupiedSlots = (totalSlots * 0.72).round();
-    final articleCount = (totalSlots * 3.2).round();
-
-    final zones = List<WarehouseZone>.generate(zoneCount, (index) {
-      final zoneName = normalizedZoneNames.isEmpty
-          ? 'Zone ${index + 1}'
-          : normalizedZoneNames[index];
-      final zoneSlots = (totalSlots / zoneCount).round();
-      final zoneOccupied = (zoneSlots * 0.7).round();
-      return WarehouseZone(
-        id: '$id-zone-${index + 1}',
-        name: zoneName,
-        totalStorageSlots: zoneSlots,
-        occupiedStorageSlots: zoneOccupied,
-        articleCount: (articleCount / zoneCount).round(),
-        abcAnalysis: AbcAnalysis(
-          aCount: (articleCount * 0.2 / zoneCount).round(),
-          bCount: (articleCount * 0.3 / zoneCount).round(),
-          cCount: (articleCount * 0.5 / zoneCount).round(),
-        ),
-        inboundPerDay: (700 / zoneCount).round(),
-        throughputPerDay: (650 / zoneCount).round(),
-        pickRatePerHour: (350 / zoneCount).round(),
-      );
-    });
-
-    return Warehouse(
-      id: id,
-      name: name,
-      location: location,
-      zoneCount: zoneCount,
-      status: status,
-      description: description,
-      totalStorageSlots: totalSlots,
-      occupiedStorageSlots: occupiedSlots,
-      articleCount: articleCount,
-      abcAnalysis: AbcAnalysis(
-        aCount: (articleCount * 0.2).round(),
-        bCount: (articleCount * 0.3).round(),
-        cCount: (articleCount * 0.5).round(),
-      ),
-      inboundPerDay: 850,
-      throughputPerDay: 780,
-      pickRatePerHour: 420,
-      zones: zones,
-      layoutSpec: WarehouseLayoutSpec(
-        lengthM: lengthM,
-        widthM: widthM,
-        heightM: heightM,
-        rackRowCount: rackRowCount,
-        rackLengthM: rackLengthM,
-        rackWidthM: rackWidthM,
-        rackLevels: rackLevels,
-        aisleWidthM: aisleWidthM,
-        zoneNames: normalizedZoneNames,
-      ),
-    );
-  }
-
-  WarehouseCreateRequest _buildCreateRequest(Warehouse warehouse) {
-    final layout = warehouse.layoutSpec;
-    return WarehouseCreateRequest(
-      name: warehouse.name,
-      location: warehouse.location,
-      status: warehouse.status,
-      description: warehouse.description,
-      lengthM: layout?.lengthM ?? 60,
-      widthM: layout?.widthM ?? 40,
-      heightM: layout?.heightM ?? 12,
-      rackRowCount: layout?.rackRowCount ?? 8,
-      rackLengthM: layout?.rackLengthM ?? 18,
-      rackWidthM: layout?.rackWidthM ?? 2.8,
-      rackLevels: layout?.rackLevels ?? 4,
-      aisleWidthM: layout?.aisleWidthM ?? 3.2,
-      zoneNames: layout?.zoneNames ?? <String>[],
-    );
-  }
-
-  WarehouseOperationsProfile _buildFallbackOperationsProfile(
-      Warehouse warehouse) {
-    final dockCount = (warehouse.zoneCount + 8).clamp(4, 28);
-    final activeDocks = (dockCount * 0.8).round();
-    final totalSlots = warehouse.totalStorageSlots;
-    final blockedSlots = (totalSlots * 0.02).round();
-    final reservedSlots = (totalSlots * 0.04).round();
-    return WarehouseOperationsProfile(
-      warehouseId: warehouse.id,
-      dockCount: dockCount,
-      activeDocks: activeDocks,
-      blockedSlots: blockedSlots,
-      reservedSlots: reservedSlots,
-      slaTargetPercent: 98,
-      slaCurrentPercent: 95,
-      avgDwellMinutes: 46,
-      coldZoneCount: 1,
-      ambientZoneCount: warehouse.zoneCount - 1,
-      hazardousZoneCount: 1,
-      highBaySlots: (totalSlots * 0.45).round(),
-      blockStorageSlots: (totalSlots * 0.2).round(),
-      shuttleSlots: (totalSlots * 0.18).round(),
-      floorStorageSlots: (totalSlots * 0.17).round(),
-      safetyIncidentsMonth: 1,
-      qualityHolds: 6,
-    );
-  }
-
-  WarehouseModelData _buildFallbackModel(Warehouse warehouse) {
-    final layout = warehouse.layoutSpec;
-    final length = layout?.lengthM ?? 60;
-    final width = layout?.widthM ?? 40;
-    final height = layout?.heightM ?? 12;
-    final shelfRows = layout?.rackRowCount ?? 8;
-    final shelfColumns = 8;
-    final shelfLevels = layout?.rackLevels ?? 4;
-
-    final zones = <WarehouseModelZone>[];
-    final zoneCount =
-        warehouse.zones.isEmpty ? 1 : warehouse.zones.length;
-    final zoneWidth = width / zoneCount;
-    for (var i = 0; i < zoneCount; i++) {
-      final zone = warehouse.zones.isEmpty
-          ? WarehouseZone(
-              id: 'zone-1',
-              name: 'Zone 1',
-              totalStorageSlots: 1000,
-              occupiedStorageSlots: 700,
-              articleCount: 2200,
-              abcAnalysis: const AbcAnalysis(
-                  aCount: 440, bCount: 660, cCount: 1100),
-              inboundPerDay: 240,
-              throughputPerDay: 220,
-              pickRatePerHour: 120,
-            )
-          : warehouse.zones[i];
-      zones.add(
-        WarehouseModelZone(
-          name: zone.name,
-          x: i * zoneWidth,
-          y: 0,
-          width: zoneWidth,
-          height: length,
-          utilization: zone.utilizationRatio,
-          pickRate: (zone.pickRatePerHour / 400).clamp(0.0, 1.0),
-          congestion: (zone.inboundPerDay / 500).clamp(0.0, 1.0),
-          abcA: zone.abcAnalysis.aRatio,
-        ),
-      );
+  bool _looksLikeDatabasePath(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
     }
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+      return false;
+    }
+    return normalized.endsWith('.db') ||
+        normalized.contains(r'\') ||
+        normalized.contains('/');
+  }
 
-    return WarehouseModelData(
-      generatedAt: DateTime.now(),
-      warehouseLengthM: length,
-      warehouseWidthM: width,
-      warehouseHeightM: height,
-      shelfRows: shelfRows,
-      shelfColumns: shelfColumns,
-      shelfLevels: shelfLevels,
-      zones: zones,
+  Future<List<Warehouse>> _loadWarehousesFromDisk(String? dbPath) async {
+    final service = (dbPath != null && dbPath.trim().isNotEmpty)
+        ? WarehouseCsvService(dataDirectory: dbPath.trim())
+        : _warehouseCsvService;
+    List<Warehouse> data = <Warehouse>[];
+    try {
+      data = await service.loadWarehousesFromDisk();
+    } on UnsupportedError {
+      return <Warehouse>[];
+    }
+    if (data.isNotEmpty) {
+      _activeDatabasePath =
+          dbPath?.trim().isNotEmpty == true
+              ? dbPath!.trim()
+              : await service.loadActiveDatabasePathFromDisk();
+    }
+    return data;
+  }
+
+  Future<Map<String, WarehouseOperationsProfile>> _loadOperationsProfilesFromDisk(
+    String? dbPath,
+  ) {
+    final service = (dbPath != null && dbPath.trim().isNotEmpty)
+        ? WarehouseCsvService(dataDirectory: dbPath.trim())
+        : _warehouseCsvService;
+    return service.loadOperationsProfilesFromDisk();
+  }
+
+  Future<List<WarehouseStorageLocation>> _loadStorageLocationsFromDisk({
+    required String warehouseId,
+    required int limit,
+    required String? dbPath,
+  }) {
+    final service = (dbPath != null && dbPath.trim().isNotEmpty)
+        ? WarehouseCsvService(dataDirectory: dbPath.trim())
+        : _warehouseCsvService;
+    return service.loadStorageLocationsFromDisk(
+      warehouseId: warehouseId,
+      limit: limit,
     );
   }
+
+  Future<Map<String, List<WarehouseAbcSlotSummary>>> _loadAbcSlotsFromDisk({
+    required String? dbPath,
+    required int limit,
+  }) {
+    final service = (dbPath != null && dbPath.trim().isNotEmpty)
+        ? WarehouseCsvService(dataDirectory: dbPath.trim())
+        : _warehouseCsvService;
+    return service.loadAbcSlotsFromDisk(limit: limit);
+  }
+
+  Future<Map<String, List<WarehouseAbcArticleSummary>>> _loadAbcArticlesFromDisk({
+    required String? dbPath,
+    required int limit,
+  }) {
+    final service = (dbPath != null && dbPath.trim().isNotEmpty)
+        ? WarehouseCsvService(dataDirectory: dbPath.trim())
+        : _warehouseCsvService;
+    return service.loadAbcArticlesFromDisk(limit: limit);
+  }
+
+  Future<Map<String, String>> _loadExternalModelPathsFromDisk(String? dbPath) {
+    final service = (dbPath != null && dbPath.trim().isNotEmpty)
+        ? WarehouseCsvService(dataDirectory: dbPath.trim())
+        : _warehouseCsvService;
+    return service.loadExternalModelPathsFromDisk();
+  }
+
+  WarehouseOperationsProfile _emptyOperationsProfile(String warehouseId) {
+    return WarehouseOperationsProfile(
+      warehouseId: warehouseId,
+      dockCount: 0,
+      activeDocks: 0,
+      blockedSlots: 0,
+      reservedSlots: 0,
+      slaTargetPercent: 0,
+      slaCurrentPercent: 0,
+      avgDwellMinutes: 0,
+      coldZoneCount: 0,
+      ambientZoneCount: 0,
+      hazardousZoneCount: 0,
+      highBaySlots: 0,
+      blockStorageSlots: 0,
+      shuttleSlots: 0,
+      floorStorageSlots: 0,
+      safetyIncidentsMonth: 0,
+      qualityHolds: 0,
+    );
+  }
+
 }
+
+
