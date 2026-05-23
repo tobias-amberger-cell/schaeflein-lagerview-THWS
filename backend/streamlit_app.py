@@ -341,7 +341,8 @@ def main() -> None:
     c4.metric("Ueberlastet (>100 %)", f"{overloaded:,}".replace(",", "."))
 
     (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_umlagern,
-     tab_nachschub, tab_einlagern, tab_abc, tab_trend, tab_top, tab_3d) = st.tabs([
+     tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_trend, tab_top,
+     tab_3d) = st.tabs([
         "Hallen",
         "Auslastungs-Heatmap",
         "Pick-Heatmap",
@@ -350,6 +351,7 @@ def main() -> None:
         "🔄 Umlagern",
         "⬆️ Nachschub",
         "📥 Einlagern",
+        "📤 Auslagern",
         "ABC-Analyse",
         "Durchsatz",
         "Top-Artikel",
@@ -605,6 +607,38 @@ def main() -> None:
         _massnahme_kategorie(
             "Gesperrt – nicht bestücken",
             "Gesperrte Plätze (ZUSTAND ≥ 150) – nicht einlagern.", blocked)
+
+    with tab_auslagern:
+        st.markdown(
+            "### 📤 Auslagern / Retrieval\n"
+            "Langsamdreher/Ladenhueter, die (gute) Plaetze blockieren und "
+            "ausgelagert oder umgelagert werden sollten."
+        )
+        observe_max = st.slider("„Beobachten“ bis Picks", 1, 50, 5)
+        belegt = filtered[
+            (filtered["BELEGT"]) & (filtered["ZUSTAND"] < 150)
+        ]
+
+        critical = belegt[
+            (belegt["ABC_KLASSE"] == "A") & (belegt["ANZ_PICKS"] == 0)
+        ].sort_values(["REGAL", "EBENE", "FACH"])
+        stale = belegt[
+            (belegt["ABC_KLASSE"] != "A") & (belegt["ANZ_PICKS"] == 0)
+        ].sort_values(["REGAL", "EBENE", "FACH"])
+        observe = belegt[
+            (belegt["ANZ_PICKS"] > 0) & (belegt["ANZ_PICKS"] <= observe_max)
+        ].sort_values("ANZ_PICKS")
+
+        _massnahme_kategorie(
+            "Kritisch",
+            "A-Platz belegt, aber 0 Picks – Premium-Platz von Ladenhueter blockiert.",
+            critical)
+        _massnahme_kategorie(
+            "Abgestanden",
+            "Belegt mit 0 Picks – bewegt sich nicht, Auslagern pruefen.", stale)
+        _massnahme_kategorie(
+            "Beobachten",
+            f"Belegt mit sehr geringer Frequenz (1–{observe_max} Picks).", observe)
 
     with tab_abc:
         st.markdown(
