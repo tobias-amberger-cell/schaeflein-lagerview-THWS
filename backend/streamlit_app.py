@@ -96,7 +96,7 @@ def load_platz_full() -> pd.DataFrame:
     con = get_connection()
     platz = pd.read_sql_query(
         f'SELECT PLATZ_ID, REGAL, FACH, EBENE, ABC_KLASSE, MAX_LHM, IST_LHM, '
-        f'ANZ_PICKS, ANZ_NACHSCHUB, ZUSTAND, SPERR_KNZ '
+        f'ANZ_PICKS, ANZ_NACHSCHUB, ZUSTAND, SPERR_KNZ, LEER_DATUM '
         f'FROM "{PLATZ_TABLE}" '
         f"WHERE TRIM(COALESCE(PLATZ_ID, '')) <> ''",
         con,
@@ -119,6 +119,10 @@ def load_platz_full() -> pd.DataFrame:
     platz["FREE_CAPACITY"] = (platz["MAX_LHM"].fillna(0) - platz["IST_LHM"].fillna(0))
     platz["HALLE"] = platz["REGAL"].apply(_hall_for_regal)
     platz["BELEGT"] = platz["ZUSTAND"] > 0
+    platz["DAYS_EMPTY"] = (
+        pd.Timestamp.now().normalize()
+        - pd.to_datetime(platz["LEER_DATUM"], errors="coerce")
+    ).dt.days
 
     # Pick-Count aus Fahrpos zusaetzlich mergen (Q_PLATZ = Quellplatz).
     try:
@@ -336,15 +340,16 @@ def main() -> None:
               f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—")
     c4.metric("Ueberlastet (>100 %)", f"{overloaded:,}".replace(",", "."))
 
-    (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_reloc,
-     tab_nachschub, tab_abc, tab_trend, tab_top, tab_3d) = st.tabs([
+    (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_umlagern,
+     tab_nachschub, tab_einlagern, tab_abc, tab_trend, tab_top, tab_3d) = st.tabs([
         "Hallen",
         "Auslastungs-Heatmap",
         "Pick-Heatmap",
         "Bottlenecks",
         "Free Capacity",
-        "Smart Relocation",
-        "Nachschub",
+        "🔄 Umlagern",
+        "⬆️ Nachschub",
+        "📥 Einlagern",
         "ABC-Analyse",
         "Durchsatz",
         "Top-Artikel",
@@ -474,66 +479,132 @@ def main() -> None:
         )
         st.dataframe(free, use_container_width=True, hide_index=True)
 
-    with tab_reloc:
-        st.markdown(
-            "**Smart Relocation** — fuer jeden ueberlasteten Platz "
-            "(UTILIZATION > 100 %) ein Vorschlag, wohin ausgelagert werden "
-            "kann (`FREE_CAPACITY > 0`)."
-        )
-        overloaded_df = filtered[filtered["UTILIZATION"] > 100]
-        free_df = filtered[filtered["FREE_CAPACITY"] > 0]
-        if overloaded_df.empty or free_df.empty:
-            st.info("Keine ueberlasteten oder keine freien Plaetze mit aktuellen Filtern.")
+    _MASSNAHME_COLS = [
+        "PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+        "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM",
+    ]
+
+    def _massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
+                             extra_cols: list[str] | None = None) -> None:
+        cols = _MASSNAHME_COLS + (extra_cols or [])
+        cols = [c for c in cols if c in df.columns]
+        st.markdown(f"**{titel}** — {beschreibung}")
+        st.metric("Plaetze", f"{len(df):,}".replace(",", "."))
+        if df.empty:
+            st.info("Keine Plaetze in dieser Kategorie (mit aktuellen Filtern).")
         else:
-            n = st.slider("Anzahl Vorschlaege", 5, 50, 15, step=5)
-            rng = np.random.default_rng(seed=42)
-            free_pool = free_df.sample(
-                n=min(n, len(free_df)), random_state=rng.integers(1, 2**32 - 1)
-            ).reset_index(drop=True)
-            picks = overloaded_df.sort_values("UTILIZATION", ascending=False).head(n).reset_index(drop=True)
-            rows = []
-            for i in range(min(len(picks), len(free_pool))):
-                src = picks.iloc[i]
-                tgt = free_pool.iloc[i]
-                rows.append({
-                    "von_PLATZ": src["PLATZ_ID"],
-                    "von (R/F/E)": f'{src["REGAL"]}/{src["FACH"]}/{src["EBENE"]}',
-                    "von_Auslastung_%": round(src["UTILIZATION"], 1),
-                    "nach_PLATZ": tgt["PLATZ_ID"],
-                    "nach (R/F/E)": f'{tgt["REGAL"]}/{tgt["FACH"]}/{tgt["EBENE"]}',
-                    "nach_freie_LHM": tgt["FREE_CAPACITY"],
-                })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(
+                df.head(200)[cols], use_container_width=True, hide_index=True
+            )
+        st.divider()
+
+    with tab_umlagern:
+        st.markdown(
+            "### 🔄 Umlagern\n"
+            "Datenbasierte Umlager-Vorschlaege (gleiche Logik wie die App)."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            hot_c_threshold = st.slider("Heiße C-Plätze ab Picks", 10, 300, 100, step=10)
+        with c2:
+            high_level = st.slider("Hohe Ebene ab", 2, 6, 4)
+
+        unused_a = filtered[
+            (filtered["ABC_KLASSE"] == "A")
+            & (filtered["ANZ_PICKS"] == 0)
+            & (filtered["ZUSTAND"] < 150)
+        ].sort_values(["REGAL", "EBENE", "FACH"])
+        hot_c = filtered[
+            (filtered["ABC_KLASSE"] == "C")
+            & (filtered["ANZ_PICKS"] >= hot_c_threshold)
+        ].sort_values("ANZ_PICKS", ascending=False)
+        high_level_a = filtered[
+            (filtered["ABC_KLASSE"] == "A")
+            & (filtered["EBENE"] >= high_level)
+            & (filtered["ANZ_PICKS"] > 0)
+        ].sort_values("ANZ_PICKS", ascending=False)
+
+        _massnahme_kategorie(
+            "Premium-Plätze ungenutzt",
+            "A-Klasse, aber 0 Picks – Premium-Platz nicht genutzt.", unused_a)
+        _massnahme_kategorie(
+            "Heiße C-Plätze",
+            "C-Klasse mit hoher Pickfrequenz – Klasse anpassen.", hot_c)
+        _massnahme_kategorie(
+            "A-Plätze auf hoher Ebene",
+            "A-Klasse weit oben & aktiv – nach unten holen.", high_level_a)
 
     with tab_nachschub:
         st.markdown(
-            "**Nachschub / Replenishment** — leere Pickplaetze (`IST_LHM = 0`) "
-            "auf niedrigen Ebenen mit hoher Pickfrequenz, die nachgefuellt "
-            "werden sollten. Nicht gesperrte Plaetze."
+            "### ⬆️ Nachschub / Replenishment\n"
+            "Leere Pickplaetze (`IST_LHM = 0`), die nachgefuellt werden sollten."
         )
-        cols = st.columns(2)
-        with cols[0]:
-            n_pick_level = st.slider("Max. Ebene (Pickzone)", 1, 6, 2)
-        with cols[1]:
-            n_pick_threshold = st.slider("Min. Picks", 0, 200, 50, step=10)
-        nachschub = filtered[
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            pick_level = st.slider("Max. Ebene (Pickzone)", 1, 6, 2)
+        with c2:
+            pick_threshold = st.slider("Dringend ab Picks", 10, 300, 50, step=10)
+        with c3:
+            overdue_days = st.slider("Überfällig ab Tagen", 3, 60, 14)
+        medium_threshold = max(1, pick_threshold // 2)
+
+        empty_pick = filtered[
             (filtered["IST_LHM"].fillna(0) == 0)
-            & (filtered["EBENE"] <= n_pick_level)
-            & (filtered["ANZ_PICKS"] >= n_pick_threshold)
+            & (filtered["EBENE"] <= pick_level)
             & (filtered["ZUSTAND"] < 150)
+        ]
+        urgent = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold] \
+            .sort_values("ANZ_PICKS", ascending=False)
+        overdue = urgent[urgent["DAYS_EMPTY"] >= overdue_days] \
+            .sort_values("DAYS_EMPTY", ascending=False)
+        medium = empty_pick[
+            (empty_pick["ANZ_PICKS"] >= medium_threshold)
+            & (empty_pick["ANZ_PICKS"] < pick_threshold)
         ].sort_values("ANZ_PICKS", ascending=False)
-        st.metric("Nachfuell-Kandidaten", f"{len(nachschub):,}".replace(",", "."))
-        if nachschub.empty:
-            st.info("Keine Nachschub-Kandidaten mit aktuellen Filtern.")
-        else:
-            st.dataframe(
-                nachschub.head(100)[
-                    ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
-                     "ANZ_PICKS", "ANZ_NACHSCHUB", "MAX_LHM", "IST_LHM"]
-                ],
-                use_container_width=True,
-                hide_index=True,
-            )
+
+        _massnahme_kategorie(
+            "Dringend leer",
+            "Aktiver Pickplatz leer – dringend nachfuellen.", urgent,
+            extra_cols=["DAYS_EMPTY"])
+        _massnahme_kategorie(
+            "Überfällig",
+            f"Bereits ≥ {overdue_days} Tage leer – Replenishment vergessen?",
+            overdue, extra_cols=["DAYS_EMPTY"])
+        _massnahme_kategorie(
+            "Mittlere Frequenz",
+            "Pickplatz leer mit mittlerer Pickfrequenz.", medium)
+
+    with tab_einlagern:
+        st.markdown(
+            "### 📥 Einlagern / Putaway\n"
+            "Wohin eingehende Ware gestellt werden sollte (freie Kapazitaet)."
+        )
+        reserve_level = st.slider("Reserve-Ebene ab", 2, 6, 3)
+        free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
+
+        fast_lane = free_slots[
+            (free_slots["ABC_KLASSE"] == "A")
+            & (free_slots["EBENE"] <= 2)
+            & (free_slots["ZUSTAND"] < 150)
+        ].sort_values("FREE_CAPACITY", ascending=False)
+        reserve = free_slots[
+            (free_slots["EBENE"] >= reserve_level)
+            & (free_slots["ZUSTAND"] < 150)
+        ].sort_values("FREE_CAPACITY", ascending=False)
+        blocked = filtered[filtered["ZUSTAND"] >= 150] \
+            .sort_values("REGAL")
+
+        _massnahme_kategorie(
+            "Fast-Lane (Schnelldreher)",
+            "Freie A-Plätze auf niedriger Ebene – ideal für Schnelldreher.",
+            fast_lane, extra_cols=["FREE_CAPACITY"])
+        _massnahme_kategorie(
+            "Reserve (hohe Ebenen)",
+            f"Freie Plätze ab Ebene {reserve_level} – für Langsamdreher/Reserve.",
+            reserve, extra_cols=["FREE_CAPACITY"])
+        _massnahme_kategorie(
+            "Gesperrt – nicht bestücken",
+            "Gesperrte Plätze (ZUSTAND ≥ 150) – nicht einlagern.", blocked)
 
     with tab_abc:
         st.markdown(
