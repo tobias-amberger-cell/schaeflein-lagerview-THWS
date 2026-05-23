@@ -295,6 +295,43 @@ TR: dict[str, dict[str, str]] = {
     },
     "abc_dist": {"de": "ABC-Verteilung", "en": "ABC distribution"},
     "abc_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
+    "abc_adjust_head": {
+        "de": "**🏷️ ABC-Anpassung — Empfehlungen**",
+        "en": "**🏷️ ABC adjustment — recommendations**",
+    },
+    "abc_adjust_intro": {
+        "de": "Plätze, deren Stamm-ABC nicht zur berechneten Klasse passt. "
+              "„Hochstufen“ = wird stärker bewegt als hinterlegt, „Herabstufen“ = umgekehrt.",
+        "en": "Slots whose master ABC differs from the calculated class. "
+              "“Promote” = busier than recorded, “Demote” = the opposite.",
+    },
+    "abc_promote": {"de": "⬆️ Hochstufen", "en": "⬆️ Promote"},
+    "abc_demote": {"de": "⬇️ Herabstufen", "en": "⬇️ Demote"},
+    "abc_rec": {"de": "Empfehlung", "en": "Recommendation"},
+    "abc_no_dev": {
+        "de": "Keine Abweichungen mit aktuellen Filtern – Stamm-ABC passt.",
+        "en": "No deviations with current filters – master ABC matches.",
+    },
+    "tp_use_range": {
+        "de": "Datumsbereich statt „letzte N Tage“",
+        "en": "Use date range instead of ‘last N days’",
+    },
+    "tp_range": {"de": "Zeitraum", "en": "Date range"},
+    "tab_article": {"de": "🔎 Artikel", "en": "🔎 Article"},
+    "art_intro": {
+        "de": "**Artikel-Detail** — Bewegungen und Quellplätze eines Artikels.",
+        "en": "**Article detail** — movements and source slots of an article.",
+    },
+    "art_select": {"de": "Artikel (Top nach Bewegungen)", "en": "Article (top by movements)"},
+    "art_input": {"de": "… oder ARTIKELNR direkt eingeben", "en": "… or enter article no. directly"},
+    "art_total": {"de": "Bewegungen gesamt", "en": "Total movements"},
+    "art_slotcount": {"de": "Quellplätze", "en": "Source slots"},
+    "art_by_slot": {"de": "Picks je Quellplatz", "en": "Picks per source slot"},
+    "art_trend": {"de": "Bewegungen über Zeit", "en": "Movements over time"},
+    "art_none": {
+        "de": "Keine Bewegungen für diesen Artikel gefunden.",
+        "en": "No movements found for this article.",
+    },
     "tp_intro": {
         "de": "**Durchsatz** — Anzahl Lagerbewegungen je Tag (aus den TPA-Daten). "
               "Zeitraum über den Sidebar-Regler einstellbar.",
@@ -562,6 +599,54 @@ def classify_abc(
     return out
 
 
+@st.cache_data(ttl=3600, show_spinner="Lade Bewegungen ...")
+def load_movements_by_day() -> pd.DataFrame:
+    """Alle Tage mit Bewegungs-Anzahl (fuer Datumsbereich-Auswahl)."""
+    con = get_connection()
+    df = pd.read_sql_query(
+        f"""
+        SELECT DATE(ENDE_DATUM) AS day, COUNT(*) AS movements
+        FROM "{TPA_TABLE}"
+        WHERE TRIM(COALESCE(ENDE_DATUM, '')) <> ''
+        GROUP BY DATE(ENDE_DATUM)
+        ORDER BY day
+        """,
+        con,
+    )
+    df["day"] = pd.to_datetime(df["day"], errors="coerce")
+    return df.dropna(subset=["day"])
+
+
+@st.cache_data(ttl=3600, show_spinner="Lade Artikel-Detail ...")
+def load_article_detail(artikelnr: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Pro Artikel: Picks je Quellplatz (Q_PLATZ) und Bewegungen je Tag."""
+    con = get_connection()
+    slots = pd.read_sql_query(
+        f"""
+        SELECT TRIM(Q_PLATZ) AS platz, COUNT(*) AS picks
+        FROM "{TPA_TABLE}"
+        WHERE TRIM(ARTIKELNR) = ? AND TRIM(COALESCE(Q_PLATZ, '')) <> ''
+        GROUP BY platz
+        ORDER BY picks DESC
+        """,
+        con,
+        params=[artikelnr],
+    )
+    days = pd.read_sql_query(
+        f"""
+        SELECT DATE(ENDE_DATUM) AS day, COUNT(*) AS picks
+        FROM "{TPA_TABLE}"
+        WHERE TRIM(ARTIKELNR) = ? AND TRIM(COALESCE(ENDE_DATUM, '')) <> ''
+        GROUP BY day
+        ORDER BY day
+        """,
+        con,
+        params=[artikelnr],
+    )
+    days["day"] = pd.to_datetime(days["day"], errors="coerce")
+    return slots, days.dropna(subset=["day"])
+
+
 def heatmap_color(util: float) -> str:
     """Aus warehouse_heatmap.py."""
     if pd.isna(util):
@@ -727,7 +812,7 @@ def main() -> None:
 
     (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_umlagern,
      tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_trend, tab_top,
-     tab_3d) = st.tabs([
+     tab_article, tab_3d) = st.tabs([
         t("tab_halls"),
         t("tab_util"),
         t("tab_pick"),
@@ -740,6 +825,7 @@ def main() -> None:
         t("tab_abc"),
         t("tab_tp"),
         t("tab_top"),
+        t("tab_article"),
         t("tab_3d"),
     ])
 
@@ -1178,6 +1264,33 @@ def main() -> None:
                 )
                 st.dataframe(cross, use_container_width=True)
 
+                # ABC-Anpassung: Abweichungen Stamm vs. berechnet + Empfehlung
+                st.markdown(t("abc_adjust_head"))
+                st.markdown(t("abc_adjust_intro"))
+                rank = {"A": 3, "B": 2, "C": 1}
+                dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
+                dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]
+                if dev.empty:
+                    st.info(t("abc_no_dev"))
+                else:
+                    dev["_m"] = dev["ABC_KLASSE"].map(rank)
+                    dev["_c"] = dev["ABC"].map(rank)
+                    dev[t("abc_rec")] = dev.apply(
+                        lambda r: t("abc_promote") if r["_c"] > r["_m"]
+                        else t("abc_demote"), axis=1,
+                    )
+                    n_prom = int((dev["_c"] > dev["_m"]).sum())
+                    n_dem = int((dev["_c"] < dev["_m"]).sum())
+                    mcols = st.columns(2)
+                    mcols[0].metric(t("abc_promote"), f"{n_prom:,}".replace(",", "."))
+                    mcols[1].metric(t("abc_demote"), f"{n_dem:,}".replace(",", "."))
+                    dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
+                        ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                         "ANZ_PICKS", "ABC_KLASSE", "ABC", t("abc_rec")]
+                    ].rename(columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet"}).head(200)
+                    st.dataframe(dev_tbl, use_container_width=True, hide_index=True)
+                    _csv_download(dev_tbl, "abc_anpassung")
+
             st.markdown(t("abc_byfreq"))
             table = data[[c for c in table_cols if c in data.columns]].head(200)
             st.dataframe(table, use_container_width=True, hide_index=True)
@@ -1185,13 +1298,33 @@ def main() -> None:
 
     with tab_trend:
         st.markdown(t("tp_intro"))
-        trend = load_throughput_trend(days)
+        use_range = st.checkbox(t("tp_use_range"), value=False)
+        if use_range:
+            all_days = load_movements_by_day()
+            if all_days.empty:
+                trend = all_days
+            else:
+                dmin = all_days["day"].min().date()
+                dmax = all_days["day"].max().date()
+                picked = st.date_input(t("tp_range"), (dmin, dmax),
+                                       min_value=dmin, max_value=dmax)
+                if isinstance(picked, (tuple, list)) and len(picked) == 2:
+                    lo, hi = picked
+                    trend = all_days[
+                        (all_days["day"].dt.date >= lo)
+                        & (all_days["day"].dt.date <= hi)
+                    ].copy()
+                else:
+                    trend = all_days.copy()
+                trend = trend.sort_values("day")
+        else:
+            trend = load_throughput_trend(days)
         if trend.empty:
             st.info(t("no_data_filters"))
         else:
             fig = px.line(
                 trend, x="day", y="movements", markers=True,
-                title=t("tp_chart").format(n=days),
+                title=t("tp_chart").format(n=len(trend)),
             )
             fig.update_layout(
                 yaxis_title=t("picks_label"),
@@ -1229,6 +1362,47 @@ def main() -> None:
             )
             st.dataframe(top, use_container_width=True, hide_index=True)
             _csv_download(top, "top_artikel")
+
+    with tab_article:
+        st.markdown(t("art_intro"))
+        opts = load_abc_articles(limit=500)
+        labels = (
+            (opts["artikel"] + " — " + opts["bezeichnung"]).tolist()
+            if not opts.empty else []
+        )
+        col_s, col_i = st.columns(2)
+        with col_s:
+            chosen = st.selectbox(t("art_select"), options=labels) if labels else None
+        with col_i:
+            manual = st.text_input(t("art_input"), value="").strip()
+
+        artikelnr = manual or (chosen.split(" — ")[0] if chosen else "")
+        if not artikelnr:
+            st.info(t("art_none"))
+        else:
+            slots, day_df = load_article_detail(artikelnr)
+            total = int(slots["picks"].sum()) if not slots.empty else 0
+            if total == 0 and day_df.empty:
+                st.info(t("art_none"))
+            else:
+                m1, m2 = st.columns(2)
+                m1.metric(t("art_total"), f"{total:,}".replace(",", "."))
+                m2.metric(t("art_slotcount"),
+                          f"{len(slots):,}".replace(",", "."))
+                if not day_df.empty:
+                    st.markdown(f"**{t('art_trend')}**")
+                    st.plotly_chart(
+                        px.line(day_df, x="day", y="picks", markers=True,
+                                labels={"day": "Datum" if _LANG == "de" else "Date",
+                                        "picks": t("picks_label")}),
+                        use_container_width=True,
+                    )
+                if not slots.empty:
+                    st.markdown(f"**{t('art_by_slot')}**")
+                    slot_tbl = slots.rename(columns={"platz": "PLATZ_ID",
+                                                     "picks": "Picks"})
+                    st.dataframe(slot_tbl, use_container_width=True, hide_index=True)
+                    _csv_download(slot_tbl, "artikel_plaetze")
 
     with tab_3d:
         # GitHub-Release-Assets senden kein CORS -> der Browser wuerde das
