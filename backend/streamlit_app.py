@@ -109,6 +109,204 @@ TR: dict[str, dict[str, str]] = {
         "en": "No slots in this category (with current filters).",
     },
     "dl": {"de": "⬇️ Als CSV", "en": "⬇️ As CSV"},
+    # Tab-Erklaerungen / Ueberschriften
+    "halls_intro": {
+        "de": "**Hallen-Übersicht** — Belegung, Auslastung und ABC-Verteilung je "
+              "Halle (Regal 1–16 = Halle 1, 17–32 = Halle 2, Rest = Halle 3).",
+        "en": "**Hall overview** — occupancy, utilization and ABC distribution per "
+              "hall (rack 1–16 = Hall 1, 17–32 = Hall 2, rest = Hall 3).",
+    },
+    "halls_kpis": {"de": "**Kennzahlen je Halle**", "en": "**Metrics per hall**"},
+    "halls_chart": {
+        "de": "Belegung pro Halle (gefiltert)",
+        "en": "Occupancy per hall (filtered)",
+    },
+    "heat_chart": {
+        "de": "Auslastung je Regal/Ebene (IST/MAX × 100)",
+        "en": "Utilization per rack/level (actual/max × 100)",
+    },
+    "pick_chart": {
+        "de": "Pick-Aktivität je Wochentag/Stunde",
+        "en": "Pick activity per weekday/hour",
+    },
+    "heat_intro": {
+        "de": "**Auslastungs-Heatmap** — durchschnittliche Auslastung "
+              "(`IST_LHM / MAX_LHM × 100`) je Regal und Ebene. Rot = voll, "
+              "grün = viel Luft. Darunter die am stärksten ausgelasteten Regale.",
+        "en": "**Utilization heatmap** — average utilization "
+              "(`IST_LHM / MAX_LHM × 100`) per rack and level. Red = full, "
+              "green = lots of space. Below: the most-utilized racks.",
+    },
+    "heat_racks": {"de": "**Regale nach Ø Auslastung**", "en": "**Racks by avg. utilization**"},
+    "pick_intro": {
+        "de": "**Pick-Heatmap** — Bewegungen je Wochentag und Stunde (aus den "
+              "TPA-Daten). Zeigt, wann am meisten gepickt wird.",
+        "en": "**Pick heatmap** — movements per weekday and hour (from TPA data). "
+              "Shows when picking peaks.",
+    },
+    "pick_peak": {
+        "de": "Spitze: {wd} {h:02d}:00 Uhr mit {p} Picks.",
+        "en": "Peak: {wd} {h:02d}:00 with {p} picks.",
+    },
+    "pick_by_wd": {"de": "Picks je Wochentag", "en": "Picks per weekday"},
+    "pick_by_hour": {"de": "Picks je Stunde", "en": "Picks per hour"},
+    "wd_label": {"de": "Wochentag", "en": "Weekday"},
+    "hour_label": {"de": "Stunde", "en": "Hour"},
+    "picks_label": {"de": "Picks", "en": "Picks"},
+    "bottle_intro": {
+        "de": "**Bottleneck-Analyse** — Plätze mit hoher Pick-Frequenz "
+              "(`ANZ_PICKS` + `Q_PLATZ`-Count aus Fahrpos). Engpässe werden oft "
+              "angefahren und sind gleichzeitig hoch ausgelastet.",
+        "en": "**Bottleneck analysis** — slots with high pick frequency "
+              "(`ANZ_PICKS` + `Q_PLATZ` count from Fahrpos). Bottlenecks are "
+              "visited often and are highly utilized at the same time.",
+    },
+    "bottle_chart": {
+        "de": "Top-15 Engpässe (Picks gesamt, Farbe = Auslastung %)",
+        "en": "Top-15 bottlenecks (total picks, color = utilization %)",
+    },
+    "free_intro": {
+        "de": "**Free Capacity** — Plätze mit Restkapazität, sortiert nach "
+              "`MAX_LHM − IST_LHM`.",
+        "en": "**Free capacity** — slots with remaining capacity, sorted by "
+              "`MAX_LHM − IST_LHM`.",
+    },
+    "free_count": {"de": "Plätze mit freier Kapazität", "en": "Slots with free capacity"},
+    "free_total": {"de": "Freie LHM gesamt", "en": "Total free LHM"},
+    "free_avg": {"de": "Ø freie LHM/Platz", "en": "Avg. free LHM/slot"},
+    "free_byhall": {"de": "Freie Kapazität (LHM) je Halle", "en": "Free capacity (LHM) per hall"},
+    # Maßnahmen
+    "reloc_head": {
+        "de": "### 🔄 Umlagern\nDatenbasierte Umlager-Vorschläge (gleiche Logik wie die App).",
+        "en": "### 🔄 Relocate\nData-driven relocation suggestions (same logic as the app).",
+    },
+    "sl_hotc": {"de": "Heiße C-Plätze ab Picks", "en": "Hot C slots from picks"},
+    "sl_highlevel": {"de": "Hohe Ebene ab", "en": "High level from"},
+    "reloc_unusedA_t": {"de": "Premium-Plätze ungenutzt", "en": "Premium slots unused"},
+    "reloc_unusedA_d": {
+        "de": "A-Klasse, aber 0 Picks – Premium-Platz nicht genutzt.",
+        "en": "A class but 0 picks – premium slot unused.",
+    },
+    "reloc_hotC_t": {"de": "Heiße C-Plätze", "en": "Hot C slots"},
+    "reloc_hotC_d": {
+        "de": "C-Klasse mit hoher Pickfrequenz – Klasse anpassen.",
+        "en": "C class with high pick frequency – reclassify.",
+    },
+    "reloc_highA_t": {"de": "A-Plätze auf hoher Ebene", "en": "A slots on high level"},
+    "reloc_highA_d": {
+        "de": "A-Klasse weit oben & aktiv – nach unten holen.",
+        "en": "A class high up & active – bring down.",
+    },
+    "replen_head": {
+        "de": "### ⬆️ Nachschub / Replenishment\nLeere Pickplätze (`IST_LHM = 0`), die nachgefüllt werden sollten.",
+        "en": "### ⬆️ Replenishment\nEmpty pick slots (`IST_LHM = 0`) that should be refilled.",
+    },
+    "sl_picklevel": {"de": "Max. Ebene (Pickzone)", "en": "Max. level (pick zone)"},
+    "sl_pickthresh": {"de": "Dringend ab Picks", "en": "Urgent from picks"},
+    "sl_overdue": {"de": "Überfällig ab Tagen", "en": "Overdue from days"},
+    "replen_urgent_t": {"de": "Dringend leer", "en": "Urgently empty"},
+    "replen_urgent_d": {
+        "de": "Aktiver Pickplatz leer – dringend nachfüllen.",
+        "en": "Active pick slot empty – replenish urgently.",
+    },
+    "replen_overdue_t": {"de": "Überfällig", "en": "Overdue"},
+    "replen_overdue_d": {
+        "de": "Bereits ≥ {n} Tage leer – Replenishment vergessen?",
+        "en": "Empty for ≥ {n} days – replenishment forgotten?",
+    },
+    "replen_medium_t": {"de": "Mittlere Frequenz", "en": "Medium frequency"},
+    "replen_medium_d": {
+        "de": "Pickplatz leer mit mittlerer Pickfrequenz.",
+        "en": "Pick slot empty with medium pick frequency.",
+    },
+    "put_head": {
+        "de": "### 📥 Einlagern / Putaway\nWohin eingehende Ware gestellt werden sollte (freie Kapazität).",
+        "en": "### 📥 Put-away\nWhere incoming goods should be stored (free capacity).",
+    },
+    "sl_reservelevel": {"de": "Reserve-Ebene ab", "en": "Reserve level from"},
+    "put_fast_t": {"de": "Fast-Lane (Schnelldreher)", "en": "Fast lane (fast movers)"},
+    "put_fast_d": {
+        "de": "Freie A-Plätze auf niedriger Ebene – ideal für Schnelldreher.",
+        "en": "Free A slots on low level – ideal for fast movers.",
+    },
+    "put_reserve_t": {"de": "Reserve (hohe Ebenen)", "en": "Reserve (high levels)"},
+    "put_reserve_d": {
+        "de": "Freie Plätze ab Ebene {n} – für Langsamdreher/Reserve.",
+        "en": "Free slots from level {n} – for slow movers/reserve.",
+    },
+    "put_blocked_t": {"de": "Gesperrt – nicht bestücken", "en": "Locked – do not stock"},
+    "put_blocked_d": {
+        "de": "Gesperrte Plätze (ZUSTAND ≥ 150) – nicht einlagern.",
+        "en": "Locked slots (ZUSTAND ≥ 150) – do not put away.",
+    },
+    "retr_head": {
+        "de": "### 📤 Auslagern / Retrieval\nLangsamdreher/Ladenhüter, die gute Plätze blockieren und ausgelagert werden sollten.",
+        "en": "### 📤 Retrieval\nSlow movers/dead stock blocking good slots that should be retrieved.",
+    },
+    "sl_observe": {"de": "„Beobachten“ bis Picks", "en": "‘Observe’ up to picks"},
+    "retr_crit_t": {"de": "Kritisch", "en": "Critical"},
+    "retr_crit_d": {
+        "de": "A-Platz belegt, aber 0 Picks – Premium-Platz von Ladenhüter blockiert.",
+        "en": "A slot occupied but 0 picks – premium slot blocked by dead stock.",
+    },
+    "retr_stale_t": {"de": "Abgestanden", "en": "Stale"},
+    "retr_stale_d": {
+        "de": "Belegt mit 0 Picks – bewegt sich nicht, Auslagern prüfen.",
+        "en": "Occupied with 0 picks – not moving, consider retrieval.",
+    },
+    "retr_observe_t": {"de": "Beobachten", "en": "Observe"},
+    "retr_observe_d": {
+        "de": "Belegt mit sehr geringer Frequenz (1–{n} Picks).",
+        "en": "Occupied with very low frequency (1–{n} picks).",
+    },
+    "abc_intro": {
+        "de": "**ABC-Analyse** — kumulative Verteilung von `ANZ_PICKS`. "
+              "A = Top 80 % Picks, B = nächste 15 %, C = Rest.",
+        "en": "**ABC analysis** — cumulative distribution of `ANZ_PICKS`. "
+              "A = top 80% of picks, B = next 15%, C = rest.",
+    },
+    "abc_chart": {"de": "ABC-Verteilung (berechnet)", "en": "ABC distribution (calculated)"},
+    "abc_cross_intro": {
+        "de": "**Stamm-ABC vs. berechnet** — Zeilen = hinterlegte `ABC_KLASSE`, "
+              "Spalten = aus Picks berechnete `ABC_CALC`. Werte abseits der "
+              "Diagonale sind Kandidaten für eine ABC-Anpassung.",
+        "en": "**Master ABC vs. calculated** — rows = stored `ABC_KLASSE`, "
+              "columns = `ABC_CALC` from picks. Off-diagonal values are "
+              "candidates for an ABC adjustment.",
+    },
+    "abc_byfreq": {"de": "**Plätze nach Pickfrequenz**", "en": "**Slots by pick frequency**"},
+    "tp_intro": {
+        "de": "**Durchsatz** — Anzahl Lagerbewegungen je Tag (aus den TPA-Daten). "
+              "Zeitraum über den Sidebar-Regler einstellbar.",
+        "en": "**Throughput** — number of warehouse movements per day (from TPA "
+              "data). Period adjustable via the sidebar slider.",
+    },
+    "tp_chart": {"de": "Bewegungen letzte {n} Tage", "en": "Movements last {n} days"},
+    "tp_avg": {"de": "Ø pro Tag", "en": "Avg. per day"},
+    "tp_max": {"de": "Maximum", "en": "Maximum"},
+    "tp_sum": {"de": "Summe Zeitraum", "en": "Sum (period)"},
+    "top_intro": {
+        "de": "**Top-Artikel** — Artikel mit den meisten Bewegungen (aus den "
+              "TPA-Daten). Anzahl über den Sidebar-Regler einstellbar.",
+        "en": "**Top items** — items with the most movements (from TPA data). "
+              "Count adjustable via the sidebar slider.",
+    },
+    "top_chart": {"de": "Meistbewegte Artikel", "en": "Most-moved items"},
+    "no_data_filters": {
+        "de": "Keine Daten mit aktuellen Filtern.",
+        "en": "No data with current filters.",
+    },
+    "d3_autorotate": {"de": "Auto-Rotation", "en": "Auto-rotate"},
+    "d3_brightness": {"de": "Helligkeit", "en": "Brightness"},
+    "d3_shadow": {"de": "Schatten", "en": "Shadow"},
+    "d3_height": {"de": "Höhe (px)", "en": "Height (px)"},
+    "d3_reset": {"de": "Ansicht zurücksetzen", "en": "Reset view"},
+    "d3_caption": {
+        "de": "Steuerung: Ziehen = drehen, Scrollen = zoomen, Rechtsklick-Ziehen "
+              "= verschieben. Regler oben ändern Helligkeit/Schatten/Höhe.",
+        "en": "Controls: drag = rotate, scroll = zoom, right-drag = pan. Sliders "
+              "above change brightness/shadow/height.",
+    },
 }
 
 
@@ -448,10 +646,7 @@ def main() -> None:
     ])
 
     with tab_hallen:
-        st.markdown(
-            "**Hallen-Übersicht** — Belegung, Auslastung und ABC-Verteilung je "
-            "Halle (Regal 1–16 = Halle 1, 17–32 = Halle 2, Rest = Halle 3)."
-        )
+        st.markdown(t("halls_intro"))
         zones = (
             filtered.groupby("HALLE")
             .agg(
@@ -486,11 +681,11 @@ def main() -> None:
             ),
             x="HALLE", y="Plaetze", color="Status", barmode="stack",
             color_discrete_map={"occupied": "#ef6c00", "frei": "#bdbdbd"},
-            title="Belegung pro Halle (gefiltert)",
+            title=t("halls_chart"),
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("**Kennzahlen je Halle**")
+        st.markdown(t("halls_kpis"))
         show = zones[[
             "HALLE", "total_slots", "occupied", "frei", "Belegung_%",
             "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
@@ -502,13 +697,9 @@ def main() -> None:
         _csv_download(show, "hallen_kennzahlen")
 
     with tab_heat:
-        st.markdown(
-            "**Auslastungs-Heatmap** — durchschnittliche Auslastung "
-            "(`IST_LHM / MAX_LHM × 100`) je Regal und Ebene. Rot = voll/überlastet, "
-            "grün = viel Luft. Darunter die am stärksten ausgelasteten Regale."
-        )
+        st.markdown(t("heat_intro"))
         if filtered.empty:
-            st.info("Keine Daten mit aktuellen Filtern.")
+            st.info(t("no_data_filters"))
         else:
             pivot = filtered.pivot_table(
                 index="EBENE", columns="REGAL",
@@ -520,7 +711,7 @@ def main() -> None:
                 range_color=[0, 120],
                 aspect="auto",
                 labels=dict(x="Regal", y="Ebene", color="Auslastung %"),
-                title="Auslastung je Regal/Ebene (IST/MAX × 100)",
+                title=t("heat_chart"),
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -535,7 +726,7 @@ def main() -> None:
             col3.metric("🔴 ≥ 80 %", int(color_counts["RED"]))
             col4.metric("⚪ unbekannt", int(color_counts["GREY"]))
 
-            st.markdown("**Regale nach Ø Auslastung**")
+            st.markdown(t("heat_racks"))
             rack_util = (
                 filtered.groupby(["HALLE", "REGAL"])
                 .agg(
@@ -553,13 +744,10 @@ def main() -> None:
             _csv_download(rack_util, "regal_auslastung")
 
     with tab_pickheat:
-        st.markdown(
-            "**Pick-Heatmap** — Bewegungen je Wochentag und Stunde "
-            "(aus den TPA-Daten). Zeigt, wann am meisten gepickt wird."
-        )
+        st.markdown(t("pick_intro"))
         ph = load_pick_heatmap()
         if ph.empty:
-            st.info("Keine Bewegungsdaten mit Datum/Uhrzeit gefunden.")
+            st.info(t("no_data_filters"))
         else:
             weekday_names = {
                 0: "So", 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa",
@@ -578,16 +766,18 @@ def main() -> None:
                 color_continuous_scale="YlOrRd",
                 aspect="auto",
                 labels=dict(x="Stunde", y="Wochentag", color="Picks"),
-                title="Pick-Aktivitaet je Wochentag/Stunde",
+                title=t("pick_chart"),
             )
             st.plotly_chart(fig, use_container_width=True)
             busiest = ph.sort_values("picks", ascending=False).head(1)
             if not busiest.empty:
                 row = busiest.iloc[0]
                 st.caption(
-                    f"Spitze: {weekday_names[int(row['weekday'])]} "
-                    f"{int(row['hour']):02d}:00 Uhr mit {int(row['picks']):,} Picks."
-                    .replace(",", ".")
+                    t("pick_peak").format(
+                        wd=weekday_names[int(row["weekday"])],
+                        h=int(row["hour"]),
+                        p=f"{int(row['picks']):,}".replace(",", "."),
+                    )
                 )
 
             c1, c2 = st.columns(2)
@@ -597,8 +787,8 @@ def main() -> None:
                 )
                 per_wd.index = [weekday_names[i] for i in per_wd.index]
                 st.plotly_chart(
-                    px.bar(per_wd, title="Picks je Wochentag",
-                           labels=dict(value="Picks", index="Wochentag")),
+                    px.bar(per_wd, title=t("pick_by_wd"),
+                           labels=dict(value=t("picks_label"), index=t("wd_label"))),
                     use_container_width=True,
                 )
             with c2:
@@ -606,22 +796,18 @@ def main() -> None:
                     ph.groupby("hour")["picks"].sum().reindex(range(24), fill_value=0)
                 )
                 st.plotly_chart(
-                    px.bar(per_hour, title="Picks je Stunde",
-                           labels=dict(value="Picks", index="Stunde")),
+                    px.bar(per_hour, title=t("pick_by_hour"),
+                           labels=dict(value=t("picks_label"), index=t("hour_label"))),
                     use_container_width=True,
                 )
             tbl = ph.copy()
-            tbl["Wochentag"] = tbl["weekday"].map(weekday_names)
-            tbl = tbl.rename(columns={"hour": "Stunde", "picks": "Picks"})
+            tbl["weekday"] = tbl["weekday"].map(weekday_names)
+            tbl = tbl.rename(columns={"weekday": "Wochentag", "hour": "Stunde",
+                                      "picks": "Picks"})
             _csv_download(tbl[["Wochentag", "Stunde", "Picks"]], "pick_heatmap")
 
     with tab_bottle:
-        st.markdown(
-            "**Bottleneck-Analyse** — Plaetze mit hoher Pick-Frequenz "
-            "(`ANZ_PICKS` aus Platz + `Q_PLATZ`-Count aus Fahrpos). "
-            "Engpaesse sind Plaetze, die oft angefahren werden und gleichzeitig "
-            "hoch ausgelastet sind."
-        )
+        st.markdown(t("bottle_intro"))
         bottlenecks = (
             filtered.assign(
                 PICK_TOTAL=lambda d: d["ANZ_PICKS"] + d["PICK_COUNT_FAHR"]
@@ -633,7 +819,7 @@ def main() -> None:
             ]
         )
         if bottlenecks.empty:
-            st.info("Keine Daten mit aktuellen Filtern.")
+            st.info(t("no_data_filters"))
         else:
             # Tabelle zuerst, damit sie auch erscheint, falls das Diagramm hakt.
             st.dataframe(bottlenecks, use_container_width=True, hide_index=True)
@@ -647,7 +833,7 @@ def main() -> None:
                         top15, x="PICK_TOTAL", y="PLATZ_ID", orientation="h",
                         color="UTILIZATION", color_continuous_scale="RdYlGn_r",
                         range_color=[0, 120],
-                        title="Top-15 Engpässe (Picks gesamt, Farbe = Auslastung %)",
+                        title=t("bottle_chart"),
                         labels=dict(PICK_TOTAL="Picks gesamt", PLATZ_ID="Platz"),
                     ),
                     use_container_width=True,
@@ -656,17 +842,13 @@ def main() -> None:
                 st.caption(f"(Diagramm konnte nicht gezeichnet werden: {exc})")
 
     with tab_free:
-        st.markdown(
-            "**Free Capacity** — Plaetze mit Restkapazitaet sortiert nach "
-            "`MAX_LHM − IST_LHM`."
-        )
+        st.markdown(t("free_intro"))
         free_all = filtered[filtered["FREE_CAPACITY"] > 0]
         c1, c2, c3 = st.columns(3)
-        c1.metric("Plätze mit freier Kapazität",
-                  f"{len(free_all):,}".replace(",", "."))
-        c2.metric("Freie LHM gesamt",
+        c1.metric(t("free_count"), f"{len(free_all):,}".replace(",", "."))
+        c2.metric(t("free_total"),
                   f"{int(free_all['FREE_CAPACITY'].sum()):,}".replace(",", "."))
-        c3.metric("Ø freie LHM/Platz",
+        c3.metric(t("free_avg"),
                   f"{free_all['FREE_CAPACITY'].mean():.1f}"
                   if not free_all.empty else "—")
 
@@ -676,8 +858,8 @@ def main() -> None:
             )
             st.plotly_chart(
                 px.bar(by_hall, x="HALLE", y="FREE_CAPACITY",
-                       title="Freie Kapazität (LHM) je Halle",
-                       labels=dict(FREE_CAPACITY="Freie LHM", HALLE="Halle")),
+                       title=t("free_byhall"),
+                       labels=dict(FREE_CAPACITY=t("free_total"), HALLE=t("hall"))),
                 use_container_width=True,
             )
         free = (
@@ -712,15 +894,12 @@ def main() -> None:
         st.divider()
 
     with tab_umlagern:
-        st.markdown(
-            "### 🔄 Umlagern\n"
-            "Datenbasierte Umlager-Vorschlaege (gleiche Logik wie die App)."
-        )
+        st.markdown(t("reloc_head"))
         c1, c2 = st.columns(2)
         with c1:
-            hot_c_threshold = st.slider("Heiße C-Plätze ab Picks", 10, 300, 100, step=10)
+            hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10)
         with c2:
-            high_level = st.slider("Hohe Ebene ab", 2, 6, 4)
+            high_level = st.slider(t("sl_highlevel"), 2, 6, 4)
 
         unused_a = filtered[
             (filtered["ABC_KLASSE"] == "A")
@@ -738,27 +917,21 @@ def main() -> None:
         ].sort_values("ANZ_PICKS", ascending=False)
 
         _massnahme_kategorie(
-            "Premium-Plätze ungenutzt",
-            "A-Klasse, aber 0 Picks – Premium-Platz nicht genutzt.", unused_a)
+            t("reloc_unusedA_t"), t("reloc_unusedA_d"), unused_a)
         _massnahme_kategorie(
-            "Heiße C-Plätze",
-            "C-Klasse mit hoher Pickfrequenz – Klasse anpassen.", hot_c)
+            t("reloc_hotC_t"), t("reloc_hotC_d"), hot_c)
         _massnahme_kategorie(
-            "A-Plätze auf hoher Ebene",
-            "A-Klasse weit oben & aktiv – nach unten holen.", high_level_a)
+            t("reloc_highA_t"), t("reloc_highA_d"), high_level_a)
 
     with tab_nachschub:
-        st.markdown(
-            "### ⬆️ Nachschub / Replenishment\n"
-            "Leere Pickplaetze (`IST_LHM = 0`), die nachgefuellt werden sollten."
-        )
+        st.markdown(t("replen_head"))
         c1, c2, c3 = st.columns(3)
         with c1:
-            pick_level = st.slider("Max. Ebene (Pickzone)", 1, 6, 2)
+            pick_level = st.slider(t("sl_picklevel"), 1, 6, 2)
         with c2:
-            pick_threshold = st.slider("Dringend ab Picks", 10, 300, 50, step=10)
+            pick_threshold = st.slider(t("sl_pickthresh"), 10, 300, 50, step=10)
         with c3:
-            overdue_days = st.slider("Überfällig ab Tagen", 3, 60, 14)
+            overdue_days = st.slider(t("sl_overdue"), 3, 60, 14)
         medium_threshold = max(1, pick_threshold // 2)
 
         empty_pick = filtered[
@@ -776,23 +949,18 @@ def main() -> None:
         ].sort_values("ANZ_PICKS", ascending=False)
 
         _massnahme_kategorie(
-            "Dringend leer",
-            "Aktiver Pickplatz leer – dringend nachfuellen.", urgent,
+            t("replen_urgent_t"), t("replen_urgent_d"), urgent,
             extra_cols=["DAYS_EMPTY"])
         _massnahme_kategorie(
-            "Überfällig",
-            f"Bereits ≥ {overdue_days} Tage leer – Replenishment vergessen?",
+            t("replen_overdue_t"),
+            t("replen_overdue_d").format(n=overdue_days),
             overdue, extra_cols=["DAYS_EMPTY"])
         _massnahme_kategorie(
-            "Mittlere Frequenz",
-            "Pickplatz leer mit mittlerer Pickfrequenz.", medium)
+            t("replen_medium_t"), t("replen_medium_d"), medium)
 
     with tab_einlagern:
-        st.markdown(
-            "### 📥 Einlagern / Putaway\n"
-            "Wohin eingehende Ware gestellt werden sollte (freie Kapazitaet)."
-        )
-        reserve_level = st.slider("Reserve-Ebene ab", 2, 6, 3)
+        st.markdown(t("put_head"))
+        reserve_level = st.slider(t("sl_reservelevel"), 2, 6, 3)
         free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
 
         fast_lane = free_slots[
@@ -808,24 +976,18 @@ def main() -> None:
             .sort_values("REGAL")
 
         _massnahme_kategorie(
-            "Fast-Lane (Schnelldreher)",
-            "Freie A-Plätze auf niedriger Ebene – ideal für Schnelldreher.",
+            t("put_fast_t"), t("put_fast_d"),
             fast_lane, extra_cols=["FREE_CAPACITY"])
         _massnahme_kategorie(
-            "Reserve (hohe Ebenen)",
-            f"Freie Plätze ab Ebene {reserve_level} – für Langsamdreher/Reserve.",
+            t("put_reserve_t"),
+            t("put_reserve_d").format(n=reserve_level),
             reserve, extra_cols=["FREE_CAPACITY"])
         _massnahme_kategorie(
-            "Gesperrt – nicht bestücken",
-            "Gesperrte Plätze (ZUSTAND ≥ 150) – nicht einlagern.", blocked)
+            t("put_blocked_t"), t("put_blocked_d"), blocked)
 
     with tab_auslagern:
-        st.markdown(
-            "### 📤 Auslagern / Retrieval\n"
-            "Langsamdreher/Ladenhueter, die (gute) Plaetze blockieren und "
-            "ausgelagert oder umgelagert werden sollten."
-        )
-        observe_max = st.slider("„Beobachten“ bis Picks", 1, 50, 5)
+        st.markdown(t("retr_head"))
+        observe_max = st.slider(t("sl_observe"), 1, 50, 5)
         belegt = filtered[
             (filtered["BELEGT"]) & (filtered["ZUSTAND"] < 150)
         ]
@@ -841,21 +1003,15 @@ def main() -> None:
         ].sort_values("ANZ_PICKS")
 
         _massnahme_kategorie(
-            "Kritisch",
-            "A-Platz belegt, aber 0 Picks – Premium-Platz von Ladenhueter blockiert.",
-            critical)
+            t("retr_crit_t"), t("retr_crit_d"), critical)
         _massnahme_kategorie(
-            "Abgestanden",
-            "Belegt mit 0 Picks – bewegt sich nicht, Auslagern pruefen.", stale)
+            t("retr_stale_t"), t("retr_stale_d"), stale)
         _massnahme_kategorie(
-            "Beobachten",
-            f"Belegt mit sehr geringer Frequenz (1–{observe_max} Picks).", observe)
+            t("retr_observe_t"),
+            t("retr_observe_d").format(n=observe_max), observe)
 
     with tab_abc:
-        st.markdown(
-            "**ABC-Analyse** — kumulative Verteilung von `ANZ_PICKS`. "
-            "A = Top 80 % Picks, B = naechste 15 %, C = Rest."
-        )
+        st.markdown(t("abc_intro"))
         abc_counts = (
             filtered["ABC_CALC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
         )
@@ -864,22 +1020,18 @@ def main() -> None:
             values=abc_counts.values,
             color=abc_counts.index,
             color_discrete_map={"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"},
-            title="ABC-Verteilung (berechnet)",
+            title=t("abc_chart"),
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown(
-            "**Stamm-ABC vs. berechnet** — Zeilen = hinterlegte `ABC_KLASSE`, "
-            "Spalten = aus Picks berechnete `ABC_CALC`. Werte abseits der Diagonale "
-            "sind Kandidaten für eine ABC-Anpassung."
-        )
+        st.markdown(t("abc_cross_intro"))
         cross = pd.crosstab(
             filtered["ABC_KLASSE"].replace("", "—"),
             filtered["ABC_CALC"].fillna("—"),
         )
         st.dataframe(cross, use_container_width=True)
 
-        st.markdown("**Plätze nach Pickfrequenz**")
+        st.markdown(t("abc_byfreq"))
         abc_table = filtered.sort_values("ANZ_PICKS", ascending=False).head(100)[
             ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
              "ANZ_PICKS", "CUMULATIVE_%", "ABC_KLASSE", "ABC_CALC"]
@@ -888,25 +1040,25 @@ def main() -> None:
         _csv_download(abc_table, "abc_analyse")
 
     with tab_trend:
-        st.markdown(
-            "**Durchsatz** — Anzahl Lagerbewegungen je Tag (aus den TPA-Daten). "
-            "Zeitraum über den Sidebar-Regler „Durchsatz-Zeitraum“ einstellbar."
-        )
+        st.markdown(t("tp_intro"))
         trend = load_throughput_trend(days)
         if trend.empty:
-            st.info("Keine Bewegungsdaten gefunden.")
+            st.info(t("no_data_filters"))
         else:
             fig = px.line(
                 trend, x="day", y="movements", markers=True,
-                title=f"Bewegungen letzte {days} Tage",
+                title=t("tp_chart").format(n=days),
             )
-            fig.update_layout(yaxis_title="Bewegungen", xaxis_title="Datum")
+            fig.update_layout(
+                yaxis_title=t("picks_label"),
+                xaxis_title="Date" if _LANG == "en" else "Datum",
+            )
             st.plotly_chart(fig, use_container_width=True)
 
             c1, c2, c3 = st.columns(3)
-            c1.metric("Ø pro Tag", f"{trend['movements'].mean():.0f}")
-            c2.metric("Maximum", f"{int(trend['movements'].max()):,}".replace(",", "."))
-            c3.metric("Summe Zeitraum",
+            c1.metric(t("tp_avg"), f"{trend['movements'].mean():.0f}")
+            c2.metric(t("tp_max"), f"{int(trend['movements'].max()):,}".replace(",", "."))
+            c3.metric(t("tp_sum"),
                       f"{int(trend['movements'].sum()):,}".replace(",", "."))
 
             tbl = trend.copy()
@@ -917,19 +1069,16 @@ def main() -> None:
             _csv_download(tbl, "durchsatz")
 
     with tab_top:
-        st.markdown(
-            "**Top-Artikel** — Artikel mit den meisten Bewegungen (aus den "
-            "TPA-Daten). Anzahl über den Sidebar-Regler „Top-Artikel anzeigen“."
-        )
+        st.markdown(t("top_intro"))
         top = load_top_articles(article_limit)
         if top.empty:
-            st.info("Keine Artikelbewegungen gefunden.")
+            st.info(t("no_data_filters"))
         else:
             chart_df = top.head(min(article_limit, 25)).sort_values("bewegungen")
             st.plotly_chart(
                 px.bar(
                     chart_df, x="bewegungen", y="artikel", orientation="h",
-                    title="Meistbewegte Artikel",
+                    title=t("top_chart"),
                     labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
                 ),
                 use_container_width=True,
@@ -946,15 +1095,15 @@ def main() -> None:
         # --- 3D-Steuerelemente ---
         ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 1])
         with ctrl1:
-            auto_rotate = st.checkbox("Auto-Rotation", value=False)
+            auto_rotate = st.checkbox(t("d3_autorotate"), value=False)
         with ctrl2:
-            exposure = st.slider("Helligkeit", 0.2, 2.0, 1.0, step=0.1)
+            exposure = st.slider(t("d3_brightness"), 0.2, 2.0, 1.0, step=0.1)
         with ctrl3:
-            shadow = st.slider("Schatten", 0.0, 2.0, 0.8, step=0.1)
+            shadow = st.slider(t("d3_shadow"), 0.0, 2.0, 0.8, step=0.1)
         with ctrl4:
-            viewer_height = st.slider("Höhe (px)", 360, 900, 640, step=20)
+            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
         bg = "#f5f5f7"
-        if st.button("Ansicht zuruecksetzen"):
+        if st.button(t("d3_reset")):
             st.rerun()
 
         rotate_attr = 'auto-rotate auto-rotate-delay="0"' if auto_rotate else ""
@@ -978,11 +1127,7 @@ def main() -> None:
             """,
             height=viewer_height + 20,
         )
-        st.caption(
-            "Steuerung: Ziehen = drehen, Scrollen = zoomen, Rechtsklick-Ziehen = "
-            "verschieben. Regler oben ändern Helligkeit/Schatten/Höhe; "
-            "„Ansicht zurücksetzen“ zentriert neu."
-        )
+        st.caption(t("d3_caption"))
 
 
 if __name__ == "__main__":
