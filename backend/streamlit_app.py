@@ -327,27 +327,17 @@ TR: dict[str, dict[str, str]] = {
         "en": "Controls: drag = rotate, scroll = zoom, right-drag = pan. Sliders "
               "above change brightness/shadow/height.",
     },
-    "abc3d_head": {"de": "### 🧊 ABC-Heatmap (3D)", "en": "### 🧊 ABC heatmap (3D)"},
+    "abc3d_head": {"de": "### 🏷️ ABC je Lagerplatz", "en": "### 🏷️ ABC per slot"},
     "abc3d_intro": {
-        "de": "Alle Plätze nach Regal/Fach/Ebene, eingefärbt nach ABC-Klasse "
-              "(A = rot, B = gelb, C = grün). Drehen/Zoomen, Hover zeigt den Platz. "
-              "Reagiert auf die Sidebar-Filter.",
-        "en": "All slots by rack/bin/level, colored by ABC class (A = red, "
-              "B = yellow, C = green). Rotate/zoom, hover shows the slot. "
-              "Reacts to the sidebar filters.",
+        "de": "Welche Plätze welcher ABC-Klasse zugeordnet sind. Reagiert auf die "
+              "Sidebar-Filter; zusätzlich nach ABC-Klasse filterbar.",
+        "en": "Which slots belong to which ABC class. Reacts to the sidebar "
+              "filters; additionally filterable by ABC class.",
     },
     "abc3d_src": {"de": "ABC-Quelle", "en": "ABC source"},
     "abc3d_calc": {"de": "Berechnet", "en": "Calculated"},
     "abc3d_master": {"de": "Stamm-ABC", "en": "Master ABC"},
-    "abc3d_maxpts": {"de": "Max. Punkte (Performance)", "en": "Max. points (performance)"},
-    "abc3d_title": {
-        "de": "Plätze im Raum, eingefärbt nach ABC",
-        "en": "Slots in space, colored by ABC",
-    },
-    "abc3d_sampled": {
-        "de": "Zeige {n} von {total} Plätzen (Stichprobe). Filter eingrenzen für alle.",
-        "en": "Showing {n} of {total} slots (sample). Narrow filters to see all.",
-    },
+    "abc3d_classfilter": {"de": "Nur ABC-Klasse", "en": "Only ABC class"},
     "fach_label": {"de": "Fach", "en": "Bin"},
 }
 
@@ -1293,45 +1283,34 @@ def main() -> None:
             src_choice = st.radio(t("abc3d_src"), src_opts, horizontal=True)
             abc_col = "ABC_KLASSE" if src_choice == t("abc3d_master") else "ABC_CALC"
         with a2:
-            max_pts = st.slider(t("abc3d_maxpts"), 1000, 25000, 8000, step=1000)
+            sel_classes = st.multiselect(
+                t("abc3d_classfilter"), options=["A", "B", "C"], default=["A", "B", "C"],
+            )
 
         if filtered.empty:
             st.info(t("no_data_filters"))
         else:
-            df3d = filtered.copy()
-            df3d["ABC_VIZ"] = df3d[abc_col].where(
-                df3d[abc_col].isin(["A", "B", "C"]), "—"
+            df_abc = filtered.copy()
+            df_abc["ABC"] = df_abc[abc_col].where(
+                df_abc[abc_col].isin(["A", "B", "C"]), "—"
             )
-            if len(df3d) > max_pts:
-                shown = df3d.sample(n=max_pts, random_state=42)
-                st.caption(
-                    t("abc3d_sampled").format(
-                        n=f"{max_pts:,}".replace(",", "."),
-                        total=f"{len(df3d):,}".replace(",", "."),
-                    )
-                )
-            else:
-                shown = df3d
-            fig3d = px.scatter_3d(
-                shown, x="REGAL", y="FACH", z="EBENE", color="ABC_VIZ",
-                color_discrete_map={
-                    "A": "#c62828", "B": "#f9a825", "C": "#2e7d32", "—": "#bdbdbd",
-                },
-                category_orders={"ABC_VIZ": ["A", "B", "C", "—"]},
-                hover_data=["PLATZ_ID", "HALLE", "ANZ_PICKS"],
-                title=t("abc3d_title"),
-                labels={"REGAL": t("rack"), "FACH": t("fach_label"),
-                        "EBENE": t("level"), "ABC_VIZ": "ABC"},
+            if sel_classes:
+                df_abc = df_abc[df_abc["ABC"].isin(sel_classes)]
+
+            counts = df_abc["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
+            mc = st.columns(3)
+            mc[0].metric("A", f"{int(counts['A']):,}".replace(",", "."))
+            mc[1].metric("B", f"{int(counts['B']):,}".replace(",", "."))
+            mc[2].metric("C", f"{int(counts['C']):,}".replace(",", "."))
+
+            abc_tbl = (
+                df_abc.sort_values(["ABC", "ANZ_PICKS"], ascending=[True, False])[
+                    ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                     "ANZ_PICKS", "ABC"]
+                ]
             )
-            fig3d.update_traces(marker=dict(size=3))
-            fig3d.update_layout(
-                height=640,
-                scene=dict(
-                    xaxis_title=t("rack"), yaxis_title=t("fach_label"),
-                    zaxis_title=t("level"),
-                ),
-            )
-            st.plotly_chart(fig3d, use_container_width=True)
+            st.dataframe(abc_tbl, use_container_width=True, hide_index=True)
+            _csv_download(abc_tbl, "abc_je_platz")
 
 
 if __name__ == "__main__":
