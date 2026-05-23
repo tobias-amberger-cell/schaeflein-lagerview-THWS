@@ -201,6 +201,24 @@ def load_top_articles(limit: int = 25) -> pd.DataFrame:
     )
 
 
+@st.cache_data(ttl=3600, show_spinner="Lade Pick-Heatmap ...")
+def load_pick_heatmap() -> pd.DataFrame:
+    """Picks je Wochentag (0=So..6=Sa) und Stunde aus den TPA-Bewegungen."""
+    con = get_connection()
+    return pd.read_sql_query(
+        f"""
+        SELECT CAST(strftime('%w', ENDE_DATUM) AS INTEGER) AS weekday,
+               CAST(substr(ENDE_ZEIT, 1, 2) AS INTEGER) AS hour,
+               COUNT(*) AS picks
+        FROM "{TPA_TABLE}"
+        WHERE TRIM(COALESCE(ENDE_DATUM, '')) <> ''
+          AND TRIM(COALESCE(ENDE_ZEIT, '')) <> ''
+        GROUP BY weekday, hour
+        """,
+        con,
+    )
+
+
 def heatmap_color(util: float) -> str:
     """Aus warehouse_heatmap.py."""
     if pd.isna(util):
@@ -218,6 +236,10 @@ def apply_filters(
     abc: list[str],
     util_range: tuple[float, float],
     only_occupied: bool,
+    regal_range: tuple[int, int] | None = None,
+    ebene_range: tuple[int, int] | None = None,
+    min_picks: int = 0,
+    sperr_mode: str = "Alle",
 ) -> pd.DataFrame:
     out = df
     if hallen:
@@ -230,6 +252,18 @@ def apply_filters(
         out = out[(util_filled >= lo) & (util_filled <= hi)]
     if only_occupied:
         out = out[out["BELEGT"]]
+    if regal_range is not None:
+        rlo, rhi = regal_range
+        out = out[(out["REGAL"] >= rlo) & (out["REGAL"] <= rhi)]
+    if ebene_range is not None:
+        elo, ehi = ebene_range
+        out = out[(out["EBENE"] >= elo) & (out["EBENE"] <= ehi)]
+    if min_picks > 0:
+        out = out[out["ANZ_PICKS"] >= min_picks]
+    if sperr_mode != "Alle":
+        sperr = out["SPERR_KNZ"].astype(str).str.strip().str.lower()
+        is_locked = ~sperr.isin(["", "0", "nan", "none"])
+        out = out[is_locked] if sperr_mode == "Nur gesperrte" else out[~is_locked]
     return out
 
 
@@ -263,13 +297,31 @@ def main() -> None:
             help="MAX_LHM vs. IST_LHM. 0 = leer, 100 = voll, >100 = ueberlastet.",
         )
         only_occupied = st.checkbox("Nur belegte Plaetze", value=False)
+        with st.expander("Platz-Filter (Regal/Ebene/Picks/Sperre)"):
+            regal_max = max(int(platz["REGAL"].max()), 1)
+            ebene_max = max(int(platz["EBENE"].max()), 1)
+            picks_max = max(int(platz["ANZ_PICKS"].max()), 1)
+            regal_range = st.slider("Regal", 0, regal_max, (0, regal_max))
+            ebene_range = st.slider("Ebene", 0, ebene_max, (0, ebene_max))
+            min_picks = st.slider("Min. Picks (ANZ_PICKS)", 0, picks_max, 0)
+            sperr_mode = st.radio(
+                "Sperr-Status",
+                options=["Alle", "Nur gesperrte", "Ohne gesperrte"],
+                horizontal=True,
+            )
         st.divider()
         days = st.slider("Durchsatz-Zeitraum (Tage)", 7, 180, 30, step=7)
         article_limit = st.slider("Top-Artikel anzeigen", 5, 100, 25, step=5)
         st.divider()
         st.caption(f"DB: `{get_db_path()}`")
 
-    filtered = apply_filters(platz, hallen, abc, util_range, only_occupied)
+    filtered = apply_filters(
+        platz, hallen, abc, util_range, only_occupied,
+        regal_range=regal_range,
+        ebene_range=ebene_range,
+        min_picks=min_picks,
+        sperr_mode=sperr_mode,
+    )
 
     total = len(filtered) or 1
     occupied = int(filtered["BELEGT"].sum())
@@ -284,13 +336,15 @@ def main() -> None:
               f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—")
     c4.metric("Ueberlastet (>100 %)", f"{overloaded:,}".replace(",", "."))
 
-    (tab_hallen, tab_heat, tab_bottle, tab_free, tab_reloc, tab_abc,
-     tab_trend, tab_top, tab_3d) = st.tabs([
+    (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_reloc,
+     tab_nachschub, tab_abc, tab_trend, tab_top, tab_3d) = st.tabs([
         "Hallen",
         "Auslastungs-Heatmap",
+        "Pick-Heatmap",
         "Bottlenecks",
         "Free Capacity",
         "Smart Relocation",
+        "Nachschub",
         "ABC-Analyse",
         "Durchsatz",
         "Top-Artikel",
@@ -347,6 +401,44 @@ def main() -> None:
             col2.metric("🟡 40–79 %", int(color_counts["YELLOW"]))
             col3.metric("🔴 ≥ 80 %", int(color_counts["RED"]))
             col4.metric("⚪ unbekannt", int(color_counts["GREY"]))
+
+    with tab_pickheat:
+        st.markdown(
+            "**Pick-Heatmap** — Bewegungen je Wochentag und Stunde "
+            "(aus den TPA-Daten). Zeigt, wann am meisten gepickt wird."
+        )
+        ph = load_pick_heatmap()
+        if ph.empty:
+            st.info("Keine Bewegungsdaten mit Datum/Uhrzeit gefunden.")
+        else:
+            weekday_names = {
+                0: "So", 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa",
+            }
+            ph = ph[(ph["weekday"].between(0, 6)) & (ph["hour"].between(0, 23))]
+            pivot = (
+                ph.pivot_table(
+                    index="weekday", columns="hour", values="picks", aggfunc="sum"
+                )
+                .reindex(range(7))
+                .reindex(columns=range(24))
+            )
+            pivot.index = [weekday_names[i] for i in pivot.index]
+            fig = px.imshow(
+                pivot,
+                color_continuous_scale="YlOrRd",
+                aspect="auto",
+                labels=dict(x="Stunde", y="Wochentag", color="Picks"),
+                title="Pick-Aktivitaet je Wochentag/Stunde",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            busiest = ph.sort_values("picks", ascending=False).head(1)
+            if not busiest.empty:
+                row = busiest.iloc[0]
+                st.caption(
+                    f"Spitze: {weekday_names[int(row['weekday'])]} "
+                    f"{int(row['hour']):02d}:00 Uhr mit {int(row['picks']):,} Picks."
+                    .replace(",", ".")
+                )
 
     with tab_bottle:
         st.markdown(
@@ -413,6 +505,36 @@ def main() -> None:
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+    with tab_nachschub:
+        st.markdown(
+            "**Nachschub / Replenishment** — leere Pickplaetze (`IST_LHM = 0`) "
+            "auf niedrigen Ebenen mit hoher Pickfrequenz, die nachgefuellt "
+            "werden sollten. Nicht gesperrte Plaetze."
+        )
+        cols = st.columns(2)
+        with cols[0]:
+            n_pick_level = st.slider("Max. Ebene (Pickzone)", 1, 6, 2)
+        with cols[1]:
+            n_pick_threshold = st.slider("Min. Picks", 0, 200, 50, step=10)
+        nachschub = filtered[
+            (filtered["IST_LHM"].fillna(0) == 0)
+            & (filtered["EBENE"] <= n_pick_level)
+            & (filtered["ANZ_PICKS"] >= n_pick_threshold)
+            & (filtered["ZUSTAND"] < 150)
+        ].sort_values("ANZ_PICKS", ascending=False)
+        st.metric("Nachfuell-Kandidaten", f"{len(nachschub):,}".replace(",", "."))
+        if nachschub.empty:
+            st.info("Keine Nachschub-Kandidaten mit aktuellen Filtern.")
+        else:
+            st.dataframe(
+                nachschub.head(100)[
+                    ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                     "ANZ_PICKS", "ANZ_NACHSCHUB", "MAX_LHM", "IST_LHM"]
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
+
     with tab_abc:
         st.markdown(
             "**ABC-Analyse** — kumulative Verteilung von `ANZ_PICKS`. "
@@ -459,27 +581,46 @@ def main() -> None:
         # Modell blocken. Daher ueber den CORS-faehigen API-Proxy laden
         # (gleiche Quelle wie die Flutter-App).
         glb_url = "https://ssi-lagerview-api.onrender.com/model.glb"
+
+        # --- 3D-Steuerelemente ---
+        ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 1])
+        with ctrl1:
+            auto_rotate = st.checkbox("Auto-Rotation", value=False)
+        with ctrl2:
+            exposure = st.slider("Helligkeit", 0.2, 2.0, 1.0, step=0.1)
+        with ctrl3:
+            shadow = st.slider("Schatten", 0.0, 2.0, 0.8, step=0.1)
+        with ctrl4:
+            viewer_height = st.slider("Höhe (px)", 360, 900, 640, step=20)
+        bg = "#f5f5f7"
+        if st.button("Ansicht zuruecksetzen"):
+            st.rerun()
+
+        rotate_attr = 'auto-rotate auto-rotate-delay="0"' if auto_rotate else ""
         components.html(
             f"""
 <script type="module"
     src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
 </script>
-<div style="width:100%;height:640px;background:#f5f5f7;border-radius:8px;">
+<div style="width:100%;height:{viewer_height}px;background:{bg};border-radius:8px;">
   <model-viewer
       src="{glb_url}"
       alt="Schaeflein BER03 Lager"
       camera-controls
+      {rotate_attr}
       touch-action="pan-y"
-      shadow-intensity="0.8"
-      exposure="1"
-      style="width:100%;height:100%;background-color:#f5f5f7;">
+      shadow-intensity="{shadow}"
+      exposure="{exposure}"
+      style="width:100%;height:100%;background-color:{bg};">
   </model-viewer>
 </div>
             """,
-            height=660,
+            height=viewer_height + 20,
         )
         st.caption(
-            f"GLB-Quelle: [{glb_url}]({glb_url}) — GitHub-Release `model-v1`."
+            "Steuerung: Ziehen = drehen, Scrollen = zoomen, Rechtsklick-Ziehen = "
+            "verschieben. Regler oben ändern Helligkeit/Schatten/Höhe; "
+            "„Ansicht zurücksetzen“ zentriert neu."
         )
 
 
