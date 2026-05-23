@@ -503,6 +503,19 @@ def heatmap_color(util: float) -> str:
     return "GREEN"
 
 
+def _logo_path() -> Path | None:
+    """Sucht das Schaeflein-Logo unabhaengig vom Arbeitsverzeichnis."""
+    candidates = [
+        Path(__file__).resolve().parents[1] / "assets" / "branding" / "schaeflein_logo.jpg",
+        Path("assets/branding/schaeflein_logo.jpg"),
+        Path("../assets/branding/schaeflein_logo.jpg"),
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
 def _csv_download(df: pd.DataFrame, key: str, label: str | None = None) -> None:
     """Einheitlicher CSV-Export-Button (utf-8-sig fuer Excel-Umlaute)."""
     st.download_button(
@@ -557,8 +570,23 @@ def main() -> None:
         TR["lang_label"]["de"], ["Deutsch", "English"], horizontal=True,
     ) == "English" else "de"
 
-    st.title("📦 Schaeflein LagerView v1.133")
-    st.caption(t("caption"))
+    logo = _logo_path()
+    if logo is not None:
+        try:
+            st.logo(str(logo))  # oben links + Sidebar-Kopf
+        except Exception:
+            pass
+
+    if logo is not None:
+        col_logo, col_title = st.columns([1, 6], vertical_alignment="center")
+        with col_logo:
+            st.image(str(logo), width=110)
+        with col_title:
+            st.title("Schaeflein LagerView v1.133")
+            st.caption(t("caption"))
+    else:
+        st.title("📦 Schaeflein LagerView v1.133")
+        st.caption(t("caption"))
 
     try:
         platz = load_platz_full()
