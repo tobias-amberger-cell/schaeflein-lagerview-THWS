@@ -47,6 +47,77 @@ _DB_CANDIDATES = [
     Path("warehouse.db"),
 ]
 
+# --- Zweisprachigkeit (DE/EN) ---------------------------------------------
+# Tabellen-Spaltennamen (Datenfelder) bleiben absichtlich unuebersetzt.
+_LANG = "de"
+
+TR: dict[str, dict[str, str]] = {
+    "caption": {
+        "de": "Lager BER03 — Live-Auswertung aus warehouse.db",
+        "en": "Warehouse BER03 — live analysis from warehouse.db",
+    },
+    "lang_label": {"de": "🌐 Sprache / Language", "en": "🌐 Sprache / Language"},
+    "filter": {"de": "Filter", "en": "Filters"},
+    "hall": {"de": "Halle", "en": "Hall"},
+    "hall_help": {"de": "Leer = alle Hallen.", "en": "Empty = all halls."},
+    "abc": {"de": "ABC-Klasse", "en": "ABC class"},
+    "abc_help": {
+        "de": "Filtert auf Stamm-ABC ODER kumulativ berechnete ABC.",
+        "en": "Filters on master ABC OR calculated ABC.",
+    },
+    "util": {"de": "Auslastung (%)", "en": "Utilization (%)"},
+    "util_help": {
+        "de": "MAX_LHM vs. IST_LHM. 0 = leer, 100 = voll, >100 = ueberlastet.",
+        "en": "MAX_LHM vs. IST_LHM. 0 = empty, 100 = full, >100 = overloaded.",
+    },
+    "only_occ": {"de": "Nur belegte Plaetze", "en": "Occupied slots only"},
+    "place_filter": {
+        "de": "Platz-Filter (Regal/Ebene/Picks/Sperre)",
+        "en": "Slot filter (rack/level/picks/lock)",
+    },
+    "rack": {"de": "Regal", "en": "Rack"},
+    "level": {"de": "Ebene", "en": "Level"},
+    "min_picks": {"de": "Min. Picks (ANZ_PICKS)", "en": "Min. picks (ANZ_PICKS)"},
+    "lock_status": {"de": "Sperr-Status", "en": "Lock status"},
+    "lock_all": {"de": "Alle", "en": "All"},
+    "lock_only": {"de": "Nur gesperrte", "en": "Locked only"},
+    "lock_without": {"de": "Ohne gesperrte", "en": "Exclude locked"},
+    "tp_period": {"de": "Durchsatz-Zeitraum (Tage)", "en": "Throughput period (days)"},
+    "top_count": {"de": "Top-Artikel anzeigen", "en": "Show top items"},
+    "m_slots": {"de": "Stellplaetze", "en": "Slots"},
+    "m_occupied": {"de": "Belegt", "en": "Occupied"},
+    "m_avg_util": {"de": "Ø Auslastung", "en": "Avg. utilization"},
+    "m_overloaded": {"de": "Ueberlastet (>100 %)", "en": "Overloaded (>100%)"},
+    # Tab-Titel
+    "tab_halls": {"de": "Hallen", "en": "Halls"},
+    "tab_util": {"de": "Auslastungs-Heatmap", "en": "Utilization heatmap"},
+    "tab_pick": {"de": "Pick-Heatmap", "en": "Pick heatmap"},
+    "tab_bottle": {"de": "Bottlenecks", "en": "Bottlenecks"},
+    "tab_free": {"de": "Free Capacity", "en": "Free capacity"},
+    "tab_relocate": {"de": "🔄 Umlagern", "en": "🔄 Relocate"},
+    "tab_replenish": {"de": "⬆️ Nachschub", "en": "⬆️ Replenish"},
+    "tab_putaway": {"de": "📥 Einlagern", "en": "📥 Put-away"},
+    "tab_retrieve": {"de": "📤 Auslagern", "en": "📤 Retrieve"},
+    "tab_abc": {"de": "ABC-Analyse", "en": "ABC analysis"},
+    "tab_tp": {"de": "Durchsatz", "en": "Throughput"},
+    "tab_top": {"de": "Top-Artikel", "en": "Top items"},
+    "tab_3d": {"de": "3D-Modell", "en": "3D model"},
+    # gemeinsame Maßnahmen-Strings
+    "cat_slots": {"de": "Plaetze", "en": "Slots"},
+    "cat_empty": {
+        "de": "Keine Plaetze in dieser Kategorie (mit aktuellen Filtern).",
+        "en": "No slots in this category (with current filters).",
+    },
+    "dl": {"de": "⬇️ Als CSV", "en": "⬇️ As CSV"},
+}
+
+
+def t(key: str) -> str:
+    entry = TR.get(key)
+    if not entry:
+        return key
+    return entry.get(_LANG, entry.get("de", key))
+
 
 @st.cache_resource(show_spinner="Lade DB ...")
 def get_db_path() -> str:
@@ -234,10 +305,10 @@ def heatmap_color(util: float) -> str:
     return "GREEN"
 
 
-def _csv_download(df: pd.DataFrame, key: str, label: str = "⬇️ Als CSV") -> None:
+def _csv_download(df: pd.DataFrame, key: str, label: str | None = None) -> None:
     """Einheitlicher CSV-Export-Button (utf-8-sig fuer Excel-Umlaute)."""
     st.download_button(
-        label,
+        label or t("dl"),
         df.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"{key}.csv",
         mime="text/csv",
@@ -283,8 +354,13 @@ def apply_filters(
 
 
 def main() -> None:
+    global _LANG
+    _LANG = "en" if st.sidebar.radio(
+        TR["lang_label"]["de"], ["Deutsch", "English"], horizontal=True,
+    ) == "English" else "de"
+
     st.title("📦 Schaeflein LagerView v1.133")
-    st.caption("Lager BER03 — Live-Auswertung aus warehouse.db")
+    st.caption(t("caption"))
 
     try:
         platz = load_platz_full()
@@ -294,39 +370,41 @@ def main() -> None:
         st.stop()
 
     with st.sidebar:
-        st.header("Filter")
+        st.header(t("filter"))
         hallen = st.multiselect(
-            "Halle",
+            t("hall"),
             options=["Halle 1", "Halle 2", "Halle 3"],
             default=[],
-            help="Leer = alle Hallen.",
+            help=t("hall_help"),
         )
         abc = st.multiselect(
-            "ABC-Klasse",
+            t("abc"),
             options=["A", "B", "C"],
             default=[],
-            help="Filtert auf Stamm-ABC ODER auf die kumulativ berechnete ABC.",
+            help=t("abc_help"),
         )
         util_range = st.slider(
-            "Auslastung (%)", 0, 150, (0, 150), step=5,
-            help="MAX_LHM vs. IST_LHM. 0 = leer, 100 = voll, >100 = ueberlastet.",
+            t("util"), 0, 150, (0, 150), step=5, help=t("util_help"),
         )
-        only_occupied = st.checkbox("Nur belegte Plaetze", value=False)
-        with st.expander("Platz-Filter (Regal/Ebene/Picks/Sperre)"):
+        only_occupied = st.checkbox(t("only_occ"), value=False)
+        with st.expander(t("place_filter")):
             regal_max = max(int(platz["REGAL"].max()), 1)
             ebene_max = max(int(platz["EBENE"].max()), 1)
             picks_max = max(int(platz["ANZ_PICKS"].max()), 1)
-            regal_range = st.slider("Regal", 0, regal_max, (0, regal_max))
-            ebene_range = st.slider("Ebene", 0, ebene_max, (0, ebene_max))
-            min_picks = st.slider("Min. Picks (ANZ_PICKS)", 0, picks_max, 0)
-            sperr_mode = st.radio(
-                "Sperr-Status",
-                options=["Alle", "Nur gesperrte", "Ohne gesperrte"],
-                horizontal=True,
+            regal_range = st.slider(t("rack"), 0, regal_max, (0, regal_max))
+            ebene_range = st.slider(t("level"), 0, ebene_max, (0, ebene_max))
+            min_picks = st.slider(t("min_picks"), 0, picks_max, 0)
+            sperr_opts = [t("lock_all"), t("lock_only"), t("lock_without")]
+            sperr_choice = st.radio(
+                t("lock_status"), options=sperr_opts, horizontal=True,
             )
+            # auf kanonische (deutsche) Schluessel zurueckmappen
+            sperr_mode = ["Alle", "Nur gesperrte", "Ohne gesperrte"][
+                sperr_opts.index(sperr_choice)
+            ]
         st.divider()
-        days = st.slider("Durchsatz-Zeitraum (Tage)", 7, 180, 30, step=7)
-        article_limit = st.slider("Top-Artikel anzeigen", 5, 100, 25, step=5)
+        days = st.slider(t("tp_period"), 7, 180, 30, step=7)
+        article_limit = st.slider(t("top_count"), 5, 100, 25, step=5)
         st.divider()
         st.caption(f"DB: `{get_db_path()}`")
 
@@ -344,29 +422,29 @@ def main() -> None:
     avg_util = filtered["UTILIZATION"].mean()
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Stellplaetze", f"{len(filtered):,}".replace(",", "."))
-    c2.metric("Belegt", f"{occupied:,}".replace(",", "."),
+    c1.metric(t("m_slots"), f"{len(filtered):,}".replace(",", "."))
+    c2.metric(t("m_occupied"), f"{occupied:,}".replace(",", "."),
               f"{occupied/total*100:.1f}%")
-    c3.metric("Ø Auslastung",
+    c3.metric(t("m_avg_util"),
               f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—")
-    c4.metric("Ueberlastet (>100 %)", f"{overloaded:,}".replace(",", "."))
+    c4.metric(t("m_overloaded"), f"{overloaded:,}".replace(",", "."))
 
     (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_umlagern,
      tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_trend, tab_top,
      tab_3d) = st.tabs([
-        "Hallen",
-        "Auslastungs-Heatmap",
-        "Pick-Heatmap",
-        "Bottlenecks",
-        "Free Capacity",
-        "🔄 Umlagern",
-        "⬆️ Nachschub",
-        "📥 Einlagern",
-        "📤 Auslagern",
-        "ABC-Analyse",
-        "Durchsatz",
-        "Top-Artikel",
-        "3D-Modell",
+        t("tab_halls"),
+        t("tab_util"),
+        t("tab_pick"),
+        t("tab_bottle"),
+        t("tab_free"),
+        t("tab_relocate"),
+        t("tab_replenish"),
+        t("tab_putaway"),
+        t("tab_retrieve"),
+        t("tab_abc"),
+        t("tab_tp"),
+        t("tab_top"),
+        t("tab_3d"),
     ])
 
     with tab_hallen:
@@ -622,9 +700,9 @@ def main() -> None:
         cols = _MASSNAHME_COLS + (extra_cols or [])
         cols = [c for c in cols if c in df.columns]
         st.markdown(f"**{titel}** — {beschreibung}")
-        st.metric("Plaetze", f"{len(df):,}".replace(",", "."))
+        st.metric(t("cat_slots"), f"{len(df):,}".replace(",", "."))
         if df.empty:
-            st.info("Keine Plaetze in dieser Kategorie (mit aktuellen Filtern).")
+            st.info(t("cat_empty"))
         else:
             st.dataframe(
                 df.head(200)[cols], use_container_width=True, hide_index=True
