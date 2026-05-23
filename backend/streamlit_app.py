@@ -557,19 +557,25 @@ def main() -> None:
         if bottlenecks.empty:
             st.info("Keine Daten mit aktuellen Filtern.")
         else:
-            top15 = bottlenecks.head(15).sort_values("PICK_TOTAL")
-            st.plotly_chart(
-                px.bar(
-                    top15, x="PICK_TOTAL", y="PLATZ_ID", orientation="h",
-                    color="UTILIZATION", color_continuous_scale="RdYlGn_r",
-                    range_color=[0, 120],
-                    title="Top-15 Engpässe (Picks gesamt, Farbe = Auslastung %)",
-                    labels=dict(PICK_TOTAL="Picks gesamt", PLATZ_ID="Platz"),
-                ),
-                use_container_width=True,
-            )
+            # Tabelle zuerst, damit sie auch erscheint, falls das Diagramm hakt.
             st.dataframe(bottlenecks, use_container_width=True, hide_index=True)
             _csv_download(bottlenecks, "bottlenecks")
+            try:
+                top15 = bottlenecks.head(15).copy()
+                top15["UTILIZATION"] = top15["UTILIZATION"].fillna(0)
+                top15 = top15.sort_values("PICK_TOTAL")
+                st.plotly_chart(
+                    px.bar(
+                        top15, x="PICK_TOTAL", y="PLATZ_ID", orientation="h",
+                        color="UTILIZATION", color_continuous_scale="RdYlGn_r",
+                        range_color=[0, 120],
+                        title="Top-15 Engpässe (Picks gesamt, Farbe = Auslastung %)",
+                        labels=dict(PICK_TOTAL="Picks gesamt", PLATZ_ID="Platz"),
+                    ),
+                    use_container_width=True,
+                )
+            except Exception as exc:  # Diagramm ist optional, Tabelle zaehlt.
+                st.caption(f"(Diagramm konnte nicht gezeichnet werden: {exc})")
 
     with tab_free:
         st.markdown(
