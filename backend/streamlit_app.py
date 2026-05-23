@@ -275,6 +275,26 @@ TR: dict[str, dict[str, str]] = {
               "candidates for an ABC adjustment.",
     },
     "abc_byfreq": {"de": "**Plätze nach Pickfrequenz**", "en": "**Slots by pick frequency**"},
+    "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
+    "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
+    "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
+    "abc_a_thresh": {"de": "A bis kumul. %", "en": "A up to cum. %"},
+    "abc_b_thresh": {"de": "B bis kumul. %", "en": "B up to cum. %"},
+    "abc_pareto": {
+        "de": "Pareto-Kurve — kumulativer Anteil der Bewegungen",
+        "en": "Pareto curve — cumulative share of movements",
+    },
+    "abc_px_slots": {"de": "Plätze (nach Picks sortiert)", "en": "Slots (sorted by picks)"},
+    "abc_px_articles": {"de": "Artikel (nach Bewegungen sortiert)", "en": "Articles (sorted by movements)"},
+    "abc_py": {"de": "kumulativer Anteil %", "en": "cumulative share %"},
+    "abc_intro_articles": {
+        "de": "**ABC nach Artikeln** — Artikel nach Bewegungen (TPA). "
+              "A = Top-Artikel bis zur A-Schwelle, dann B, Rest C.",
+        "en": "**ABC by articles** — articles by movements (TPA). "
+              "A = top articles up to the A threshold, then B, rest C.",
+    },
+    "abc_dist": {"de": "ABC-Verteilung", "en": "ABC distribution"},
+    "abc_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
     "tp_intro": {
         "de": "**Durchsatz** — Anzahl Lagerbewegungen je Tag (aus den TPA-Daten). "
               "Zeitraum über den Sidebar-Regler einstellbar.",
@@ -490,6 +510,44 @@ def load_pick_heatmap() -> pd.DataFrame:
         """,
         con,
     )
+
+
+@st.cache_data(ttl=3600, show_spinner="Lade Artikel-ABC ...")
+def load_abc_articles(limit: int = 50000) -> pd.DataFrame:
+    """Bewegungen je Artikel (ARTIKELNR) aus den TPA-Daten."""
+    con = get_connection()
+    return pd.read_sql_query(
+        f"""
+        SELECT TRIM(ARTIKELNR) AS artikel,
+               TRIM(COALESCE(ARTBEZ1, '')) AS bezeichnung,
+               COUNT(*) AS bewegungen
+        FROM "{TPA_TABLE}"
+        WHERE TRIM(COALESCE(ARTIKELNR, '')) <> ''
+        GROUP BY artikel
+        ORDER BY bewegungen DESC
+        LIMIT ?
+        """,
+        con,
+        params=[limit],
+    )
+
+
+def classify_abc(
+    df: pd.DataFrame, value_col: str, a_pct: float, b_pct: float
+) -> pd.DataFrame:
+    """ABC nach kumulativem Anteil von value_col. Liefert Spalten CUM_% + ABC."""
+    out = df.sort_values(value_col, ascending=False).copy().reset_index(drop=True)
+    total = out[value_col].sum()
+    if total > 0:
+        out["CUM_%"] = (out[value_col].cumsum() / total * 100).round(2)
+        out["ABC"] = np.where(
+            out["CUM_%"] <= a_pct, "A",
+            np.where(out["CUM_%"] <= b_pct, "B", "C"),
+        )
+    else:
+        out["CUM_%"] = 0.0
+        out["ABC"] = "C"
+    return out
 
 
 def heatmap_color(util: float) -> str:
@@ -1039,33 +1097,79 @@ def main() -> None:
             t("retr_observe_d").format(n=observe_max), observe)
 
     with tab_abc:
-        st.markdown(t("abc_intro"))
-        abc_counts = (
-            filtered["ABC_CALC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
+        abc_mode = st.radio(
+            t("abc_mode"),
+            options=[t("abc_by_slots"), t("abc_by_articles")],
+            horizontal=True,
         )
-        fig = px.pie(
-            names=abc_counts.index,
-            values=abc_counts.values,
-            color=abc_counts.index,
-            color_discrete_map={"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"},
-            title=t("abc_chart"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        by_articles = abc_mode == t("abc_by_articles")
 
-        st.markdown(t("abc_cross_intro"))
-        cross = pd.crosstab(
-            filtered["ABC_KLASSE"].replace("", "—"),
-            filtered["ABC_CALC"].fillna("—"),
-        )
-        st.dataframe(cross, use_container_width=True)
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            a_thr = st.slider(t("abc_a_thresh"), 50, 95, 80, step=1)
+        with cc2:
+            b_thr = st.slider(t("abc_b_thresh"), a_thr + 1, 99, max(a_thr + 1, 95),
+                              step=1)
 
-        st.markdown(t("abc_byfreq"))
-        abc_table = filtered.sort_values("ANZ_PICKS", ascending=False).head(100)[
-            ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
-             "ANZ_PICKS", "CUMULATIVE_%", "ABC_KLASSE", "ABC_CALC"]
-        ]
-        st.dataframe(abc_table, use_container_width=True, hide_index=True)
-        _csv_download(abc_table, "abc_analyse")
+        abc_color = {"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"}
+
+        if by_articles:
+            st.markdown(t("abc_intro_articles"))
+            base = load_abc_articles()
+            data = classify_abc(base, "bewegungen", a_thr, b_thr) \
+                if not base.empty else base
+            px_label = t("abc_px_articles")
+            table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
+        else:
+            st.markdown(t("abc_intro"))
+            data = classify_abc(filtered, "ANZ_PICKS", a_thr, b_thr)
+            px_label = t("abc_px_slots")
+            table_cols = ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                          "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC"]
+
+        if data.empty:
+            st.info(t("no_data_filters"))
+        else:
+            # Verteilung (Pie + Anzahl je Klasse)
+            counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
+            d1, d2 = st.columns([2, 1])
+            with d1:
+                st.plotly_chart(
+                    px.pie(names=counts.index, values=counts.values,
+                           color=counts.index, color_discrete_map=abc_color,
+                           title=t("abc_dist")),
+                    use_container_width=True,
+                )
+            with d2:
+                st.markdown(f"**{t('abc_count')}**")
+                for klasse in ["A", "B", "C"]:
+                    st.metric(klasse, f"{int(counts[klasse]):,}".replace(",", "."))
+
+            # Pareto-Kurve: kumulativer Anteil ueber sortierte Plaetze/Artikel
+            pareto = data.reset_index(drop=True)
+            pareto["rank"] = pareto.index + 1
+            fig = px.area(
+                pareto, x="rank", y="CUM_%", title=t("abc_pareto"),
+                labels={"rank": px_label, "CUM_%": t("abc_py")},
+            )
+            fig.add_hline(y=a_thr, line_dash="dash", line_color="#c62828",
+                          annotation_text=f"A ≤ {a_thr}%")
+            fig.add_hline(y=b_thr, line_dash="dash", line_color="#f9a825",
+                          annotation_text=f"B ≤ {b_thr}%")
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
+            if not by_articles:
+                st.markdown(t("abc_cross_intro"))
+                cross = pd.crosstab(
+                    data["ABC_KLASSE"].replace("", "—"), data["ABC"],
+                )
+                st.dataframe(cross, use_container_width=True)
+
+            st.markdown(t("abc_byfreq"))
+            table = data[[c for c in table_cols if c in data.columns]].head(200)
+            st.dataframe(table, use_container_width=True, hide_index=True)
+            _csv_download(table, "abc_articles" if by_articles else "abc_slots")
 
     with tab_trend:
         st.markdown(t("tp_intro"))
