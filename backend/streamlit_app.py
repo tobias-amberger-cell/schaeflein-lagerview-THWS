@@ -234,6 +234,17 @@ def heatmap_color(util: float) -> str:
     return "GREEN"
 
 
+def _csv_download(df: pd.DataFrame, key: str, label: str = "⬇️ Als CSV") -> None:
+    """Einheitlicher CSV-Export-Button (utf-8-sig fuer Excel-Umlaute)."""
+    st.download_button(
+        label,
+        df.to_csv(index=False).encode("utf-8-sig"),
+        file_name=f"{key}.csv",
+        mime="text/csv",
+        key=f"dl_{key}",
+    )
+
+
 def apply_filters(
     df: pd.DataFrame,
     hallen: list[str],
@@ -359,13 +370,35 @@ def main() -> None:
     ])
 
     with tab_hallen:
+        st.markdown(
+            "**Hallen-Übersicht** — Belegung, Auslastung und ABC-Verteilung je "
+            "Halle (Regal 1–16 = Halle 1, 17–32 = Halle 2, Rest = Halle 3)."
+        )
         zones = (
             filtered.groupby("HALLE")
-            .agg(total_slots=("PLATZ_ID", "count"),
-                 occupied=("BELEGT", "sum"))
+            .agg(
+                total_slots=("PLATZ_ID", "count"),
+                occupied=("BELEGT", "sum"),
+                avg_util=("UTILIZATION", "mean"),
+                picks=("ANZ_PICKS", "sum"),
+            )
             .reset_index()
         )
         zones["frei"] = zones["total_slots"] - zones["occupied"]
+        zones["Belegung_%"] = (zones["occupied"] / zones["total_slots"] * 100).round(1)
+        zones["Ø_Auslastung_%"] = zones["avg_util"].round(1)
+        # ABC-Verteilung je Halle.
+        abc_pivot = (
+            filtered.pivot_table(
+                index="HALLE", columns="ABC_CALC", values="PLATZ_ID",
+                aggfunc="count", fill_value=0,
+            )
+            .reindex(columns=["A", "B", "C"], fill_value=0)
+            .reset_index()
+            .rename(columns={"A": "A-Plätze", "B": "B-Plätze", "C": "C-Plätze"})
+        )
+        zones = zones.merge(abc_pivot, on="HALLE", how="left")
+
         fig = px.bar(
             zones.melt(
                 id_vars="HALLE",
@@ -378,9 +411,24 @@ def main() -> None:
             title="Belegung pro Halle (gefiltert)",
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(zones, use_container_width=True, hide_index=True)
+
+        st.markdown("**Kennzahlen je Halle**")
+        show = zones[[
+            "HALLE", "total_slots", "occupied", "frei", "Belegung_%",
+            "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
+        ]].rename(columns={
+            "HALLE": "Halle", "total_slots": "Plätze", "occupied": "Belegt",
+            "frei": "Frei", "picks": "Picks gesamt",
+        })
+        st.dataframe(show, use_container_width=True, hide_index=True)
+        _csv_download(show, "hallen_kennzahlen")
 
     with tab_heat:
+        st.markdown(
+            "**Auslastungs-Heatmap** — durchschnittliche Auslastung "
+            "(`IST_LHM / MAX_LHM × 100`) je Regal und Ebene. Rot = voll/überlastet, "
+            "grün = viel Luft. Darunter die am stärksten ausgelasteten Regale."
+        )
         if filtered.empty:
             st.info("Keine Daten mit aktuellen Filtern.")
         else:
@@ -408,6 +456,23 @@ def main() -> None:
             col2.metric("🟡 40–79 %", int(color_counts["YELLOW"]))
             col3.metric("🔴 ≥ 80 %", int(color_counts["RED"]))
             col4.metric("⚪ unbekannt", int(color_counts["GREY"]))
+
+            st.markdown("**Regale nach Ø Auslastung**")
+            rack_util = (
+                filtered.groupby(["HALLE", "REGAL"])
+                .agg(
+                    Plätze=("PLATZ_ID", "count"),
+                    Ø_Auslastung_=("UTILIZATION", "mean"),
+                    Überlastet=("UTILIZATION", lambda s: int((s > 100).sum())),
+                )
+                .reset_index()
+                .rename(columns={"HALLE": "Halle", "REGAL": "Regal",
+                                 "Ø_Auslastung_": "Ø Auslastung %"})
+            )
+            rack_util["Ø Auslastung %"] = rack_util["Ø Auslastung %"].round(1)
+            rack_util = rack_util.sort_values("Ø Auslastung %", ascending=False)
+            st.dataframe(rack_util, use_container_width=True, hide_index=True)
+            _csv_download(rack_util, "regal_auslastung")
 
     with tab_pickheat:
         st.markdown(
@@ -447,6 +512,31 @@ def main() -> None:
                     .replace(",", ".")
                 )
 
+            c1, c2 = st.columns(2)
+            with c1:
+                per_wd = (
+                    ph.groupby("weekday")["picks"].sum().reindex(range(7), fill_value=0)
+                )
+                per_wd.index = [weekday_names[i] for i in per_wd.index]
+                st.plotly_chart(
+                    px.bar(per_wd, title="Picks je Wochentag",
+                           labels=dict(value="Picks", index="Wochentag")),
+                    use_container_width=True,
+                )
+            with c2:
+                per_hour = (
+                    ph.groupby("hour")["picks"].sum().reindex(range(24), fill_value=0)
+                )
+                st.plotly_chart(
+                    px.bar(per_hour, title="Picks je Stunde",
+                           labels=dict(value="Picks", index="Stunde")),
+                    use_container_width=True,
+                )
+            tbl = ph.copy()
+            tbl["Wochentag"] = tbl["weekday"].map(weekday_names)
+            tbl = tbl.rename(columns={"hour": "Stunde", "picks": "Picks"})
+            _csv_download(tbl[["Wochentag", "Stunde", "Picks"]], "pick_heatmap")
+
     with tab_bottle:
         st.markdown(
             "**Bottleneck-Analyse** — Plaetze mit hoher Pick-Frequenz "
@@ -464,22 +554,57 @@ def main() -> None:
                  "ANZ_PICKS", "PICK_COUNT_FAHR", "PICK_TOTAL", "UTILIZATION"]
             ]
         )
-        st.dataframe(bottlenecks, use_container_width=True, hide_index=True)
+        if bottlenecks.empty:
+            st.info("Keine Daten mit aktuellen Filtern.")
+        else:
+            top15 = bottlenecks.head(15).sort_values("PICK_TOTAL")
+            st.plotly_chart(
+                px.bar(
+                    top15, x="PICK_TOTAL", y="PLATZ_ID", orientation="h",
+                    color="UTILIZATION", color_continuous_scale="RdYlGn_r",
+                    range_color=[0, 120],
+                    title="Top-15 Engpässe (Picks gesamt, Farbe = Auslastung %)",
+                    labels=dict(PICK_TOTAL="Picks gesamt", PLATZ_ID="Platz"),
+                ),
+                use_container_width=True,
+            )
+            st.dataframe(bottlenecks, use_container_width=True, hide_index=True)
+            _csv_download(bottlenecks, "bottlenecks")
 
     with tab_free:
         st.markdown(
             "**Free Capacity** — Plaetze mit Restkapazitaet sortiert nach "
             "`MAX_LHM − IST_LHM`."
         )
+        free_all = filtered[filtered["FREE_CAPACITY"] > 0]
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Plätze mit freier Kapazität",
+                  f"{len(free_all):,}".replace(",", "."))
+        c2.metric("Freie LHM gesamt",
+                  f"{int(free_all['FREE_CAPACITY'].sum()):,}".replace(",", "."))
+        c3.metric("Ø freie LHM/Platz",
+                  f"{free_all['FREE_CAPACITY'].mean():.1f}"
+                  if not free_all.empty else "—")
+
+        if not free_all.empty:
+            by_hall = (
+                free_all.groupby("HALLE")["FREE_CAPACITY"].sum().reset_index()
+            )
+            st.plotly_chart(
+                px.bar(by_hall, x="HALLE", y="FREE_CAPACITY",
+                       title="Freie Kapazität (LHM) je Halle",
+                       labels=dict(FREE_CAPACITY="Freie LHM", HALLE="Halle")),
+                use_container_width=True,
+            )
         free = (
-            filtered[filtered["FREE_CAPACITY"] > 0]
-            .sort_values("FREE_CAPACITY", ascending=False)
+            free_all.sort_values("FREE_CAPACITY", ascending=False)
             .head(100)[
                 ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
                  "MAX_LHM", "IST_LHM", "FREE_CAPACITY", "UTILIZATION"]
             ]
         )
         st.dataframe(free, use_container_width=True, hide_index=True)
+        _csv_download(free, "free_capacity")
 
     _MASSNAHME_COLS = [
         "PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
@@ -498,6 +623,8 @@ def main() -> None:
             st.dataframe(
                 df.head(200)[cols], use_container_width=True, hide_index=True
             )
+            key = "".join(c if c.isalnum() else "_" for c in titel.lower())
+            _csv_download(df[cols], f"massnahme_{key}")
         st.divider()
 
     with tab_umlagern:
@@ -656,16 +783,31 @@ def main() -> None:
             title="ABC-Verteilung (berechnet)",
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(
-            filtered.sort_values("ANZ_PICKS", ascending=False).head(50)[
-                ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
-                 "ANZ_PICKS", "CUMULATIVE_%", "ABC_KLASSE", "ABC_CALC"]
-            ],
-            use_container_width=True,
-            hide_index=True,
+
+        st.markdown(
+            "**Stamm-ABC vs. berechnet** — Zeilen = hinterlegte `ABC_KLASSE`, "
+            "Spalten = aus Picks berechnete `ABC_CALC`. Werte abseits der Diagonale "
+            "sind Kandidaten für eine ABC-Anpassung."
         )
+        cross = pd.crosstab(
+            filtered["ABC_KLASSE"].replace("", "—"),
+            filtered["ABC_CALC"].fillna("—"),
+        )
+        st.dataframe(cross, use_container_width=True)
+
+        st.markdown("**Plätze nach Pickfrequenz**")
+        abc_table = filtered.sort_values("ANZ_PICKS", ascending=False).head(100)[
+            ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+             "ANZ_PICKS", "CUMULATIVE_%", "ABC_KLASSE", "ABC_CALC"]
+        ]
+        st.dataframe(abc_table, use_container_width=True, hide_index=True)
+        _csv_download(abc_table, "abc_analyse")
 
     with tab_trend:
+        st.markdown(
+            "**Durchsatz** — Anzahl Lagerbewegungen je Tag (aus den TPA-Daten). "
+            "Zeitraum über den Sidebar-Regler „Durchsatz-Zeitraum“ einstellbar."
+        )
         trend = load_throughput_trend(days)
         if trend.empty:
             st.info("Keine Bewegungsdaten gefunden.")
@@ -677,9 +819,39 @@ def main() -> None:
             fig.update_layout(yaxis_title="Bewegungen", xaxis_title="Datum")
             st.plotly_chart(fig, use_container_width=True)
 
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Ø pro Tag", f"{trend['movements'].mean():.0f}")
+            c2.metric("Maximum", f"{int(trend['movements'].max()):,}".replace(",", "."))
+            c3.metric("Summe Zeitraum",
+                      f"{int(trend['movements'].sum()):,}".replace(",", "."))
+
+            tbl = trend.copy()
+            tbl["day"] = tbl["day"].dt.strftime("%Y-%m-%d")
+            tbl = tbl.rename(columns={"day": "Datum", "movements": "Bewegungen"})
+            tbl = tbl.sort_values("Datum", ascending=False)
+            st.dataframe(tbl, use_container_width=True, hide_index=True)
+            _csv_download(tbl, "durchsatz")
+
     with tab_top:
+        st.markdown(
+            "**Top-Artikel** — Artikel mit den meisten Bewegungen (aus den "
+            "TPA-Daten). Anzahl über den Sidebar-Regler „Top-Artikel anzeigen“."
+        )
         top = load_top_articles(article_limit)
-        st.dataframe(top, use_container_width=True, hide_index=True)
+        if top.empty:
+            st.info("Keine Artikelbewegungen gefunden.")
+        else:
+            chart_df = top.head(min(article_limit, 25)).sort_values("bewegungen")
+            st.plotly_chart(
+                px.bar(
+                    chart_df, x="bewegungen", y="artikel", orientation="h",
+                    title="Meistbewegte Artikel",
+                    labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
+                ),
+                use_container_width=True,
+            )
+            st.dataframe(top, use_container_width=True, hide_index=True)
+            _csv_download(top, "top_artikel")
 
     with tab_3d:
         # GitHub-Release-Assets senden kein CORS -> der Browser wuerde das
