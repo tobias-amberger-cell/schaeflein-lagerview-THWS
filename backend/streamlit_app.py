@@ -124,6 +124,43 @@ controls.autoRotate = AUTOROTATE;
 controls.autoRotateSpeed = 0.8;
 controls.addEventListener('change', requestRender);
 
+// --- "Schweben" durch die Regale per WASD ---------------------------------
+// OrbitControls bleibt voll erhalten (Drehen per Maus + Klick). Zusaetzlich
+// bewegen WASD/QE Kamera UND Orbit-Zielpunkt gemeinsam durch den Raum -> man
+// fliegt in die Gaenge und kann dort weiter drehen/klicken. Kein Pointer-Lock,
+// damit das Anklicken nicht kaputt geht.
+const keys = {};
+let moveScale = 1;  // wird nach dem Laden an die Modellgroesse angepasst
+function onKey(e, down){
+  const k = e.key.toLowerCase();
+  if(['w','a','s','d','q','e'].includes(k)){ keys[k] = down; e.preventDefault(); }
+  if(e.key === 'Shift'){ keys.shift = down; }
+}
+window.addEventListener('keydown', (e) => onKey(e, true));
+window.addEventListener('keyup', (e) => onKey(e, false));
+// Canvas fokussierbar machen, damit es Tasten empfaengt.
+renderer.domElement.tabIndex = 0;
+renderer.domElement.addEventListener('pointerdown', () => renderer.domElement.focus());
+
+const _fwd = new THREE.Vector3(), _right = new THREE.Vector3(), _mv = new THREE.Vector3();
+function updateMovement(){
+  const speed = moveScale * (keys.shift ? 3 : 1);
+  _fwd.subVectors(controls.target, camera.position).normalize();
+  _right.crossVectors(_fwd, camera.up).normalize();
+  _mv.set(0, 0, 0);
+  if(keys.w) _mv.addScaledVector(_fwd, speed);
+  if(keys.s) _mv.addScaledVector(_fwd, -speed);
+  if(keys.d) _mv.addScaledVector(_right, speed);
+  if(keys.a) _mv.addScaledVector(_right, -speed);
+  if(keys.e) _mv.y += speed;
+  if(keys.q) _mv.y -= speed;
+  if(_mv.lengthSq() === 0) return false;
+  camera.position.add(_mv);
+  controls.target.add(_mv);  // Zielpunkt mitnehmen -> man "fliegt", Orbit bleibt
+  needsRender = true;
+  return true;
+}
+
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let selected = null, selectedOrigMat = null;
@@ -241,6 +278,7 @@ new GLTFLoader().load('__GLB__',
     camera.position.set(center.x + dist * 0.9, center.y + dist * 0.6, center.z + dist * 0.9);
     camera.near = maxDim / 1000; camera.far = maxDim * 10;
     camera.updateProjectionMatrix();
+    moveScale = maxDim * 0.004;  // Flug-Geschwindigkeit relativ zur Modellgroesse
     controls.update();
     loadingEl.style.display = 'none';
     requestRender();
@@ -253,10 +291,12 @@ new GLTFLoader().load('__GLB__',
 
 function animate(){
   requestAnimationFrame(animate);
+  // WASD-Flug zuerst (bewegt Kamera + Zielpunkt), dann Orbit-Update.
+  const moving = updateMovement();
   // controls.update() liefert true, solange das Damping die Kamera bewegt;
   // 'change' setzt needsRender dabei ohnehin. Nur dann tatsaechlich rendern.
   const moved = controls.update();
-  if(needsRender || moved){
+  if(needsRender || moved || moving){
     renderer.render(scene, camera);
     needsRender = false;
   }
@@ -657,9 +697,12 @@ TR: dict[str, dict[str, str]] = {
     "d3_reset": {"de": "Ansicht zurücksetzen", "en": "Reset view"},
     "d3_caption": {
         "de": "Steuerung: Ziehen = drehen, Scrollen = zoomen, Rechtsklick-Ziehen "
-              "= verschieben. Regler oben ändern Helligkeit/Schatten/Höhe.",
-        "en": "Controls: drag = rotate, scroll = zoom, right-drag = pan. Sliders "
-              "above change brightness/shadow/height.",
+              "= verschieben. **W A S D = durch die Regale fliegen**, Q/E = "
+              "runter/hoch, Shift = schneller (erst ins Modell klicken). "
+              "Klick auf einen Platz zeigt seine Daten.",
+        "en": "Controls: drag = rotate, scroll = zoom, right-drag = pan. "
+              "**W A S D = fly through the racks**, Q/E = down/up, Shift = "
+              "faster (click into the model first). Click a slot to see its data.",
     },
     "abc3d_head": {"de": "### 🏷️ ABC je Lagerplatz", "en": "### 🏷️ ABC per slot"},
     "abc3d_intro": {
