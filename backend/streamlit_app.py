@@ -435,11 +435,12 @@ TR: dict[str, dict[str, str]] = {
         "de": "### 📥 Einlagern / Putaway\nWohin eingehende Ware gestellt werden sollte (freie Kapazität).",
         "en": "### 📥 Put-away\nWhere incoming goods should be stored (free capacity).",
     },
+    "sl_fastlevel": {"de": "Fast-Lane bis Ebene", "en": "Fast lane up to level"},
     "sl_reservelevel": {"de": "Reserve-Ebene ab", "en": "Reserve level from"},
     "put_fast_t": {"de": "Fast-Lane (Schnelldreher)", "en": "Fast lane (fast movers)"},
     "put_fast_d": {
-        "de": "Freie A-Plätze auf niedriger Ebene – ideal für Schnelldreher.",
-        "en": "Free A slots on low level – ideal for fast movers.",
+        "de": "Freie A-Plätze bis Ebene {n} – ideal für Schnelldreher.",
+        "en": "Free A slots up to level {n} – ideal for fast movers.",
     },
     "put_reserve_t": {"de": "Reserve (hohe Ebenen)", "en": "Reserve (high levels)"},
     "put_reserve_d": {
@@ -1498,13 +1499,18 @@ def main() -> None:
 
     with tab_einlagern:
         st.markdown(t("put_head"))
-        reserve_level = st.slider(t("sl_reservelevel"), 2, 6, 3)
+        c1, c2 = st.columns(2)
+        with c1:
+            fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2)
+        with c2:
+            reserve_level = st.slider(t("sl_reservelevel"), 2, 6, 3)
         free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
 
-        # Fast-Lane: freie A-Plaetze ganz unten -> kurze Wege fuer Schnelldreher.
+        # Fast-Lane: freie A-Plaetze auf niedriger Ebene -> kurze Wege fuer
+        # Schnelldreher. Schwelle ueber den Slider fast_level einstellbar.
         fast_lane = free_slots[
             (free_slots["ABC_KLASSE"] == "A")
-            & (free_slots["EBENE"] <= 2)
+            & (free_slots["EBENE"] <= fast_level)
             & (free_slots["ZUSTAND"] < 150)
         ].sort_values("FREE_CAPACITY", ascending=False)
         # Reserve: freie Plaetze in hohen Ebenen -> fuer Langsamdreher/Puffer.
@@ -1517,7 +1523,7 @@ def main() -> None:
             .sort_values("REGAL")
 
         _massnahme_kategorie(
-            t("put_fast_t"), t("put_fast_d"),
+            t("put_fast_t"), t("put_fast_d").format(n=fast_level),
             fast_lane, extra_cols=["FREE_CAPACITY"])
         _massnahme_kategorie(
             t("put_reserve_t"),
