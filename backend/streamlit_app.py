@@ -371,7 +371,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const DATA = __DATA__;
 const L = __LABELS__;
 const FOCUS = "__FOCUS__";
+const ABCCOLOR = __ABCCOLOR__;        // true = nach ABC faerben, false = neutral
 const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
+const WOOD = 0xc19a6b;                // neutrale Paletten-Farbe
 
 const host = document.getElementById('view');
 const panel = document.getElementById('panel');
@@ -449,6 +451,11 @@ function showSlot(id){
 }
 function fillLegend(counts){
   const fmtN = (n) => n.toLocaleString('de-DE');
+  if(!ABCCOLOR){   // neutrale Paletten -> nur Gesamtzahl statt ABC-Farben
+    const total = counts.A + counts.B + counts.C;
+    legendEl.innerHTML = '<div style="font-weight:600;">'+L.legend+': '+fmtN(total)+'</div>';
+    return;
+  }
   const row = (hex, label, n) => '<div style="display:flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:2px;background:'+hex+';display:inline-block;"></span><span style="flex:1;">'+label+'</span><span style="font-weight:600;margin-left:8px;">'+fmtN(n)+'</span></div>';
   legendEl.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">'+L.legend+'</div>'+row('#c62828','A',counts.A)+row('#f9a825','B',counts.B)+row('#2e7d32','C',counts.C);
 }
@@ -477,40 +484,58 @@ const SPECIAL_X = -CELL_ * 5;        // Sonderblock links vom ersten Regal
 const specialPos = {};               // id -> {c: Spalte, e: Reihe} (4 Reihen)
 specialIds.forEach((id,k) => { specialPos[id] = { c: Math.floor(k/4), e: k%4 }; });
 
-const CELL = 1.0, RACK_PITCH = 2.2;
+const CELL = 1.0, BAY = 3, BAY_GAP = 0.6, RACK_PITCH = 3.6;
+const BOX_D = 1.5, BOX_H = 0.78, BOX_W = 0.82;   // Palette: Tiefe(X)/Hoehe(Y)/Breite(Z)
+function zForCol(c){ return c*CELL + Math.floor(c/BAY)*BAY_GAP; }  // Bays mit Luecke
+
 const N = ids.length;
-const geo = new THREE.BoxGeometry(CELL*0.85, CELL*0.85, CELL*0.85);
-const mat = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+const geo = new THREE.BoxGeometry(BOX_D, BOX_H, BOX_W);
+const mat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
 const inst = new THREE.InstancedMesh(geo, mat, N);
 inst.frustumCulled = false;
 const dummy = new THREE.Object3D();
 const idByInst = new Array(N), instById = {}, pos = new Array(N), baseColor = new Array(N);
 const counts = { A:0, B:0, C:0 };
 const col = new THREE.Color();
-const rackMaxZ = {}, rackMaxY = {};  // Ausmaße je Regal (fuer die Rahmen)
-let gMinX=1e9, gMaxX=-1e9, gMinZ=1e9, gMaxZ=-1e9;  // Gesamt-Ausmaße (Boden)
+const rackMaxCol = {}, rackMaxY = {};  // max Spalte/Ebene je Regal (fuer Struktur)
+let gMinX=1e9, gMaxX=-1e9, gMinZ=1e9, gMaxZ=-1e9;
 for(let i=0; i<N; i++){
   const id = ids[i], d = DATA[id];
   let x, y, z;
   if(d.r === 0){                       // Sonderplatz -> kompakter Block
     const sp = specialPos[id];
-    x = SPECIAL_X; z = sp.c * CELL; y = sp.e * CELL;
+    x = SPECIAL_X; z = zForCol(sp.c); y = sp.e * CELL;
   } else {                             // normales Regal
-    x = rackX[d.r] * RACK_PITCH; z = fachCol[d.r][d.f] * CELL; y = d.e * CELL;
-    if(z > (rackMaxZ[d.r]||0)) rackMaxZ[d.r] = z;
+    const cidx = fachCol[d.r][d.f];
+    x = rackX[d.r] * RACK_PITCH; z = zForCol(cidx); y = d.e * CELL;
+    if(cidx > (rackMaxCol[d.r]||0)) rackMaxCol[d.r] = cidx;
     if(y > (rackMaxY[d.r]||0)) rackMaxY[d.r] = y;
   }
   dummy.position.set(x, y, z); dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
   const key = (d.ac==='A'||d.ac==='B'||d.ac==='C') ? d.ac : 'grey';
   if(counts[key]!=null) counts[key]++;
-  col.setHex(ABC_HEX[key]); inst.setColorAt(i, col);
-  baseColor[i] = ABC_HEX[key]; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z};
+  const cval = ABCCOLOR ? ABC_HEX[key] : WOOD;
+  col.setHex(cval); inst.setColorAt(i, col);
+  baseColor[i] = cval; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z};
   if(x<gMinX) gMinX=x; if(x>gMaxX) gMaxX=x;
   if(z<gMinZ) gMinZ=z; if(z>gMaxZ) gMaxZ=z;
 }
 inst.instanceMatrix.needsUpdate = true;
 if(inst.instanceColor) inst.instanceColor.needsUpdate = true;
 scene.add(inst);
+
+// Paletten-Sockel (dunkles Holz) unter jeder Palette -> 3D/Paletten-Look
+const baseInst = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(BOX_D*1.02, 0.12, BOX_W*1.05),
+  new THREE.MeshStandardMaterial({ color: 0x6d4c41, roughness: 0.95 }), N);
+baseInst.frustumCulled = false;
+for(let i=0; i<N; i++){
+  const p = pos[i];
+  dummy.position.set(p.x, p.y - BOX_H/2 - 0.07, p.z); dummy.updateMatrix();
+  baseInst.setMatrixAt(i, dummy.matrix);
+}
+baseInst.instanceMatrix.needsUpdate = true;
+scene.add(baseInst);
 fillLegend(counts);
 loadingEl.style.display = 'none';
 
@@ -549,23 +574,27 @@ function makeLabel(text){
 regals.forEach(r => {
   const x = rackX[r] * RACK_PITCH;
   const ncols = Object.keys(fachCol[r]).length;
-  const zmax = (ncols - 1) * CELL, ymax = rackMaxY[r] || 0;
+  const zmax = zForCol(ncols - 1), ymax = rackMaxY[r] || 0;
   const levels = Math.round(ymax / CELL);
   const postH = ymax + CELL;
-  // Staender alle 6 Faecher (+ am Regalende), beidseitig leicht versetzt
-  for(let c = 0; c <= ncols - 1; c += 6){
-    pushBox(upM, x-0.45, ymax/2, c*CELL, 0.12, postH, 0.12);
-    pushBox(upM, x+0.45, ymax/2, c*CELL, 0.12, postH, 0.12);
+  const px = BOX_D/2 + 0.05;
+  // Staender an jeder Bay-Grenze, beidseitig
+  for(let c = 0; c < ncols; c += BAY){
+    const zc = zForCol(c) - CELL*0.5 - BAY_GAP*0.4;
+    pushBox(upM, x-px, ymax/2, zc, 0.14, postH, 0.14);
+    pushBox(upM, x+px, ymax/2, zc, 0.14, postH, 0.14);
   }
-  pushBox(upM, x-0.45, ymax/2, zmax, 0.12, postH, 0.12);
-  pushBox(upM, x+0.45, ymax/2, zmax, 0.12, postH, 0.12);
+  const zEnd = zmax + CELL*0.5;
+  pushBox(upM, x-px, ymax/2, zEnd, 0.14, postH, 0.14);
+  pushBox(upM, x+px, ymax/2, zEnd, 0.14, postH, 0.14);
   // Querträger je Ebene (Fachboden, knapp unter den Paletten)
   for(let e = 0; e <= levels; e++){
-    pushBox(beamM, x-0.4, e*CELL - 0.45, zmax/2, 0.08, 0.09, zmax + CELL);
-    pushBox(beamM, x+0.4, e*CELL - 0.45, zmax/2, 0.08, 0.09, zmax + CELL);
+    const by = e*CELL - BOX_H/2 - 0.08;
+    pushBox(beamM, x-px, by, zmax/2, 0.1, 0.1, zmax + CELL);
+    pushBox(beamM, x+px, by, zmax/2, 0.1, 0.1, zmax + CELL);
   }
   const lab = makeLabel('R' + r);
-  lab.position.set(x, ymax + CELL*2.0, -CELL*1.5);
+  lab.position.set(x, ymax + CELL*2.2, -CELL*1.5);
   lab.scale.set(3, 1.5, 1);
   frameGroup.add(lab);
 });
@@ -596,7 +625,8 @@ controls.target.copy(center);
 const maxDim = Math.max(size.x, size.y, size.z);
 moveScale = maxDim * 0.004;
 const dist = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
-camera.position.set(center.x + dist*0.8, center.y + dist*0.6, center.z + dist*0.8);
+// Schraege 3/4-Ansicht von vorne-oben (aehnlich der CAD-Ansicht)
+camera.position.set(center.x + dist*0.45, center.y + dist*0.40, center.z - dist*0.85);
 camera.near = Math.max(maxDim/1000, 0.1); camera.far = maxDim * 10;
 camera.updateProjectionMatrix(); controls.update();
 
@@ -2322,14 +2352,20 @@ def main() -> None:
         focus_id = search_platz if search_platz.isdigit() else ""
 
         if schema_mode:
-            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
-                                      key="d3_height_schema")
+            sc1, sc2 = st.columns([1, 1])
+            with sc1:
+                schema_abc = st.checkbox(t("d3_color_abc"), value=False,
+                                         key="d3_abc_schema")
+            with sc2:
+                viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
+                                          key="d3_height_schema")
             html = (
                 _SCHEMA_VIEWER_HTML
                 .replace("__HEIGHT__", str(viewer_height))
                 .replace("__DATA__", slot_json)
                 .replace("__LABELS__", labels_json)
                 .replace("__FOCUS__", focus_id)
+                .replace("__ABCCOLOR__", "true" if schema_abc else "false")
             )
             components.html(html, height=viewer_height + 16)
             st.caption(t("d3_schema_caption"))
