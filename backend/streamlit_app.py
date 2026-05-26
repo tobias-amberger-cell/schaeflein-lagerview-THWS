@@ -301,6 +301,7 @@ TR: dict[str, dict[str, str]] = {
     },
     # Tab-Titel
     "tab_halls": {"de": "Hallen", "en": "Halls"},
+    "tab_misc": {"de": "Sonstiges", "en": "Other"},
     "tab_util": {"de": "Auslastungs-Heatmap", "en": "Utilization heatmap"},
     "tab_pick": {"de": "Pick-Heatmap", "en": "Pick heatmap"},
     "tab_bottle": {"de": "Bottlenecks", "en": "Bottlenecks"},
@@ -1135,17 +1136,16 @@ def main() -> None:
 
     # --- Register/Tabs ---------------------------------------------------
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
-    # Drei Gruppen: (1) Analyse (Hallen..Free), (2) Steuermassnahmen
-    # (Umlagern/Nachschub/Einlagern/Auslagern – dieselben Regeln wie die App),
-    # (3) Auswertung/Extras (ABC, Durchsatz, Top-Artikel, Artikel-Detail, 3D).
-    (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_umlagern,
+    # Drei Gruppen: (1) Hallen + "Sonstiges" (gebuendelte Analyse-Heatmaps),
+    # (2) Steuermassnahmen (Umlagern/Nachschub/Einlagern/Auslagern – dieselben
+    # Regeln wie die App), (3) Auswertung/Extras (ABC, Durchsatz, Top-Artikel,
+    # Artikel-Detail, 3D). "Sonstiges" enthaelt die Unter-Tabs Auslastungs-/
+    # Pick-Heatmap, Bottlenecks und Free Capacity (siehe unten).
+    (tab_hallen, tab_sonstiges, tab_umlagern,
      tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_trend, tab_top,
      tab_article, tab_3d) = st.tabs([
         t("tab_halls"),
-        t("tab_util"),
-        t("tab_pick"),
-        t("tab_bottle"),
-        t("tab_free"),
+        t("tab_misc"),
         t("tab_relocate"),
         t("tab_replenish"),
         t("tab_putaway"),
@@ -1156,6 +1156,15 @@ def main() -> None:
         t("tab_article"),
         t("tab_3d"),
     ])
+
+    # "Sonstiges": Unter-Tabs fuer die vier Analyse-Heatmaps. Die Unter-Tab-
+    # Objekte werden hier (im Kontext von tab_sonstiges) erzeugt; ihre Inhalte
+    # folgen weiter unten als `with sub_*` und landen dadurch verschachtelt
+    # unter "Sonstiges".
+    with tab_sonstiges:
+        sub_heat, sub_pickheat, sub_bottle, sub_free = st.tabs([
+            t("tab_util"), t("tab_pick"), t("tab_bottle"), t("tab_free"),
+        ])
 
     with tab_hallen:
         st.markdown(t("halls_intro"))
@@ -1208,7 +1217,7 @@ def main() -> None:
         st.dataframe(show, use_container_width=True, hide_index=True)
         _csv_download(show, "hallen_kennzahlen")
 
-    with tab_heat:
+    with sub_heat:
         st.markdown(t("heat_intro"))
         if filtered.empty:
             st.info(t("no_data_filters"))
@@ -1255,7 +1264,7 @@ def main() -> None:
             st.dataframe(rack_util, use_container_width=True, hide_index=True)
             _csv_download(rack_util, "regal_auslastung")
 
-    with tab_pickheat:
+    with sub_pickheat:
         st.markdown(t("pick_intro"))
         _mov_filter_note()
         ph = agg_pick_heatmap(tpa)
@@ -1319,7 +1328,7 @@ def main() -> None:
                                       "picks": "Picks"})
             _csv_download(tbl[["Wochentag", "Stunde", "Picks"]], "pick_heatmap")
 
-    with tab_bottle:
+    with sub_bottle:
         st.markdown(t("bottle_intro"))
         bottlenecks = (
             filtered.assign(
@@ -1354,7 +1363,7 @@ def main() -> None:
             except Exception as exc:  # Diagramm ist optional, Tabelle zaehlt.
                 st.caption(f"(Diagramm konnte nicht gezeichnet werden: {exc})")
 
-    with tab_free:
+    with sub_free:
         st.markdown(t("free_intro"))
         free_all = filtered[filtered["FREE_CAPACITY"] > 0]
         c1, c2, c3 = st.columns(3)
