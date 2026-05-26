@@ -119,7 +119,7 @@ dir.position.set(1, 2, 1);
 scene.add(dir);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+controls.enableDamping = false;  // kein Nachziehen/Gleiten: stoppt beim Loslassen
 controls.autoRotate = AUTOROTATE;
 controls.autoRotateSpeed = 0.8;
 controls.addEventListener('change', requestRender);
