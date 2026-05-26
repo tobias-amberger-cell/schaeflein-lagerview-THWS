@@ -441,6 +441,16 @@ TR: dict[str, dict[str, str]] = {
         "de": "### 🔄 Umlagern\nDatenbasierte Umlager-Vorschläge.",
         "en": "### 🔄 Relocate\nData-driven relocation suggestions (same logic as the app).",
     },
+    "reloc_abc_help": {
+        "de": "Welche Klassen anzeigen: A blendet „Premium ungenutzt“ + „A weit "
+              "oben“ ein, C die „Heißen C-Plätze“.",
+        "en": "Which classes to show: A reveals ‘premium unused’ + ‘A high up’, "
+              "C the ‘hot C slots’.",
+    },
+    "reloc_pick_abc": {
+        "de": "Mindestens eine ABC-Klasse auswählen.",
+        "en": "Select at least one ABC class.",
+    },
     "sl_hotc": {"de": "Heiße C-Plätze ab Picks", "en": "Hot C slots from picks"},
     "sl_highlevel": {"de": "Hohe Ebene ab", "en": "High level from"},
     "reloc_unusedA_t": {"de": "Premium-Plätze ungenutzt", "en": "Premium slots unused"},
@@ -486,7 +496,7 @@ TR: dict[str, dict[str, str]] = {
     },
     "sl_fastlevel": {"de": "Fast-Lane bis Ebene", "en": "Fast lane up to level"},
     "sl_reservelevel": {"de": "Reserve-Ebene ab", "en": "Reserve level from"},
-    "put_fast_t": {"de": "Fast-Lane (Schnelldreher)", "en": "Fast lane (fast movers)"},
+    "put_fast_t": {"de": "Schnelldreher-Plätze", "en": "Fast-mover slots"},
     "put_fast_d": {
         "de": "Freie A-Plätze bis Ebene {n} – ideal für Schnelldreher.",
         "en": "Free A slots up to level {n} – ideal for fast movers.",
@@ -505,6 +515,7 @@ TR: dict[str, dict[str, str]] = {
         "de": "### 📤 Auslagern / Retrieval\nLangsamdreher/Ladenhüter, die gute Plätze blockieren und ausgelagert werden sollten.",
         "en": "### 📤 Retrieval\nSlow movers/dead stock blocking good slots that should be retrieved.",
     },
+    "sl_retrzone": {"de": "Pickzone bis Ebene", "en": "Pick zone up to level"},
     "sl_observe": {"de": "„Beobachten“ bis Picks", "en": "‘Observe’ up to picks"},
     "retr_crit_t": {"de": "Kritisch", "en": "Critical"},
     "retr_crit_d": {
@@ -779,6 +790,10 @@ def load_platz_full() -> pd.DataFrame:
         np.nan,
     )
     platz["FREE_CAPACITY"] = (platz["MAX_LHM"].fillna(0) - platz["IST_LHM"].fillna(0))
+    # WERT = Platzkapazitaet (MAX_LHM) x Picks. Ersatz fuer "Gewicht x Picks"
+    # (GEWICHT liegt in den Daten nur als 0 vor) -> grober Bedeutungswert je
+    # Platz fuer die Massnahmen-Tabellen.
+    platz["WERT"] = platz["MAX_LHM"].fillna(0) * platz["ANZ_PICKS"]
     platz["HALLE"] = platz["REGAL"].apply(_hall_for_regal)
     platz["BELEGT"] = platz["ZUSTAND"] > 0
     platz["DAYS_EMPTY"] = (
@@ -1219,10 +1234,10 @@ def main() -> None:
     # erzeugt; ihre Inhalte folgen weiter unten als `with sub_*` und landen
     # dadurch verschachtelt unter "Sonstiges".
     with tab_sonstiges:
-        (sub_heat, sub_pickheat, sub_bottle, sub_free, sub_trend,
-         sub_top) = st.tabs([
-            t("tab_util"), t("tab_pick"), t("tab_bottle"), t("tab_free"),
-            t("tab_tp"), t("tab_top"),
+        (sub_heat, sub_bottle, sub_free, sub_trend, sub_top,
+         sub_pickheat) = st.tabs([
+            t("tab_util"), t("tab_bottle"), t("tab_free"),
+            t("tab_tp"), t("tab_top"), t("tab_pick"),
         ])
 
     with tab_hallen:
@@ -1396,31 +1411,14 @@ def main() -> None:
             .sort_values(["PICK_TOTAL", "UTILIZATION"], ascending=[False, False])
             .head(50)[
                 ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
-                 "ANZ_PICKS", "PICK_COUNT_FAHR", "PICK_TOTAL", "UTILIZATION"]
+                 "ANZ_PICKS", "PICK_TOTAL", "MAX_LHM", "IST_LHM", "UTILIZATION"]
             ]
         )
         if bottlenecks.empty:
             st.info(t("no_data_filters"))
         else:
-            # Tabelle zuerst, damit sie auch erscheint, falls das Diagramm hakt.
             st.dataframe(bottlenecks, use_container_width=True, hide_index=True)
             _csv_download(bottlenecks, "bottlenecks")
-            try:
-                top15 = bottlenecks.head(15).copy()
-                top15["UTILIZATION"] = top15["UTILIZATION"].fillna(0)
-                top15 = top15.sort_values("PICK_TOTAL")
-                st.plotly_chart(
-                    px.bar(
-                        top15, x="PICK_TOTAL", y="PLATZ_ID", orientation="h",
-                        color="UTILIZATION", color_continuous_scale="RdYlGn_r",
-                        range_color=[0, 120],
-                        title=t("bottle_chart"),
-                        labels=dict(PICK_TOTAL="Picks gesamt", PLATZ_ID="Platz"),
-                    ),
-                    use_container_width=True,
-                )
-            except Exception as exc:  # Diagramm ist optional, Tabelle zaehlt.
-                st.caption(f"(Diagramm konnte nicht gezeichnet werden: {exc})")
 
     with sub_free:
         st.markdown(t("free_intro"))
@@ -1461,7 +1459,7 @@ def main() -> None:
     # welche Kategorie fallen) entsprechen der Logik der Flutter-App.
     _MASSNAHME_COLS = [
         "PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
-        "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM",
+        "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM", "WERT",
     ]
 
     def _massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
@@ -1483,10 +1481,16 @@ def main() -> None:
 
     with tab_umlagern:
         st.markdown(t("reloc_head"))
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
-            hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10)
+            # A/B/C-Auswahl: blendet die Kategorien nach ihrer Ziel-Klasse ein.
+            # A -> "Premium ungenutzt" + "A weit oben", C -> "Heisse C-Plaetze".
+            reloc_abc = st.multiselect(
+                t("abc"), ["A", "B", "C"], default=["A", "B", "C"],
+                key="reloc_abc", help=t("reloc_abc_help"))
         with c2:
+            hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10)
+        with c3:
             high_level = st.slider(t("sl_highlevel"), 2, 6, 4)
 
         # Regel 1: A-Platz (Premium) ohne Picks -> Premiumplatz verschwendet.
@@ -1508,12 +1512,17 @@ def main() -> None:
             & (filtered["ANZ_PICKS"] > 0)
         ].sort_values("ANZ_PICKS", ascending=False)
 
-        _massnahme_kategorie(
-            t("reloc_unusedA_t"), t("reloc_unusedA_d"), unused_a)
-        _massnahme_kategorie(
-            t("reloc_hotC_t"), t("reloc_hotC_d"), hot_c)
-        _massnahme_kategorie(
-            t("reloc_highA_t"), t("reloc_highA_d"), high_level_a)
+        if "A" in reloc_abc:
+            _massnahme_kategorie(
+                t("reloc_unusedA_t"), t("reloc_unusedA_d"), unused_a)
+        if "C" in reloc_abc:
+            _massnahme_kategorie(
+                t("reloc_hotC_t"), t("reloc_hotC_d"), hot_c)
+        if "A" in reloc_abc:
+            _massnahme_kategorie(
+                t("reloc_highA_t"), t("reloc_highA_d"), high_level_a)
+        if not reloc_abc:
+            st.info(t("reloc_pick_abc"))
 
     with tab_nachschub:
         st.markdown(t("replen_head"))
@@ -1524,7 +1533,6 @@ def main() -> None:
             pick_threshold = st.slider(t("sl_pickthresh"), 10, 300, 50, step=10)
         with c3:
             overdue_days = st.slider(t("sl_overdue"), 3, 60, 14)
-        medium_threshold = max(1, pick_threshold // 2)
 
         # Basis: leere Pickplaetze (IST_LHM=0) in der Pickzone (niedrige Ebene),
         # nicht gesperrt. Daraus drei Dringlichkeitsstufen:
@@ -1539,11 +1547,6 @@ def main() -> None:
         # ueberfaellig = dringend + schon zu lange leer (DAYS_EMPTY)
         overdue = urgent[urgent["DAYS_EMPTY"] >= overdue_days] \
             .sort_values("DAYS_EMPTY", ascending=False)
-        # mittel = leer mit mittlerer Frequenz (halbe Schwelle .. Schwelle)
-        medium = empty_pick[
-            (empty_pick["ANZ_PICKS"] >= medium_threshold)
-            & (empty_pick["ANZ_PICKS"] < pick_threshold)
-        ].sort_values("ANZ_PICKS", ascending=False)
 
         _massnahme_kategorie(
             t("replen_urgent_t"), t("replen_urgent_d"), urgent,
@@ -1552,49 +1555,38 @@ def main() -> None:
             t("replen_overdue_t"),
             t("replen_overdue_d").format(n=overdue_days),
             overdue, extra_cols=["DAYS_EMPTY"])
-        _massnahme_kategorie(
-            t("replen_medium_t"), t("replen_medium_d"), medium)
 
     with tab_einlagern:
         st.markdown(t("put_head"))
-        c1, c2 = st.columns(2)
-        with c1:
-            fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2)
-        with c2:
-            reserve_level = st.slider(t("sl_reservelevel"), 2, 6, 3)
+        fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2)
         free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
 
-        # Fast-Lane: freie A-Plaetze auf niedriger Ebene -> kurze Wege fuer
-        # Schnelldreher. Schwelle ueber den Slider fast_level einstellbar.
+        # Schnelldreher-Plaetze: freie A-Plaetze auf niedriger Ebene -> kurze
+        # Wege. Schwelle ueber den Slider fast_level einstellbar.
         fast_lane = free_slots[
             (free_slots["ABC_KLASSE"] == "A")
             & (free_slots["EBENE"] <= fast_level)
             & (free_slots["ZUSTAND"] < 150)
         ].sort_values("FREE_CAPACITY", ascending=False)
-        # Reserve: freie Plaetze in hohen Ebenen -> fuer Langsamdreher/Puffer.
-        reserve = free_slots[
-            (free_slots["EBENE"] >= reserve_level)
-            & (free_slots["ZUSTAND"] < 150)
-        ].sort_values("FREE_CAPACITY", ascending=False)
-        # Gesperrt (ZUSTAND>=150): bewusst NICHT bestuecken (Warnliste).
-        blocked = filtered[filtered["ZUSTAND"] >= 150] \
-            .sort_values("REGAL")
 
         _massnahme_kategorie(
             t("put_fast_t"), t("put_fast_d").format(n=fast_level),
             fast_lane, extra_cols=["FREE_CAPACITY"])
-        _massnahme_kategorie(
-            t("put_reserve_t"),
-            t("put_reserve_d").format(n=reserve_level),
-            reserve, extra_cols=["FREE_CAPACITY"])
-        _massnahme_kategorie(
-            t("put_blocked_t"), t("put_blocked_d"), blocked)
 
     with tab_auslagern:
         st.markdown(t("retr_head"))
-        observe_max = st.slider(t("sl_observe"), 1, 50, 5)
+        c1, c2 = st.columns(2)
+        with c1:
+            # Pickzone: nur niedrige Ebenen betrachten. 88% aller Plaetze haben
+            # 0 Picks (v.a. Reserve weit oben) -> ohne diese Grenze waeren die
+            # 0-Pick-Listen unbrauchbar gross. Standard: bis Ebene 2.
+            retr_zone = st.slider(t("sl_retrzone"), 1, 6, 2)
+        with c2:
+            observe_max = st.slider(t("sl_observe"), 1, 50, 5)
         belegt = filtered[
-            (filtered["BELEGT"]) & (filtered["ZUSTAND"] < 150)
+            (filtered["BELEGT"])
+            & (filtered["ZUSTAND"] < 150)
+            & (filtered["EBENE"] <= retr_zone)
         ]
 
         # kritisch: belegter A-Platz mit 0 Picks -> Premiumplatz von Ladenhueter
@@ -1642,12 +1634,10 @@ def main() -> None:
             base = agg_articles(tpa)
             data = classify_abc(base, "bewegungen", a_thr, b_thr) \
                 if not base.empty else base
-            px_label = t("abc_px_articles")
             table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
         else:
             st.markdown(t("abc_intro"))
             data = classify_abc(filtered, "ANZ_PICKS", a_thr, b_thr)
-            px_label = t("abc_px_slots")
             table_cols = ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
                           "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC"]
 
@@ -1669,27 +1659,8 @@ def main() -> None:
                 for klasse in ["A", "B", "C"]:
                     st.metric(klasse, f"{int(counts[klasse]):,}".replace(",", "."))
 
-            # Pareto-Kurve: kumulativer Anteil ueber sortierte Plaetze/Artikel
-            pareto = data.reset_index(drop=True)
-            pareto["rank"] = pareto.index + 1
-            fig = px.area(
-                pareto, x="rank", y="CUM_%", title=t("abc_pareto"),
-                labels={"rank": px_label, "CUM_%": t("abc_py")},
-            )
-            fig.add_hline(y=a_thr, line_dash="dash", line_color="#c62828",
-                          annotation_text=f"A ≤ {a_thr}%")
-            fig.add_hline(y=b_thr, line_dash="dash", line_color="#f9a825",
-                          annotation_text=f"B ≤ {b_thr}%")
-            st.plotly_chart(fig, use_container_width=True)
-
             # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
             if not by_articles:
-                st.markdown(t("abc_cross_intro"))
-                cross = pd.crosstab(
-                    data["ABC_KLASSE"].replace("", "—"), data["ABC"],
-                )
-                st.dataframe(cross, use_container_width=True)
-
                 # ABC-Anpassung: Abweichungen Stamm vs. berechnet + Empfehlung.
                 # Trick: A/B/C als Rang 3/2/1. Ist die berechnete Klasse hoeher
                 # als die hinterlegte (_c > _m), wird der Platz mehr bewegt als
