@@ -345,6 +345,200 @@ window.addEventListener('resize', () => {
 </script>
 """
 
+# Zweite 3D-Ansicht: SCHEMA, direkt aus den Daten erzeugt (kein CAD-Modell).
+# Jeder DB-Platz wird eine Box, positioniert nach Regal (X) / Fach (Z) / Ebene
+# (Y). Dadurch sind ALLE Plaetze sichtbar/klickbar (kein Grau, keine fehlenden
+# Regale). Per InstancedMesh (1 Draw-Call) auch bei 22k Boxen fluessig.
+# Platzhalter: __HEIGHT__, __DATA__ (PLATZ_ID->Werte), __LABELS__, __FOCUS__.
+_SCHEMA_VIEWER_HTML = """
+<div id="wrap" style="display:flex;gap:8px;height:__HEIGHT__px;font-family:sans-serif;">
+  <div id="view" style="flex:3;position:relative;background:#f5f5f7;border-radius:8px;overflow:hidden;">
+    <div id="loading" style="position:absolute;top:10px;left:12px;font-size:13px;color:#555;background:rgba(255,255,255,.7);padding:2px 8px;border-radius:4px;">…</div>
+    <div id="legend" style="position:absolute;bottom:10px;left:12px;font-size:12px;color:#333;background:rgba(255,255,255,.88);padding:8px 10px;border-radius:6px;line-height:1.5;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
+  </div>
+  <div id="panel" style="flex:1;min-width:230px;max-width:320px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;overflow:auto;"></div>
+</div>
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const DATA = __DATA__;
+const L = __LABELS__;
+const FOCUS = "__FOCUS__";
+const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
+
+const host = document.getElementById('view');
+const panel = document.getElementById('panel');
+const loadingEl = document.getElementById('loading');
+const legendEl = document.getElementById('legend');
+panel.innerHTML = '<div style="color:#888;">' + L.hint + '</div>';
+
+let W = host.clientWidth || 600, H = host.clientHeight || 600;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5f5f7);
+const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100000);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+renderer.setSize(W, H);
+host.appendChild(renderer.domElement);
+
+let needsRender = true;
+function requestRender(){ needsRender = true; }
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.2));
+const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+dir.position.set(1, 2, 1); scene.add(dir);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = false;
+controls.addEventListener('change', requestRender);
+
+// WASD-Flug (wie CAD-Ansicht)
+const keys = {};
+let moveScale = 1;
+function onKey(e, down){
+  const k = e.key.toLowerCase();
+  if(['w','a','s','d','q','e'].includes(k)){ keys[k] = down; e.preventDefault(); }
+  if(e.key === 'Shift'){ keys.shift = down; }
+}
+window.addEventListener('keydown', (e) => onKey(e, true));
+window.addEventListener('keyup', (e) => onKey(e, false));
+renderer.domElement.tabIndex = 0;
+renderer.domElement.addEventListener('pointerdown', () => renderer.domElement.focus());
+const _fwd = new THREE.Vector3(), _right = new THREE.Vector3(), _mv = new THREE.Vector3();
+function updateMovement(){
+  const speed = moveScale * (keys.shift ? 3 : 1);
+  _fwd.subVectors(controls.target, camera.position).normalize();
+  _right.crossVectors(_fwd, camera.up).normalize();
+  _mv.set(0,0,0);
+  if(keys.w) _mv.addScaledVector(_fwd, speed);
+  if(keys.s) _mv.addScaledVector(_fwd, -speed);
+  if(keys.d) _mv.addScaledVector(_right, speed);
+  if(keys.a) _mv.addScaledVector(_right, -speed);
+  if(keys.e) _mv.y += speed;
+  if(keys.q) _mv.y -= speed;
+  if(_mv.lengthSq() === 0) return false;
+  camera.position.add(_mv); controls.target.add(_mv); needsRender = true; return true;
+}
+
+function fmt(v){ return (v==null) ? '—' : v; }
+function showSlot(id){
+  const d = DATA[id];
+  let h = '<div style="font-weight:600;font-size:15px;margin-bottom:8px;">' + L.platz + ': ' + id + '</div>';
+  if(!d){ h += '<div style="color:#c62828;">' + L.notdb + '</div>'; }
+  else {
+    const util = (d.u==null) ? '—' : (d.u + ' %');
+    const status = d.b ? L.occupied : L.empty;
+    const rows = [[L.pos, d.r+' / '+d.f+' / '+d.e],[L.halle,d.h],[L.abc_m,d.a],[L.abc_c,d.ac],[L.picks,d.p],[L.util,util],[L.status,status]];
+    h += '<table style="border-collapse:collapse;width:100%;">';
+    for(const r of rows){ h += '<tr><td style="color:#777;padding:3px 8px 3px 0;vertical-align:top;">'+r[0]+'</td><td style="text-align:right;font-weight:500;">'+fmt(r[1])+'</td></tr>'; }
+    h += '</table>';
+  }
+  panel.innerHTML = h;
+}
+function fillLegend(counts){
+  const fmtN = (n) => n.toLocaleString('de-DE');
+  const row = (hex, label, n) => '<div style="display:flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:2px;background:'+hex+';display:inline-block;"></span><span style="flex:1;">'+label+'</span><span style="font-weight:600;margin-left:8px;">'+fmtN(n)+'</span></div>';
+  legendEl.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">'+L.legend+'</div>'+row('#c62828','A',counts.A)+row('#f9a825','B',counts.B)+row('#2e7d32','C',counts.C);
+}
+
+// --- Layout aus den Daten bauen -------------------------------------------
+const ids = Object.keys(DATA);
+const rackFach = {};
+ids.forEach(id => { const d = DATA[id]; (rackFach[d.r] = rackFach[d.r] || new Set()).add(d.f); });
+const regals = Object.keys(rackFach).map(Number).sort((a,b) => a-b);
+const rackX = {}; regals.forEach((r,i) => rackX[r] = i);
+const fachCol = {};
+regals.forEach(r => { const arr=[...rackFach[r]].sort((a,b)=>a-b); const m={}; arr.forEach((f,i)=>m[f]=i); fachCol[r]=m; });
+
+const CELL = 1.0, RACK_PITCH = 2.2;
+const N = ids.length;
+const geo = new THREE.BoxGeometry(CELL*0.85, CELL*0.85, CELL*0.85);
+const mat = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+const inst = new THREE.InstancedMesh(geo, mat, N);
+inst.frustumCulled = false;
+const dummy = new THREE.Object3D();
+const idByInst = new Array(N), instById = {}, pos = new Array(N), baseColor = new Array(N);
+const counts = { A:0, B:0, C:0 };
+const col = new THREE.Color();
+for(let i=0; i<N; i++){
+  const id = ids[i], d = DATA[id];
+  const x = rackX[d.r] * RACK_PITCH, z = fachCol[d.r][d.f] * CELL, y = d.e * CELL;
+  dummy.position.set(x, y, z); dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+  const key = (d.ac==='A'||d.ac==='B'||d.ac==='C') ? d.ac : 'grey';
+  if(counts[key]!=null) counts[key]++;
+  col.setHex(ABC_HEX[key]); inst.setColorAt(i, col);
+  baseColor[i] = ABC_HEX[key]; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z};
+}
+inst.instanceMatrix.needsUpdate = true;
+if(inst.instanceColor) inst.instanceColor.needsUpdate = true;
+scene.add(inst);
+fillLegend(counts);
+loadingEl.style.display = 'none';
+
+// Kamera einpassen
+const box = new THREE.Box3().setFromObject(inst);
+const size = box.getSize(new THREE.Vector3());
+const center = box.getCenter(new THREE.Vector3());
+controls.target.copy(center);
+const maxDim = Math.max(size.x, size.y, size.z);
+moveScale = maxDim * 0.004;
+const dist = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
+camera.position.set(center.x + dist*0.8, center.y + dist*0.6, center.z + dist*0.8);
+camera.near = Math.max(maxDim/1000, 0.1); camera.far = maxDim * 10;
+camera.updateProjectionMatrix(); controls.update();
+
+// Auswahl/Markierung per Instanz-Farbe
+let selInst = -1;
+function selectInstance(i){
+  if(selInst >= 0){ col.setHex(baseColor[selInst]); inst.setColorAt(selInst, col); }
+  selInst = i; col.setHex(0x1565c0); inst.setColorAt(i, col);
+  inst.instanceColor.needsUpdate = true;
+  showSlot(idByInst[i]); requestRender();
+}
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+renderer.domElement.addEventListener('click', (ev) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((ev.clientX-rect.left)/rect.width)*2 - 1;
+  pointer.y = -((ev.clientY-rect.top)/rect.height)*2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObject(inst, false)[0];
+  if(hit && hit.instanceId != null){ selectInstance(hit.instanceId); }
+});
+
+function focusOnId(id){
+  const i = instById[id];
+  if(i == null){ panel.innerHTML = '<div style="color:#c62828;">'+L.notfound+' ('+id+')</div>'; return; }
+  const p = pos[i]; controls.target.set(p.x, p.y, p.z);
+  const off = Math.max(maxDim * 0.04, 4);
+  camera.position.set(p.x + off, p.y + off*0.6, p.z + off);
+  camera.updateProjectionMatrix(); controls.update();
+  selectInstance(i);
+}
+if(FOCUS){ focusOnId(FOCUS); }
+requestRender();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const moving = updateMovement();
+  const moved = controls.update();
+  if(needsRender || moved || moving){ renderer.render(scene, camera); needsRender = false; }
+}
+animate();
+window.addEventListener('resize', () => {
+  W = host.clientWidth; H = host.clientHeight;
+  camera.aspect = W/H; camera.updateProjectionMatrix(); renderer.setSize(W, H); requestRender();
+});
+</script>
+"""
+
 # --- DB-Tabellen (Lager BER03) --------------------------------------------
 # PLATZ   = ein Datensatz je Stellplatz (Stammdaten + Auslastung + ABC)
 # PALETTE = Palettenbestand (aktuell nicht ausgewertet, nur zur Doku)
@@ -778,6 +972,25 @@ TR: dict[str, dict[str, str]] = {
     },
     "d3_legend": {"de": "Plätze im Modell", "en": "Slots in model"},
     "d3_grey": {"de": "ohne Daten", "en": "no data"},
+    "d3_view": {"de": "Ansicht", "en": "View"},
+    "d3_view_cad": {"de": "CAD-Modell", "en": "CAD model"},
+    "d3_view_schema": {"de": "Schema (alle Plätze)", "en": "Schema (all slots)"},
+    "d3_schema_intro": {
+        "de": "**Schema aus den Daten** — jeder Lagerplatz der Datenbank als Box, "
+              "positioniert nach Regal/Fach/Ebene. Zeigt **alle 22.429 Plätze** "
+              "(kein Grau, keine fehlenden Regale), eingefärbt nach ABC.",
+        "en": "**Schema from the data** — every database slot as a box, placed by "
+              "rack/bin/level. Shows **all 22,429 slots** (no grey, no missing "
+              "racks), colored by ABC.",
+    },
+    "d3_schema_caption": {
+        "de": "Steuerung: Ziehen = drehen, Scrollen = zoomen, **WASD = fliegen** "
+              "(erst ins Bild klicken), Q/E = runter/hoch. Klick auf eine Box "
+              "zeigt die Platz-Daten. Jede Box = 1 Lagerplatz aus der DB.",
+        "en": "Controls: drag = rotate, scroll = zoom, **WASD = fly** (click into "
+              "the view first), Q/E = down/up. Click a box for slot data. Each "
+              "box = 1 slot from the DB.",
+    },
     "search_platz": {"de": "🔎 Lagerplatz suchen (PLATZ_ID)", "en": "🔎 Find slot (PLATZ_ID)"},
     "search_platz_help": {
         "de": "9-stellige PLATZ_ID eingeben und Enter – die Karte fliegt zu "
@@ -1955,31 +2168,19 @@ def main() -> None:
     with tab_3d:
         import json as _json
 
-        st.markdown(t("d3_click_intro"))
+        # Umschalter: CAD-Modell (echte Optik, ~66% Deckung) ODER Schema aus
+        # den Daten (alle 22.429 Plaetze, kein Grau, klotzig).
+        view_opts = [t("d3_view_cad"), t("d3_view_schema")]
+        view_choice = st.radio(t("d3_view"), view_opts, horizontal=True)
+        schema_mode = view_choice == t("d3_view_schema")
 
-        # Klickbares Modell: SampleScene_clickable.glb hat eine intakte
-        # Hierarchie, deren Blatt-Meshes nach PLATZ_ID benannt sind. Der
-        # three.js-Viewer (eingebettet via components.html) wirft beim Klick
-        # einen Strahl ins Modell (Raycasting), liest den getroffenen
-        # PLATZ_ID-Namen und schlaegt seine Kennzahlen in der unten injizierten
-        # JSON-Map nach. GLB wird CORS-faehig ueber die API geliefert.
-        glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
+        st.markdown(t("d3_schema_intro") if schema_mode else t("d3_click_intro"))
 
-        # Lagerplatz-Suche direkt an der Karte: ID eingeben -> Modell fliegt hin.
+        # Lagerplatz-Suche direkt an der Karte: ID eingeben -> Ansicht fliegt hin.
         search_platz = st.text_input(
             t("search_platz"), value="", help=t("search_platz_help"),
             key="d3_search",
         ).strip()
-
-        # Modell dreht sich bewusst NICHT von allein (auf Wunsch). Drehen geht
-        # weiterhin manuell per Ziehen mit der Maus.
-        ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
-        with ctrl1:
-            color_abc = st.checkbox(t("d3_color_abc"), value=True)
-        with ctrl2:
-            perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
-        with ctrl3:
-            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
 
         slot_json = load_slot_3d_map()
         labels = {
@@ -2000,22 +2201,46 @@ def main() -> None:
             "notfound": t("d3_notfound"),
             "loading": "Lade Modell" if _LANG == "de" else "Loading model",
         }
+        labels_json = _json.dumps(labels, ensure_ascii=False)
         # Nur 9-stellige PLATZ_ID ins Modell durchreichen.
         focus_id = search_platz if search_platz.isdigit() else ""
 
-        html = (
-            _THREE_VIEWER_HTML
-            .replace("__HEIGHT__", str(viewer_height))
-            .replace("__GLB__", glb_url)
-            .replace("__DATA__", slot_json)
-            .replace("__LABELS__", _json.dumps(labels, ensure_ascii=False))
-            .replace("__ROTATE__", "false")
-            .replace("__ABCCOLOR__", "true" if color_abc else "false")
-            .replace("__HIDEGREY__", "true" if perf_mode else "false")
-            .replace("__FOCUS__", focus_id)
-        )
-        components.html(html, height=viewer_height + 16)
-        st.caption(t("d3_caption"))
+        if schema_mode:
+            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
+                                      key="d3_height_schema")
+            html = (
+                _SCHEMA_VIEWER_HTML
+                .replace("__HEIGHT__", str(viewer_height))
+                .replace("__DATA__", slot_json)
+                .replace("__LABELS__", labels_json)
+                .replace("__FOCUS__", focus_id)
+            )
+            components.html(html, height=viewer_height + 16)
+            st.caption(t("d3_schema_caption"))
+        else:
+            # CAD-Modell: SampleScene_clickable.glb (Meshes nach PLATZ_ID benannt),
+            # CORS-faehig ueber die API geliefert.
+            glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
+            ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
+            with ctrl1:
+                color_abc = st.checkbox(t("d3_color_abc"), value=True)
+            with ctrl2:
+                perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
+            with ctrl3:
+                viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
+            html = (
+                _THREE_VIEWER_HTML
+                .replace("__HEIGHT__", str(viewer_height))
+                .replace("__GLB__", glb_url)
+                .replace("__DATA__", slot_json)
+                .replace("__LABELS__", labels_json)
+                .replace("__ROTATE__", "false")
+                .replace("__ABCCOLOR__", "true" if color_abc else "false")
+                .replace("__HIDEGREY__", "true" if perf_mode else "false")
+                .replace("__FOCUS__", focus_id)
+            )
+            components.html(html, height=viewer_height + 16)
+            st.caption(t("d3_caption"))
 
         st.divider()
         st.markdown(t("abc3d_head"))
