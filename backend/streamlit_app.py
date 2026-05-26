@@ -54,6 +54,7 @@ st.set_page_config(
 #   __DATA__    JSON PLATZ_ID->Werte  __LABELS__ JSON uebersetzte Beschriftungen
 #   __ROTATE__  "true"/"false"     __ABCCOLOR__ "true"/"false" (ABC einfaerben)
 #   __HIDEGREY__ "true"/"false"    (Leistungsmodus: datenlose Plaetze ausblenden)
+#   __FOCUS__   gesuchte PLATZ_ID (leer = keine Suche; Kamera springt sonst hin)
 # Ablauf im Browser: GLTF laden -> Kamera einpassen -> Klick = Raycasting ->
 # getroffenes Mesh hat als Namen die PLATZ_ID -> Kennzahlen aus __DATA__ ins
 # Panel. KEINE React/Node-Abhaengigkeit, laeuft komplett in der iframe.
@@ -81,6 +82,7 @@ const L = __LABELS__;
 const AUTOROTATE = __ROTATE__;
 const ABCCOLOR = __ABCCOLOR__;
 const HIDEGREY = __HIDEGREY__;
+const FOCUS = "__FOCUS__";  // gesuchte PLATZ_ID (leer = keine Suche)
 const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
 const PID_RE = /^[0-9]{9}$/;
 
@@ -165,8 +167,41 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let selected = null, selectedOrigMat = null;
 const HIGHLIGHT = new THREE.Color(0x1565c0);
+const meshIndex = {};   // PLATZ_ID -> Mesh (fuer die Suche/Sprung)
+let modelMaxDim = 100;  // Modellgroesse, nach dem Laden gesetzt
 
 function fmt(v){ return (v==null) ? '—' : v; }
+
+// Markiert genau EIN Mesh (blau) und stellt das vorige Material zurueck.
+function highlightMesh(meshObj){
+  if(selected && selectedOrigMat){ selected.material = selectedOrigMat; }
+  selected = meshObj;
+  selectedOrigMat = meshObj.material;
+  const m = meshObj.material.clone();
+  if(m.emissive){ m.emissive = HIGHLIGHT; m.emissiveIntensity = 0.9; }
+  else { m.color = HIGHLIGHT; }
+  meshObj.material = m;
+}
+
+// Springt zu einem Platz: Kamera nah heran, Platz markieren, Daten anzeigen.
+const _wp = new THREE.Vector3();
+function focusOnId(id){
+  const mesh = meshIndex[id];
+  if(!mesh){
+    panel.innerHTML = '<div style="color:#c62828;">' + L.notfound + ' (' + id + ')</div>';
+    return;
+  }
+  if(mesh.visible === false){ mesh.visible = true; }  // ggf. im Leistungsmodus versteckt
+  mesh.getWorldPosition(_wp);
+  controls.target.copy(_wp);
+  const off = modelMaxDim * 0.05;  // nah genug, um den Platz + Nachbarn zu sehen
+  camera.position.set(_wp.x + off, _wp.y + off * 0.6, _wp.z + off);
+  camera.updateProjectionMatrix();
+  controls.update();
+  highlightMesh(mesh);
+  showSlot(id);
+  requestRender();
+}
 
 function showSlot(id){
   const d = DATA[id];
@@ -215,13 +250,7 @@ function onClick(ev){
   for(const hit of hits){
     const id = pickIdFromObject(hit.object);
     if(id){
-      if(selected && selectedOrigMat){ selected.material = selectedOrigMat; }
-      selected = hit.object;
-      selectedOrigMat = selected.material;
-      const m = selected.material.clone();  // nur das EINE markierte Mesh klont
-      if(m.emissive){ m.emissive = HIGHLIGHT; m.emissiveIntensity = 0.9; }
-      else { m.color = HIGHLIGHT; }
-      selected.material = m;
+      highlightMesh(hit.object);
       showSlot(id);
       requestRender();
       return;
@@ -257,6 +286,7 @@ new GLTFLoader().load('__GLB__',
     const counts = { A:0, B:0, C:0, grey:0 };
     root.traverse((o) => {
       if(!o.isMesh || !o.name || !PID_RE.test(o.name)) return;
+      meshIndex[o.name] = o;  // fuer die Lagerplatz-Suche
       const d = DATA[o.name];
       const cls = d ? d.ac : null;
       const key = (cls === 'A' || cls === 'B' || cls === 'C') ? cls : 'grey';
@@ -274,6 +304,7 @@ new GLTFLoader().load('__GLB__',
     const center = box.getCenter(new THREE.Vector3());
     controls.target.copy(center);
     const maxDim = Math.max(size.x, size.y, size.z);
+    modelMaxDim = maxDim;
     const dist = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
     camera.position.set(center.x + dist * 0.9, center.y + dist * 0.6, center.z + dist * 0.9);
     camera.near = maxDim / 1000; camera.far = maxDim * 10;
@@ -281,6 +312,8 @@ new GLTFLoader().load('__GLB__',
     moveScale = maxDim * 0.004;  // Flug-Geschwindigkeit relativ zur Modellgroesse
     controls.update();
     loadingEl.style.display = 'none';
+    // Gesuchten Platz anfliegen (ueberschreibt die Standard-Ansicht).
+    if(FOCUS){ focusOnId(FOCUS); }
     requestRender();
   },
   (p) => {
@@ -745,6 +778,17 @@ TR: dict[str, dict[str, str]] = {
     },
     "d3_legend": {"de": "Plätze im Modell", "en": "Slots in model"},
     "d3_grey": {"de": "ohne Daten", "en": "no data"},
+    "search_platz": {"de": "🔎 Lagerplatz suchen (PLATZ_ID)", "en": "🔎 Find slot (PLATZ_ID)"},
+    "search_platz_help": {
+        "de": "PLATZ_ID eingeben – im Tab „3D-Modell“ fliegt die Ansicht zu "
+              "diesem Platz und markiert ihn.",
+        "en": "Enter a PLATZ_ID – in the “3D model” tab the view flies to that "
+              "slot and highlights it.",
+    },
+    "d3_notfound": {
+        "de": "Platz nicht im Modell gefunden.",
+        "en": "Slot not found in the model.",
+    },
     "d3_perf": {"de": "Leistungsmodus", "en": "Performance mode"},
     "d3_perf_help": {
         "de": "Blendet Plätze ohne DB-Daten (grau) aus → flüssiger. "
@@ -1190,6 +1234,10 @@ def main() -> None:
 
     with st.sidebar:
         st.header(t("filter"))
+        # Lagerplatz-Suche fuer den 3D-Tab: ID eingeben -> Modell fliegt hin.
+        search_platz = st.text_input(
+            t("search_platz"), value="", help=t("search_platz_help"),
+        ).strip()
         hallen = st.multiselect(
             t("hall"),
             options=["Halle 1", "Halle 2", "Halle 3"],
@@ -1946,8 +1994,11 @@ def main() -> None:
             "notdb": t("d3_not_in_db"),
             "legend": t("d3_legend"),
             "grey": t("d3_grey"),
+            "notfound": t("d3_notfound"),
             "loading": "Lade Modell" if _LANG == "de" else "Loading model",
         }
+        # Suche aus der Sidebar: nur 9-stellige PLATZ_ID ins Modell durchreichen.
+        focus_id = search_platz if search_platz.isdigit() else ""
 
         html = (
             _THREE_VIEWER_HTML
@@ -1958,6 +2009,7 @@ def main() -> None:
             .replace("__ROTATE__", "false")
             .replace("__ABCCOLOR__", "true" if color_abc else "false")
             .replace("__HIDEGREY__", "true" if perf_mode else "false")
+            .replace("__FOCUS__", focus_id)
         )
         components.html(html, height=viewer_height + 16)
         st.caption(t("d3_caption"))
