@@ -60,6 +60,7 @@ _THREE_VIEWER_HTML = """
 <div id="wrap" style="display:flex;gap:8px;height:__HEIGHT__px;font-family:sans-serif;">
   <div id="view" style="flex:3;position:relative;background:#f5f5f7;border-radius:8px;overflow:hidden;">
     <div id="loading" style="position:absolute;top:10px;left:12px;font-size:13px;color:#555;background:rgba(255,255,255,.7);padding:2px 8px;border-radius:4px;">…</div>
+    <div id="legend" style="position:absolute;bottom:10px;left:12px;font-size:12px;color:#333;background:rgba(255,255,255,.88);padding:8px 10px;border-radius:6px;line-height:1.5;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
   </div>
   <div id="panel" style="flex:1;min-width:230px;max-width:320px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;overflow:auto;"></div>
 </div>
@@ -173,22 +174,43 @@ function onClick(ev){
 }
 renderer.domElement.addEventListener('click', onClick);
 
+const legendEl = document.getElementById('legend');
+
+function fillLegend(counts){
+  const fmtN = (n) => n.toLocaleString('de-DE');
+  const row = (hex, label, n) =>
+    '<div style="display:flex;align-items:center;gap:6px;">'
+    + '<span style="width:12px;height:12px;border-radius:2px;background:' + hex + ';display:inline-block;"></span>'
+    + '<span style="flex:1;">' + label + '</span>'
+    + '<span style="font-weight:600;margin-left:8px;">' + fmtN(n) + '</span></div>';
+  legendEl.innerHTML =
+    '<div style="font-weight:600;margin-bottom:4px;">' + L.legend + '</div>'
+    + row('#c62828', 'A', counts.A)
+    + row('#f9a825', 'B', counts.B)
+    + row('#2e7d32', 'C', counts.C)
+    + row('#9e9e9e', L.grey, counts.grey);
+}
+
 new GLTFLoader().load('__GLB__',
   (gltf) => {
     const root = gltf.scene;
     scene.add(root);
 
-    if(ABCCOLOR){
-      root.traverse((o) => {
-        if(o.isMesh && o.name && DATA[o.name]){
-          const cls = DATA[o.name].ac;
-          if(ABC_HEX[cls] != null){
-            o.material = o.material.clone();
-            o.material.color = new THREE.Color(ABC_HEX[cls]);
-          }
-        }
-      });
-    }
+    // Eine Traversierung: Plaetze je Klasse zaehlen und (optional) einfaerben.
+    // grau = Mesh hat eine PLATZ_ID, aber keinen Datensatz in der DB.
+    const counts = { A:0, B:0, C:0, grey:0 };
+    root.traverse((o) => {
+      if(!o.isMesh || !o.name || !PID_RE.test(o.name)) return;
+      const d = DATA[o.name];
+      const cls = d ? d.ac : null;
+      if(cls === 'A' || cls === 'B' || cls === 'C') counts[cls] += 1;
+      else counts.grey += 1;
+      if(ABCCOLOR){
+        o.material = o.material.clone();
+        o.material.color = new THREE.Color(ABC_HEX[cls] != null ? ABC_HEX[cls] : 0x9e9e9e);
+      }
+    });
+    fillLegend(counts);
 
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
@@ -622,6 +644,8 @@ TR: dict[str, dict[str, str]] = {
         "de": "Dieser Platz ist nicht in der Datenbank (nur im Modell).",
         "en": "This slot is not in the database (model only).",
     },
+    "d3_legend": {"de": "Plätze im Modell", "en": "Slots in model"},
+    "d3_grey": {"de": "ohne Daten", "en": "no data"},
 }
 
 
@@ -1137,34 +1161,34 @@ def main() -> None:
 
     # --- Register/Tabs ---------------------------------------------------
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
-    # Drei Gruppen: (1) Hallen + "Sonstiges" (gebuendelte Analyse-Heatmaps),
-    # (2) Steuermassnahmen (Umlagern/Nachschub/Einlagern/Auslagern – dieselben
-    # Regeln wie die App), (3) Auswertung/Extras (ABC, Top-Artikel,
-    # Artikel-Detail, 3D). "Sonstiges" enthaelt die Unter-Tabs Auslastungs-/
-    # Pick-Heatmap, Bottlenecks, Free Capacity und Durchsatz (siehe unten).
-    (tab_hallen, tab_sonstiges, tab_umlagern,
-     tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_top,
-     tab_article, tab_3d) = st.tabs([
+    # ACHTUNG: Die Anzeige-Reihenfolge der Reiter bestimmt allein diese Liste –
+    # die `with tab_*`-Bloecke weiter unten duerfen in beliebiger Code-Reihen-
+    # folge stehen. Reihenfolge: Hallen, 3D, ABC, Steuermassnahmen (Umlagern/
+    # Nachschub/Einlagern/Auslagern), Artikel, und ganz am Ende "Sonstiges".
+    # "Sonstiges" buendelt Auslastungs-/Pick-Heatmap, Bottlenecks, Free
+    # Capacity, Durchsatz und Top-Artikel (siehe unten).
+    (tab_hallen, tab_3d, tab_abc, tab_umlagern, tab_nachschub,
+     tab_einlagern, tab_auslagern, tab_article, tab_sonstiges) = st.tabs([
         t("tab_halls"),
-        t("tab_misc"),
+        t("tab_3d"),
+        t("tab_abc"),
         t("tab_relocate"),
         t("tab_replenish"),
         t("tab_putaway"),
         t("tab_retrieve"),
-        t("tab_abc"),
-        t("tab_top"),
         t("tab_article"),
-        t("tab_3d"),
+        t("tab_misc"),
     ])
 
-    # "Sonstiges": Unter-Tabs fuer die Analyse-Heatmaps + Durchsatz. Die Unter-
-    # Tab-Objekte werden hier (im Kontext von tab_sonstiges) erzeugt; ihre
-    # Inhalte folgen weiter unten als `with sub_*` und landen dadurch
-    # verschachtelt unter "Sonstiges".
+    # "Sonstiges": Unter-Tabs fuer die Analyse-Heatmaps + Durchsatz + Top-
+    # Artikel. Die Unter-Tab-Objekte werden hier (im Kontext von tab_sonstiges)
+    # erzeugt; ihre Inhalte folgen weiter unten als `with sub_*` und landen
+    # dadurch verschachtelt unter "Sonstiges".
     with tab_sonstiges:
-        sub_heat, sub_pickheat, sub_bottle, sub_free, sub_trend = st.tabs([
+        (sub_heat, sub_pickheat, sub_bottle, sub_free, sub_trend,
+         sub_top) = st.tabs([
             t("tab_util"), t("tab_pick"), t("tab_bottle"), t("tab_free"),
-            t("tab_tp"),
+            t("tab_tp"), t("tab_top"),
         ])
 
     with tab_hallen:
@@ -1717,7 +1741,7 @@ def main() -> None:
             st.dataframe(tbl, use_container_width=True, hide_index=True)
             _csv_download(tbl, "durchsatz")
 
-    with tab_top:
+    with sub_top:
         st.markdown(t("top_intro"))
         _mov_filter_note()
         top = agg_articles(tpa, article_limit)
@@ -1813,6 +1837,8 @@ def main() -> None:
             "occupied": t("d3_occupied"),
             "empty": t("d3_empty"),
             "notdb": t("d3_not_in_db"),
+            "legend": t("d3_legend"),
+            "grey": t("d3_grey"),
             "loading": "Lade Modell" if _LANG == "de" else "Loading model",
         }
 
