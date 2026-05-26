@@ -789,12 +789,13 @@ TR: dict[str, dict[str, str]] = {
         "de": "Platz nicht im Modell gefunden.",
         "en": "Slot not found in the model.",
     },
-    "d3_perf": {"de": "Leistungsmodus", "en": "Performance mode"},
+    "d3_perf": {"de": "Plätze ohne Daten ausblenden", "en": "Hide slots without data"},
     "d3_perf_help": {
-        "de": "Blendet Plätze ohne DB-Daten (grau) aus → flüssiger. "
-              "Es gehen keine Daten verloren, graue Plätze haben ohnehin keine.",
-        "en": "Hides slots without DB data (grey) → smoother. No data is lost; "
-              "grey slots have none anyway.",
+        "de": "Blendet die grauen Plätze aus, für die es keinen DB-Datensatz "
+              "gibt (Modell-Luftplätze). Standardmäßig an – sauberer und "
+              "flüssiger. Es gehen keine Daten verloren.",
+        "en": "Hides the grey slots that have no DB record (model-only). On by "
+              "default – cleaner and smoother. No data is lost.",
     },
 }
 
@@ -1976,7 +1977,7 @@ def main() -> None:
         with ctrl1:
             color_abc = st.checkbox(t("d3_color_abc"), value=True)
         with ctrl2:
-            perf_mode = st.checkbox(t("d3_perf"), value=False, help=t("d3_perf_help"))
+            perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
         with ctrl3:
             viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
 
