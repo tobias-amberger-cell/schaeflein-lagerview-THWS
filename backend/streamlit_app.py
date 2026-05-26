@@ -460,28 +460,36 @@ function fillLegend(counts){
   legendEl.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">'+L.legend+'</div>'+row('#c62828','A',counts.A)+row('#f9a825','B',counts.B)+row('#2e7d32','C',counts.C);
 }
 
-// --- Layout aus ECHTEN CAD-Positionen (rack_layout.json) ------------------
-// RL[regal] = { o:[x,y,z] (Ursprung Fach0/Ebene0), sx (Fach-Schritt in X),
-// sy (Ebenen-Schritt in Y) }. Regale laufen entlang X, gestapelt nach Z ->
-// reale Hallen-Anordnung wie im CAD/Grundriss.
-const RL = __RACKLAYOUT__;
+// --- Layout aus den Daten bauen -------------------------------------------
 const ids = Object.keys(DATA);
-// Sonderplaetze (REGAL 0 oder Regal ohne Layout) -> kompakter Block daneben.
-const specialIds = ids.filter(id => DATA[id].r === 0 || !RL[DATA[id].r]);
-const gridIds = ids.filter(id => DATA[id].r !== 0 && RL[DATA[id].r]);
+// Sonderplaetze (REGAL 0: VA/EN/VD/GS = Versand/Eingang etc.) haben kein
+// echtes Regal-Raster -> als kompakter Block, nicht als Turm.
+const specialIds = ids.filter(id => DATA[id].r === 0);
+const gridIds = ids.filter(id => DATA[id].r !== 0);
 const rackFach = {};
 gridIds.forEach(id => { const d = DATA[id]; (rackFach[d.r] = rackFach[d.r] || new Set()).add(d.f); });
+const regals = Object.keys(rackFach).map(Number).sort((a,b) => a-b);
+// Regale entlang X aufreihen, mit breiterem Gang zwischen den Hallen.
+const HALL = (r) => r <= 16 ? 1 : (r <= 32 ? 2 : 3);
+const rackX = {}; let _xi = 0, _prevH = null;
+regals.forEach(r => {
+  const h = HALL(r);
+  if(_prevH !== null && h !== _prevH) _xi += 2;  // Hallen-Gang
+  rackX[r] = _xi; _xi += 1; _prevH = h;
+});
 const fachCol = {};
-Object.keys(rackFach).forEach(r => { const arr=[...rackFach[r]].sort((a,b)=>a-b); const m={}; arr.forEach((f,i)=>m[f]=i); fachCol[r]=m; });
-const regals = Object.keys(fachCol).map(Number).sort((a,b)=>a-b);
-let _minOx = 1e9; regals.forEach(r => { if(RL[r].o[0] < _minOx) _minOx = RL[r].o[0]; });
-const SPECIAL_X = _minOx - 8;        // Sonderblock links neben dem Lager
-const specialPos = {};
+regals.forEach(r => { const arr=[...rackFach[r]].sort((a,b)=>a-b); const m={}; arr.forEach((f,i)=>m[f]=i); fachCol[r]=m; });
+const CELL_ = 1.0;
+const SPECIAL_X = -CELL_ * 5;        // Sonderblock links vom ersten Regal
+const specialPos = {};               // id -> {c: Spalte, e: Reihe} (4 Reihen)
 specialIds.forEach((id,k) => { specialPos[id] = { c: Math.floor(k/4), e: k%4 }; });
 
-const CELL = 1.0, BAY = 4, FILL = 0.82, DEPTH = 1.3;  // DEPTH = Regaltiefe (Z)
+const CELL = 1.0, BAY = 3, BAY_GAP = 0.6, RACK_PITCH = 3.6;
+const BOX_D = 1.5, BOX_H = 0.78, BOX_W = 0.82;   // Palette: Tiefe(X)/Hoehe(Y)/Breite(Z)
+function zForCol(c){ return c*CELL + Math.floor(c/BAY)*BAY_GAP; }  // Bays mit Luecke
+
 const N = ids.length;
-const geo = new THREE.BoxGeometry(1, 1, 1);           // pro Instanz skaliert
+const geo = new THREE.BoxGeometry(BOX_D, BOX_H, BOX_W);
 const mat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
 const inst = new THREE.InstancedMesh(geo, mat, N);
 inst.frustumCulled = false;
@@ -489,44 +497,42 @@ const dummy = new THREE.Object3D();
 const idByInst = new Array(N), instById = {}, pos = new Array(N), baseColor = new Array(N);
 const counts = { A:0, B:0, C:0 };
 const col = new THREE.Color();
-const rackMaxE = {};   // max Ebene je Regal (fuer Struktur-Hoehe)
-let gMinX=1e9, gMaxX=-1e9, gMinZ=1e9, gMaxZ=-1e9, gMinY=1e9;
+const rackMaxCol = {}, rackMaxY = {};  // max Spalte/Ebene je Regal (fuer Struktur)
+let gMinX=1e9, gMaxX=-1e9, gMinZ=1e9, gMaxZ=-1e9;
 for(let i=0; i<N; i++){
   const id = ids[i], d = DATA[id];
-  let x, y, z, sx, sy;
-  if(d.r === 0 || !RL[d.r]){           // Sonderplatz -> kompakter Block
-    const sp = specialPos[id]; sx = 1.0; sy = 1.0;
-    x = SPECIAL_X + sp.c*CELL; y = sp.e*CELL + 1.2; z = 0;
-  } else {                             // echtes Regal an realer Position
-    const rl = RL[d.r], rank = fachCol[d.r][d.f];
-    sx = rl.sx; sy = rl.sy;
-    x = rl.o[0] + rank*sx; y = rl.o[1] + d.e*sy; z = rl.o[2];
-    if(d.e > (rackMaxE[d.r]||0)) rackMaxE[d.r] = d.e;
+  let x, y, z;
+  if(d.r === 0){                       // Sonderplatz -> kompakter Block
+    const sp = specialPos[id];
+    x = SPECIAL_X; z = zForCol(sp.c); y = sp.e * CELL;
+  } else {                             // normales Regal
+    const cidx = fachCol[d.r][d.f];
+    x = rackX[d.r] * RACK_PITCH; z = zForCol(cidx); y = d.e * CELL;
+    if(cidx > (rackMaxCol[d.r]||0)) rackMaxCol[d.r] = cidx;
+    if(y > (rackMaxY[d.r]||0)) rackMaxY[d.r] = y;
   }
-  dummy.position.set(x, y, z); dummy.scale.set(sx*FILL, sy*FILL, DEPTH*FILL);
-  dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+  dummy.position.set(x, y, z); dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
   const key = (d.ac==='A'||d.ac==='B'||d.ac==='C') ? d.ac : 'grey';
   if(counts[key]!=null) counts[key]++;
   const cval = ABCCOLOR ? ABC_HEX[key] : WOOD;
   col.setHex(cval); inst.setColorAt(i, col);
-  baseColor[i] = cval; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z,sx,sy};
+  baseColor[i] = cval; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z};
   if(x<gMinX) gMinX=x; if(x>gMaxX) gMaxX=x;
   if(z<gMinZ) gMinZ=z; if(z>gMaxZ) gMaxZ=z;
-  if(y<gMinY) gMinY=y;
 }
 inst.instanceMatrix.needsUpdate = true;
 if(inst.instanceColor) inst.instanceColor.needsUpdate = true;
 scene.add(inst);
 
 // Paletten-Sockel (dunkles Holz) unter jeder Palette -> 3D/Paletten-Look
-const baseInst = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),
+const baseInst = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(BOX_D*1.02, 0.12, BOX_W*1.05),
   new THREE.MeshStandardMaterial({ color: 0x6d4c41, roughness: 0.95 }), N);
 baseInst.frustumCulled = false;
 for(let i=0; i<N; i++){
   const p = pos[i];
-  dummy.position.set(p.x, p.y - p.sy*FILL/2 - 0.06, p.z);
-  dummy.scale.set(p.sx*0.95, 0.1, DEPTH*0.95);
-  dummy.updateMatrix(); baseInst.setMatrixAt(i, dummy.matrix);
+  dummy.position.set(p.x, p.y - BOX_H/2 - 0.07, p.z); dummy.updateMatrix();
+  baseInst.setMatrixAt(i, dummy.matrix);
 }
 baseInst.instanceMatrix.needsUpdate = true;
 scene.add(baseInst);
@@ -539,13 +545,12 @@ const floor = new THREE.Mesh(
   new THREE.MeshStandardMaterial({ color: 0xe4e4e7, roughness: 1.0 })
 );
 floor.rotation.x = -Math.PI/2;
-const floorY = gMinY - 0.9;
-floor.position.set((gMinX+gMaxX)/2, floorY, (gMinZ+gMaxZ)/2);
+floor.position.set((gMinX+gMaxX)/2, -CELL*0.6, (gMinZ+gMaxZ)/2);
 scene.add(floor);
 // dezentes Boden-Raster fuer Tiefenwirkung
 const gsize = Math.max((gMaxX-gMinX), (gMaxZ-gMinZ)) + 10;
 const grid = new THREE.GridHelper(gsize, Math.round(gsize/2), 0xb0bec5, 0xcfd8dc);
-grid.position.set((gMinX+gMaxX)/2, floorY + 0.02, (gMinZ+gMaxZ)/2);
+grid.position.set((gMinX+gMaxX)/2, -CELL*0.58, (gMinZ+gMaxZ)/2);
 scene.add(grid);
 
 // Regalstruktur im Pallet-Racking-Look: vertikale Staender + horizontale
@@ -567,36 +572,35 @@ function makeLabel(text){
   return new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c) }));
 }
 regals.forEach(r => {
-  const rl = RL[r]; const ncols = Object.keys(fachCol[r]).length;
-  const sx = rl.sx, sy = rl.sy, ox = rl.o[0], oy = rl.o[1], oz = rl.o[2];
-  const maxE = rackMaxE[r] || 0;
-  const len = (ncols - 1) * sx;            // Regallaenge in X
-  const postH = (maxE + 1) * sy;           // Hoehe
-  const cy = oy + maxE*sy/2;               // vertikale Mitte
-  const dz = DEPTH/2 + 0.06;               // Staender/Traeger vorne+hinten
-  // Staender (vertikal) an jeder Bay-Grenze, vorne und hinten
+  const x = rackX[r] * RACK_PITCH;
+  const ncols = Object.keys(fachCol[r]).length;
+  const zmax = zForCol(ncols - 1), ymax = rackMaxY[r] || 0;
+  const levels = Math.round(ymax / CELL);
+  const postH = ymax + CELL;
+  const px = BOX_D/2 + 0.05;
+  // Staender an jeder Bay-Grenze, beidseitig
   for(let c = 0; c < ncols; c += BAY){
-    const cx = ox + c*sx;
-    pushBox(upM, cx, cy, oz-dz, 0.14, postH, 0.14);
-    pushBox(upM, cx, cy, oz+dz, 0.14, postH, 0.14);
+    const zc = zForCol(c) - CELL*0.5 - BAY_GAP*0.4;
+    pushBox(upM, x-px, ymax/2, zc, 0.14, postH, 0.14);
+    pushBox(upM, x+px, ymax/2, zc, 0.14, postH, 0.14);
   }
-  const ex = ox + (ncols-1)*sx;            // Regalende
-  pushBox(upM, ex, cy, oz-dz, 0.14, postH, 0.14);
-  pushBox(upM, ex, cy, oz+dz, 0.14, postH, 0.14);
-  // Querträger je Ebene (laufen entlang X, knapp unter den Paletten)
-  for(let e = 0; e <= maxE; e++){
-    const by = oy + e*sy - sy*0.5 - 0.02;
-    pushBox(beamM, ox + len/2, by, oz-dz, len + sx, 0.09, 0.09);
-    pushBox(beamM, ox + len/2, by, oz+dz, len + sx, 0.09, 0.09);
+  const zEnd = zmax + CELL*0.5;
+  pushBox(upM, x-px, ymax/2, zEnd, 0.14, postH, 0.14);
+  pushBox(upM, x+px, ymax/2, zEnd, 0.14, postH, 0.14);
+  // Querträger je Ebene (Fachboden, knapp unter den Paletten)
+  for(let e = 0; e <= levels; e++){
+    const by = e*CELL - BOX_H/2 - 0.08;
+    pushBox(beamM, x-px, by, zmax/2, 0.1, 0.1, zmax + CELL);
+    pushBox(beamM, x+px, by, zmax/2, 0.1, 0.1, zmax + CELL);
   }
   const lab = makeLabel('R' + r);
-  lab.position.set(ox - sx*1.5, oy + postH + sy*0.6, oz);
+  lab.position.set(x, ymax + CELL*2.2, -CELL*1.5);
   lab.scale.set(3, 1.5, 1);
   frameGroup.add(lab);
 });
 if(specialIds.length){   // Beschriftung fuer den Sonderplatz-Block
   const sl = makeLabel('Sonder');
-  sl.position.set(SPECIAL_X, 6.5, 0);
+  sl.position.set(SPECIAL_X, 4*CELL, -CELL*1.5);
   sl.scale.set(3.5, 1.7, 1);
   frameGroup.add(sl);
 }
@@ -1467,21 +1471,6 @@ def load_slot_3d_map() -> str:
             "b": bool(row.BELEGT),
         }
     return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
-
-
-@st.cache_data(ttl=3600)
-def load_rack_layout() -> str:
-    """Echte Regal-Positionen fuer die Schema-3D-Ansicht.
-
-    Vorberechnet aus dem CAD-Modell (siehe scripts/Notiz) und als kleine
-    JSON-Datei im Repo abgelegt: {regal: {o:[x,y,z], sx, sy}}. So muss die
-    GLB nicht zur Laufzeit geparst werden. Fehlt die Datei, liefert "{}" ->
-    der Schema-Viewer faellt dann auf sein einfaches Raster zurueck.
-    """
-    p = Path(__file__).resolve().parent / "data" / "rack_layout.json"
-    if p.is_file():
-        return p.read_text(encoding="utf-8")
-    return "{}"
 
 
 def heatmap_color(util: float) -> str:
@@ -2377,7 +2366,6 @@ def main() -> None:
                 .replace("__LABELS__", labels_json)
                 .replace("__FOCUS__", focus_id)
                 .replace("__ABCCOLOR__", "true" if schema_abc else "false")
-                .replace("__RACKLAYOUT__", load_rack_layout())
             )
             components.html(html, height=viewer_height + 16)
             st.caption(t("d3_schema_caption"))
