@@ -451,6 +451,24 @@ TR: dict[str, dict[str, str]] = {
         "de": "Mindestens eine ABC-Klasse auswählen.",
         "en": "Select at least one ABC class.",
     },
+    "col_vorschlag": {"de": "Vorschlag", "en": "Suggestion"},
+    "col_ziel": {"de": "Zielplatz-Vorschlag", "en": "Suggested target slot"},
+    "ziel_none": {
+        "de": "kein freier Zielplatz in Auswahl",
+        "en": "no free target slot in selection",
+    },
+    "reloc_unusedA_v": {
+        "de": "Ware auf C-/Reserveplatz umlagern – Premiumplatz freimachen",
+        "en": "Move goods to a C/reserve slot – free up the premium spot",
+    },
+    "reloc_hotC_v": {
+        "de": "Auf A-Platz / niedrige Ebene hochlagern + ABC hochstufen",
+        "en": "Move up to an A slot / low level + promote ABC",
+    },
+    "reloc_highA_v": {
+        "de": "Auf niedrige Ebene umlagern – kürzere Wege",
+        "en": "Move down to a low level – shorter travel",
+    },
     "sl_hotc": {"de": "Heiße C-Plätze ab Picks", "en": "Hot C slots from picks"},
     "sl_highlevel": {"de": "Hohe Ebene ab", "en": "High level from"},
     "reloc_unusedA_t": {"de": "Premium-Plätze ungenutzt", "en": "Premium slots unused"},
@@ -1463,8 +1481,13 @@ def main() -> None:
     ]
 
     def _massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
-                             extra_cols: list[str] | None = None) -> None:
-        """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV)."""
+                             extra_cols: list[str] | None = None,
+                             vorschlag: str | None = None) -> None:
+        """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV).
+
+        `vorschlag`: optionaler Text, der als zusaetzliche Spalte "Vorschlag"
+        (konkrete Handlungsempfehlung) in jede Zeile geschrieben wird.
+        """
         cols = _MASSNAHME_COLS + (extra_cols or [])
         cols = [c for c in cols if c in df.columns]
         st.markdown(f"**{titel}** — {beschreibung}")
@@ -1472,11 +1495,14 @@ def main() -> None:
         if df.empty:
             st.info(t("cat_empty"))
         else:
+            show = df[cols].copy()
+            if vorschlag:
+                show[t("col_vorschlag")] = vorschlag
             st.dataframe(
-                df.head(200)[cols], use_container_width=True, hide_index=True
+                show.head(200), use_container_width=True, hide_index=True
             )
             key = "".join(c if c.isalnum() else "_" for c in titel.lower())
-            _csv_download(df[cols], f"massnahme_{key}")
+            _csv_download(show, f"massnahme_{key}")
         st.divider()
 
     with tab_umlagern:
@@ -1512,15 +1538,46 @@ def main() -> None:
             & (filtered["ANZ_PICKS"] > 0)
         ].sort_values("ANZ_PICKS", ascending=False)
 
+        # Konkrete Zielplatz-Vorschlaege aus den freien (nicht gesperrten)
+        # Plaetzen der aktuellen Auswahl. Niedrige Ebenen (<=2) = gute Pick-
+        # plaetze -> Ziel fuer heisse C-Plaetze und A-Plaetze von oben; hohe
+        # Ebenen (>=3) = Reserve -> Ziel fuer ungenutzte Premiumplaetze.
+        free_pool = filtered[
+            (filtered["FREE_CAPACITY"] > 0) & (filtered["ZUSTAND"] < 150)
+        ]
+        free_low = free_pool[free_pool["EBENE"] <= 2] \
+            .sort_values("FREE_CAPACITY", ascending=False)
+        free_high = free_pool[free_pool["EBENE"] >= 3] \
+            .sort_values("FREE_CAPACITY", ascending=False)
+
+        def _add_ziel(src: pd.DataFrame, targets: pd.DataFrame) -> pd.DataFrame:
+            """Greedy 1:1 – jedem Quellplatz genau einen freien Zielplatz (nach
+            freier Kapazitaet) zuordnen; Quellplaetze selbst sind nie Ziel."""
+            tgt = targets[~targets["PLATZ_ID"].isin(src["PLATZ_ID"])]
+            labels = [
+                f"{r.PLATZ_ID} · {r.HALLE} R{int(r.REGAL)}/E{int(r.EBENE)} "
+                f"(frei {int(r.FREE_CAPACITY)})"
+                for r in tgt.itertuples(index=False)
+            ]
+            col = [labels[i] if i < len(labels) else t("ziel_none")
+                   for i in range(len(src))]
+            return src.assign(**{t("col_ziel"): col})
+
         if "A" in reloc_abc:
             _massnahme_kategorie(
-                t("reloc_unusedA_t"), t("reloc_unusedA_d"), unused_a)
+                t("reloc_unusedA_t"), t("reloc_unusedA_d"),
+                _add_ziel(unused_a, free_high),
+                extra_cols=[t("col_ziel")], vorschlag=t("reloc_unusedA_v"))
         if "C" in reloc_abc:
             _massnahme_kategorie(
-                t("reloc_hotC_t"), t("reloc_hotC_d"), hot_c)
+                t("reloc_hotC_t"), t("reloc_hotC_d"),
+                _add_ziel(hot_c, free_low),
+                extra_cols=[t("col_ziel")], vorschlag=t("reloc_hotC_v"))
         if "A" in reloc_abc:
             _massnahme_kategorie(
-                t("reloc_highA_t"), t("reloc_highA_d"), high_level_a)
+                t("reloc_highA_t"), t("reloc_highA_d"),
+                _add_ziel(high_level_a, free_low),
+                extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
         if not reloc_abc:
             st.info(t("reloc_pick_abc"))
 
