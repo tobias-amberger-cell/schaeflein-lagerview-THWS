@@ -1758,12 +1758,12 @@ def main() -> None:
         # JSON-Map nach. GLB wird CORS-faehig ueber die API geliefert.
         glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
 
-        ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
+        # Modell dreht sich bewusst NICHT von allein (auf Wunsch). Drehen geht
+        # weiterhin manuell per Ziehen mit der Maus.
+        ctrl1, ctrl2 = st.columns([1, 1])
         with ctrl1:
-            auto_rotate = st.checkbox(t("d3_autorotate"), value=False)
-        with ctrl2:
             color_abc = st.checkbox(t("d3_color_abc"), value=True)
-        with ctrl3:
+        with ctrl2:
             viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
 
         slot_json = load_slot_3d_map()
@@ -1789,7 +1789,7 @@ def main() -> None:
             .replace("__GLB__", glb_url)
             .replace("__DATA__", slot_json)
             .replace("__LABELS__", _json.dumps(labels, ensure_ascii=False))
-            .replace("__ROTATE__", "true" if auto_rotate else "false")
+            .replace("__ROTATE__", "false")
             .replace("__ABCCOLOR__", "true" if color_abc else "false")
         )
         components.html(html, height=viewer_height + 16)
