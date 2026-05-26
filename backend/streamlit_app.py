@@ -780,9 +780,9 @@ TR: dict[str, dict[str, str]] = {
     "d3_grey": {"de": "ohne Daten", "en": "no data"},
     "search_platz": {"de": "🔎 Lagerplatz suchen (PLATZ_ID)", "en": "🔎 Find slot (PLATZ_ID)"},
     "search_platz_help": {
-        "de": "PLATZ_ID eingeben – im Tab „3D-Modell“ fliegt die Ansicht zu "
+        "de": "9-stellige PLATZ_ID eingeben und Enter – die Karte fliegt zu "
               "diesem Platz und markiert ihn.",
-        "en": "Enter a PLATZ_ID – in the “3D model” tab the view flies to that "
+        "en": "Enter a 9-digit PLATZ_ID and press Enter – the map flies to that "
               "slot and highlights it.",
     },
     "d3_notfound": {
@@ -1234,10 +1234,6 @@ def main() -> None:
 
     with st.sidebar:
         st.header(t("filter"))
-        # Lagerplatz-Suche fuer den 3D-Tab: ID eingeben -> Modell fliegt hin.
-        search_platz = st.text_input(
-            t("search_platz"), value="", help=t("search_platz_help"),
-        ).strip()
         hallen = st.multiselect(
             t("hall"),
             options=["Halle 1", "Halle 2", "Halle 3"],
@@ -1968,6 +1964,12 @@ def main() -> None:
         # JSON-Map nach. GLB wird CORS-faehig ueber die API geliefert.
         glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
 
+        # Lagerplatz-Suche direkt an der Karte: ID eingeben -> Modell fliegt hin.
+        search_platz = st.text_input(
+            t("search_platz"), value="", help=t("search_platz_help"),
+            key="d3_search",
+        ).strip()
+
         # Modell dreht sich bewusst NICHT von allein (auf Wunsch). Drehen geht
         # weiterhin manuell per Ziehen mit der Maus.
         ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
@@ -1997,7 +1999,7 @@ def main() -> None:
             "notfound": t("d3_notfound"),
             "loading": "Lade Modell" if _LANG == "de" else "Loading model",
         }
-        # Suche aus der Sidebar: nur 9-stellige PLATZ_ID ins Modell durchreichen.
+        # Nur 9-stellige PLATZ_ID ins Modell durchreichen.
         focus_id = search_platz if search_platz.isdigit() else ""
 
         html = (
