@@ -16,6 +16,20 @@ Deployment auf Streamlit Community Cloud:
 """
 from __future__ import annotations
 
+# ===========================================================================
+#  AUFBAU DIESER DATEI (zum Erklaeren / Praesentieren)
+#  ---------------------------------------------------------------------------
+#  1. Konstanten + Tabellennamen   -> welche DB-Tabellen gelesen werden
+#  2. Uebersetzungen (TR / t())    -> DE/EN-Umschaltung der Oberflaeche
+#  3. DB-Zugriff (get_db_path/...)  -> findet/laedt warehouse.db (read-only)
+#  4. Lade-Funktionen (load_*)      -> SQL -> pandas DataFrame, alle @st.cache
+#  5. Hilfsfunktionen               -> ABC-Klassifikation, Filter, CSV-Export
+#  6. main()                        -> Sidebar-Filter, KPIs und die Tabs/Register
+#
+#  Roter Faden: alle Auswertungen kommen aus EINER Tabelle (PLATZ) plus den
+#  Bewegungsdaten (TPA/FAHRPOS). Es wird NICHTS in die DB zurueckgeschrieben –
+#  reine Lese-/Analyse-App. Dieselbe Logik steckt in der Flutter-App.
+# ===========================================================================
 import os
 import sqlite3
 import tempfile
@@ -34,11 +48,193 @@ st.set_page_config(
     layout="wide",
 )
 
+# HTML/JS-Vorlage fuer den klickbaren three.js-3D-Viewer. Die __PLATZHALTER__
+# werden in main() (Tab "3D-Modell") per str.replace gefuellt:
+#   __HEIGHT__  Hoehe in px        __GLB__    URL der klickbaren GLB
+#   __DATA__    JSON PLATZ_ID->Werte  __LABELS__ JSON uebersetzte Beschriftungen
+#   __ROTATE__  "true"/"false"     __ABCCOLOR__ "true"/"false" (ABC einfaerben)
+# Ablauf im Browser: GLTF laden -> Kamera einpassen -> Klick = Raycasting ->
+# getroffenes Mesh hat als Namen die PLATZ_ID -> Kennzahlen aus __DATA__ ins
+# Panel. KEINE React/Node-Abhaengigkeit, laeuft komplett in der iframe.
+_THREE_VIEWER_HTML = """
+<div id="wrap" style="display:flex;gap:8px;height:__HEIGHT__px;font-family:sans-serif;">
+  <div id="view" style="flex:3;position:relative;background:#f5f5f7;border-radius:8px;overflow:hidden;">
+    <div id="loading" style="position:absolute;top:10px;left:12px;font-size:13px;color:#555;background:rgba(255,255,255,.7);padding:2px 8px;border-radius:4px;">…</div>
+  </div>
+  <div id="panel" style="flex:1;min-width:230px;max-width:320px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;overflow:auto;"></div>
+</div>
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const DATA = __DATA__;
+const L = __LABELS__;
+const AUTOROTATE = __ROTATE__;
+const ABCCOLOR = __ABCCOLOR__;
+const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32 };
+const PID_RE = /^[0-9]{9}$/;
+
+const host = document.getElementById('view');
+const panel = document.getElementById('panel');
+const loadingEl = document.getElementById('loading');
+panel.innerHTML = '<div style="color:#888;">' + L.hint + '</div>';
+
+let W = host.clientWidth || 600, H = host.clientHeight || 600;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5f5f7);
+const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(W, H);
+host.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.1));
+const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+dir.position.set(1, 2, 1);
+scene.add(dir);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotate = AUTOROTATE;
+controls.autoRotateSpeed = 0.8;
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let selected = null, selectedOrigMat = null;
+const HIGHLIGHT = new THREE.Color(0x1565c0);
+
+function fmt(v){ return (v==null) ? '—' : v; }
+
+function showSlot(id){
+  const d = DATA[id];
+  let h = '<div style="font-weight:600;font-size:15px;margin-bottom:8px;">'
+        + L.platz + ': ' + id + '</div>';
+  if(!d){
+    h += '<div style="color:#c62828;">' + L.notdb + '</div>';
+  } else {
+    const util = (d.u==null) ? '—' : (d.u + ' %');
+    const status = d.b ? L.occupied : L.empty;
+    const rows = [
+      [L.pos, d.r + ' / ' + d.f + ' / ' + d.e],
+      [L.halle, d.h],
+      [L.abc_m, d.a],
+      [L.abc_c, d.ac],
+      [L.picks, d.p],
+      [L.util, util],
+      [L.status, status],
+    ];
+    h += '<table style="border-collapse:collapse;width:100%;">';
+    for(const r of rows){
+      h += '<tr><td style="color:#777;padding:3px 8px 3px 0;vertical-align:top;">'
+         + r[0] + '</td><td style="text-align:right;font-weight:500;">'
+         + fmt(r[1]) + '</td></tr>';
+    }
+    h += '</table>';
+  }
+  panel.innerHTML = h;
+}
+
+function pickIdFromObject(obj){
+  let o = obj;
+  while(o){
+    if(o.name && PID_RE.test(o.name)) return o.name;
+    o = o.parent;
+  }
+  return null;
+}
+
+function onClick(ev){
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(scene.children, true);
+  for(const hit of hits){
+    const id = pickIdFromObject(hit.object);
+    if(id){
+      if(selected && selectedOrigMat){ selected.material = selectedOrigMat; }
+      selected = hit.object;
+      selectedOrigMat = selected.material;
+      const m = selected.material.clone();
+      if(m.emissive){ m.emissive = HIGHLIGHT; m.emissiveIntensity = 0.9; }
+      else { m.color = HIGHLIGHT; }
+      selected.material = m;
+      showSlot(id);
+      return;
+    }
+  }
+}
+renderer.domElement.addEventListener('click', onClick);
+
+new GLTFLoader().load('__GLB__',
+  (gltf) => {
+    const root = gltf.scene;
+    scene.add(root);
+
+    if(ABCCOLOR){
+      root.traverse((o) => {
+        if(o.isMesh && o.name && DATA[o.name]){
+          const cls = DATA[o.name].ac;
+          if(ABC_HEX[cls] != null){
+            o.material = o.material.clone();
+            o.material.color = new THREE.Color(ABC_HEX[cls]);
+          }
+        }
+      });
+    }
+
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    controls.target.copy(center);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const dist = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
+    camera.position.set(center.x + dist * 0.9, center.y + dist * 0.6, center.z + dist * 0.9);
+    camera.near = maxDim / 1000; camera.far = maxDim * 10;
+    camera.updateProjectionMatrix();
+    controls.update();
+    loadingEl.style.display = 'none';
+  },
+  (p) => {
+    if(p && p.total){ loadingEl.textContent = L.loading + ' ' + Math.round(p.loaded / p.total * 100) + '%'; }
+  },
+  (err) => { loadingEl.textContent = 'Fehler: ' + err; }
+);
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  W = host.clientWidth; H = host.clientHeight;
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  renderer.setSize(W, H);
+});
+</script>
+"""
+
+# --- DB-Tabellen (Lager BER03) --------------------------------------------
+# PLATZ   = ein Datensatz je Stellplatz (Stammdaten + Auslastung + ABC)
+# PALETTE = Palettenbestand (aktuell nicht ausgewertet, nur zur Doku)
+# TPA     = Transport-/Pick-Auftragspositionen = die Bewegungen (6 Monate)
+# FAHRPOS = Fahrpositionen; Q_PLATZ = Quellplatz -> daraus Pick-Frequenz
 PLATZ_TABLE = "df_platz_ber03_schlg_rti3"
 PALETTE_TABLE = "df_palette_08042026_ber03_schlg_rti3"
 TPA_TABLE = "df_tpa_6mon_ber03_schlg_rti3"
 FAHRPOS_TABLE = "df_fahrpos_6mon_ber03_schlg_rti3"
 
+# Such-Reihenfolge fuer die lokale DB. Der erste existierende Pfad gewinnt;
+# wird keiner gefunden, faellt get_db_path() auf den Download per URL zurueck.
 _DB_CANDIDATES = [
     Path("data/warehouse.db"),
     Path("backend/data/warehouse.db"),
@@ -48,7 +244,10 @@ _DB_CANDIDATES = [
 ]
 
 # --- Zweisprachigkeit (DE/EN) ---------------------------------------------
-# Tabellen-Spaltennamen (Datenfelder) bleiben absichtlich unuebersetzt.
+# Muster: TR[schluessel][sprache] = Text. t("schluessel") liest mit dem global
+# gesetzten _LANG den passenden Text. Neue UI-Texte hier eintragen, im Code nur
+# noch t("...") verwenden. Tabellen-Spaltennamen (Datenfelder) bleiben bewusst
+# unuebersetzt, damit sie zur DB passen.
 _LANG = "de"
 
 TR: dict[str, dict[str, str]] = {
@@ -376,6 +575,33 @@ TR: dict[str, dict[str, str]] = {
     "abc3d_master": {"de": "Stamm-ABC", "en": "Master ABC"},
     "abc3d_classfilter": {"de": "Nur ABC-Klasse", "en": "Only ABC class"},
     "fach_label": {"de": "Fach", "en": "Bin"},
+    # --- klickbarer 3D-Viewer ---
+    "d3_click_intro": {
+        "de": "**Klickbares 3D-Modell** — auf einen Lagerplatz im Modell klicken, "
+              "um seine Kennzahlen rechts zu sehen. Die Plätze sind nach `PLATZ_ID` "
+              "benannt und direkt mit der Datenbank verknüpft.",
+        "en": "**Clickable 3D model** — click a storage slot in the model to see its "
+              "metrics on the right. Slots are named by `PLATZ_ID` and linked "
+              "directly to the database.",
+    },
+    "d3_color_abc": {"de": "Nach ABC einfärben", "en": "Color by ABC"},
+    "d3_panel_hint": {
+        "de": "Klicke einen Lagerplatz im Modell an.",
+        "en": "Click a storage slot in the model.",
+    },
+    "d3_f_platz": {"de": "Lagerplatz", "en": "Slot"},
+    "d3_f_pos": {"de": "Regal / Fach / Ebene", "en": "Rack / bin / level"},
+    "d3_f_abc_m": {"de": "ABC (Stamm)", "en": "ABC (master)"},
+    "d3_f_abc_c": {"de": "ABC (berechnet)", "en": "ABC (calculated)"},
+    "d3_f_picks": {"de": "Picks", "en": "Picks"},
+    "d3_f_util": {"de": "Auslastung", "en": "Utilization"},
+    "d3_f_status": {"de": "Status", "en": "Status"},
+    "d3_occupied": {"de": "belegt", "en": "occupied"},
+    "d3_empty": {"de": "frei", "en": "empty"},
+    "d3_not_in_db": {
+        "de": "Dieser Platz ist nicht in der Datenbank (nur im Modell).",
+        "en": "This slot is not in the database (model only).",
+    },
 }
 
 
@@ -388,6 +614,13 @@ def t(key: str) -> str:
 
 @st.cache_resource(show_spinner="Lade DB ...")
 def get_db_path() -> str:
+    """Liefert den Pfad zur warehouse.db.
+
+    Reihenfolge: (1) lokale Datei aus _DB_CANDIDATES, (2) sonst Download von
+    `db_url` (Streamlit-Secret) bzw. WAREHOUSE_DB_URL (Env). Die ~300 MB grosse
+    DB liegt NICHT im Git-Repo, sondern als GitHub-Release-Asset; daher der
+    Download-Fallback. @st.cache_resource = nur einmal pro Session ausfuehren.
+    """
     for p in _DB_CANDIDATES:
         if p.exists():
             return str(p)
@@ -430,7 +663,18 @@ def _hall_for_regal(regal: int) -> str:
 
 @st.cache_data(ttl=3600, show_spinner="Lade Stellplaetze ...")
 def load_platz_full() -> pd.DataFrame:
-    """Stellplatz-Tabelle mit Utilization, Halle und Pick-Count gemerged."""
+    """Zentrale Tabelle der App: ein Datensatz je Stellplatz, angereichert um
+    abgeleitete Kennzahlen. Fast alle Tabs/Filter bauen darauf auf.
+
+    Schritte:
+      1. Stammdaten je Platz aus der PLATZ-Tabelle lesen
+      2. Spalten in Zahlen wandeln (DB liefert teils Strings)
+      3. Kennzahlen ableiten: UTILIZATION (%), FREE_CAPACITY, HALLE, BELEGT,
+         DAYS_EMPTY (Tage seit LEER_DATUM)
+      4. Pick-Frequenz aus FAHRPOS dazumergen (PICK_COUNT_FAHR)
+      5. ABC_CALC: ABC-Klasse aus der kumulativen Pick-Verteilung berechnen
+    @st.cache_data(ttl=3600) = Ergebnis 1 h zwischenspeichern (teurer Query).
+    """
     con = get_connection()
     platz = pd.read_sql_query(
         f'SELECT PLATZ_ID, REGAL, FACH, EBENE, ABC_KLASSE, MAX_LHM, IST_LHM, '
@@ -449,6 +693,8 @@ def load_platz_full() -> pd.DataFrame:
     platz["ZUSTAND"] = pd.to_numeric(platz["ZUSTAND"], errors="coerce").fillna(0).astype(int)
     platz["ABC_KLASSE"] = platz["ABC_KLASSE"].astype(str).str.strip().str.upper()
 
+    # Auslastung in %: IST-Ladehilfsmittel / Maximum. 0 = leer, 100 = voll,
+    # >100 = ueberbelegt. Ohne MAX_LHM (=0) ist die Auslastung undefiniert (NaN).
     platz["UTILIZATION"] = np.where(
         platz["MAX_LHM"] > 0,
         (platz["IST_LHM"] / platz["MAX_LHM"]) * 100,
@@ -482,7 +728,11 @@ def load_platz_full() -> pd.DataFrame:
     except Exception:
         platz["PICK_COUNT_FAHR"] = 0
 
-    # ABC nach kumulativer Pick-Verteilung (aus warehouse_analytics.py).
+    # ABC nach kumulativer Pick-Verteilung (Pareto, aus warehouse_analytics.py):
+    # Plaetze absteigend nach Picks sortieren, kumulierten Anteil bilden und
+    # klassifizieren -> A = Plaetze, die zusammen die ersten 80 % aller Picks
+    # ausmachen, B = bis 95 %, C = der lange Rest. Das ist die *berechnete*
+    # Klasse (ABC_CALC) und kann von der hinterlegten ABC_KLASSE abweichen.
     abc_basis = platz.sort_values("ANZ_PICKS", ascending=False).copy()
     total = abc_basis["ANZ_PICKS"].sum()
     if total > 0:
@@ -505,8 +755,14 @@ def load_platz_full() -> pd.DataFrame:
     return platz
 
 
+# --- Bewegungsdaten (TPA/FAHRPOS) -----------------------------------------
+# Diese load_*-Funktionen liefern jeweils ein fertiges DataFrame fuer genau
+# einen Tab. Trennung von Datenbeschaffung (hier) und Darstellung (in main()).
+
+
 @st.cache_data(ttl=3600)
 def load_throughput_trend(days: int = 30) -> pd.DataFrame:
+    """Bewegungen je Tag der letzten `days` Tage (Tab 'Durchsatz')."""
     con = get_connection()
     df = pd.read_sql_query(
         f"""
@@ -584,7 +840,13 @@ def load_abc_articles(limit: int = 50000) -> pd.DataFrame:
 def classify_abc(
     df: pd.DataFrame, value_col: str, a_pct: float, b_pct: float
 ) -> pd.DataFrame:
-    """ABC nach kumulativem Anteil von value_col. Liefert Spalten CUM_% + ABC."""
+    """ABC-Klassifikation nach kumulativem Anteil von `value_col`.
+
+    Generische Variante der ABC-Logik aus load_platz_full(), aber mit *frei
+    einstellbaren* Schwellen (Slider im ABC-Tab) und fuer beliebige Wertespalte
+    – `ANZ_PICKS` (je Platz) oder `bewegungen` (je Artikel). Liefert zusaetzlich
+    die Spalten CUM_% (kumulierter Anteil) und ABC (A/B/C).
+    """
     out = df.sort_values(value_col, ascending=False).copy().reset_index(drop=True)
     total = out[value_col].sum()
     if total > 0:
@@ -647,6 +909,38 @@ def load_article_detail(artikelnr: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     return slots, days.dropna(subset=["day"])
 
 
+@st.cache_data(ttl=3600, show_spinner="Baue 3D-Platzdaten ...")
+def load_slot_3d_map() -> str:
+    """Kompakte JSON-Map PLATZ_ID -> Kennzahlen fuer den klickbaren 3D-Viewer.
+
+    Die Meshes in SampleScene_clickable.glb sind nach PLATZ_ID benannt. Beim
+    Klick liest das three.js-Frontend hier nach, welche Werte zu dem Platz
+    gehoeren (ABC, Picks, Auslastung, belegt). Als JSON-String gecacht, damit
+    er pro Session nur einmal gebaut wird.
+    """
+    import json
+
+    df = load_platz_full()
+    out: dict[str, dict] = {}
+    for row in df.itertuples(index=False):
+        pid = str(row.PLATZ_ID).strip()
+        if not pid:
+            continue
+        util = getattr(row, "UTILIZATION")
+        out[pid] = {
+            "r": int(row.REGAL),
+            "f": int(row.FACH),
+            "e": int(row.EBENE),
+            "h": row.HALLE,
+            "a": (row.ABC_KLASSE or "—"),
+            "ac": (row.ABC_CALC if isinstance(row.ABC_CALC, str) else "—"),
+            "p": int(row.ANZ_PICKS),
+            "u": (None if pd.isna(util) else round(float(util), 1)),
+            "b": bool(row.BELEGT),
+        }
+    return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
+
+
 def heatmap_color(util: float) -> str:
     """Aus warehouse_heatmap.py."""
     if pd.isna(util):
@@ -693,6 +987,11 @@ def apply_filters(
     min_picks: int = 0,
     sperr_mode: str = "Alle",
 ) -> pd.DataFrame:
+    """Wendet die Sidebar-Filter auf das Platz-DataFrame an und gibt die
+    Teilmenge zurueck. Wird einmal in main() aufgerufen; ALLE Tabs arbeiten
+    danach mit diesem `filtered` – so wirkt jeder Filter ueberall gleich.
+    Jeder Block ist ein optionaler Filter (leer/Default = nicht einschraenken).
+    """
     out = df
     if hallen:
         out = out[out["HALLE"].isin(hallen)]
@@ -720,6 +1019,15 @@ def apply_filters(
 
 
 def main() -> None:
+    """Baut die komplette Oberflaeche auf (Streamlit rendert top-down und fuehrt
+    diese Funktion bei jeder Interaktion komplett neu aus).
+
+    Ablauf: Sprache -> Logo/Titel -> Daten laden -> Sidebar-Filter -> KPIs ->
+    Tabs. Die teuren Lade-Funktionen sind gecacht, daher ist das Neu-Ausfuehren
+    guenstig.
+    """
+    # Sprachumschalter ganz oben in der Sidebar; setzt das globale _LANG, das
+    # t() fuer alle folgenden Texte auswertet.
     global _LANG
     _LANG = "en" if st.sidebar.radio(
         TR["lang_label"]["de"], ["Deutsch", "English"], horizontal=True,
@@ -789,6 +1097,7 @@ def main() -> None:
         st.divider()
         st.caption(f"DB: `{get_db_path()}`")
 
+    # Einmal filtern -> alle Tabs nutzen dasselbe gefilterte DataFrame.
     filtered = apply_filters(
         platz, hallen, abc, util_range, only_occupied,
         regal_range=regal_range,
@@ -797,6 +1106,7 @@ def main() -> None:
         sperr_mode=sperr_mode,
     )
 
+    # --- KPI-Kacheln oben (beziehen sich auf die gefilterte Auswahl) ---
     total = len(filtered) or 1
     occupied = int(filtered["BELEGT"].sum())
     overloaded = int((filtered["UTILIZATION"] > 100).sum())
@@ -810,6 +1120,11 @@ def main() -> None:
               f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—")
     c4.metric(t("m_overloaded"), f"{overloaded:,}".replace(",", "."))
 
+    # --- Register/Tabs ---------------------------------------------------
+    # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
+    # Drei Gruppen: (1) Analyse (Hallen..Free), (2) Steuermassnahmen
+    # (Umlagern/Nachschub/Einlagern/Auslagern – dieselben Regeln wie die App),
+    # (3) Auswertung/Extras (ABC, Durchsatz, Top-Artikel, Artikel-Detail, 3D).
     (tab_hallen, tab_heat, tab_pickheat, tab_bottle, tab_free, tab_umlagern,
      tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_trend, tab_top,
      tab_article, tab_3d) = st.tabs([
@@ -1056,6 +1371,12 @@ def main() -> None:
         st.dataframe(free, use_container_width=True, hide_index=True)
         _csv_download(free, "free_capacity")
 
+    # ----- Steuermassnahmen (Umlagern/Nachschub/Einlagern/Auslagern) -----
+    # Jeder dieser vier Tabs zeigt mehrere "Kategorien" (z. B. dringend/
+    # ueberfaellig). Eine Kategorie = eine nach Regeln gefilterte Teilmenge von
+    # `filtered`. _massnahme_kategorie() rendert jede einheitlich: Titel,
+    # Anzahl-Kennzahl, Tabelle und CSV-Download. Die Regeln (welche Plaetze in
+    # welche Kategorie fallen) entsprechen der Logik der Flutter-App.
     _MASSNAHME_COLS = [
         "PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
         "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM",
@@ -1063,6 +1384,7 @@ def main() -> None:
 
     def _massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                              extra_cols: list[str] | None = None) -> None:
+        """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV)."""
         cols = _MASSNAHME_COLS + (extra_cols or [])
         cols = [c for c in cols if c in df.columns]
         st.markdown(f"**{titel}** — {beschreibung}")
@@ -1085,15 +1407,19 @@ def main() -> None:
         with c2:
             high_level = st.slider(t("sl_highlevel"), 2, 6, 4)
 
+        # Regel 1: A-Platz (Premium) ohne Picks -> Premiumplatz verschwendet.
+        # ZUSTAND < 150 = nicht gesperrt.
         unused_a = filtered[
             (filtered["ABC_KLASSE"] == "A")
             & (filtered["ANZ_PICKS"] == 0)
             & (filtered["ZUSTAND"] < 150)
         ].sort_values(["REGAL", "EBENE", "FACH"])
+        # Regel 2: C-Platz mit vielen Picks -> falsch klassifiziert, hochstufen.
         hot_c = filtered[
             (filtered["ABC_KLASSE"] == "C")
             & (filtered["ANZ_PICKS"] >= hot_c_threshold)
         ].sort_values("ANZ_PICKS", ascending=False)
+        # Regel 3: aktiver A-Artikel weit oben -> ergonomisch nach unten holen.
         high_level_a = filtered[
             (filtered["ABC_KLASSE"] == "A")
             & (filtered["EBENE"] >= high_level)
@@ -1118,15 +1444,20 @@ def main() -> None:
             overdue_days = st.slider(t("sl_overdue"), 3, 60, 14)
         medium_threshold = max(1, pick_threshold // 2)
 
+        # Basis: leere Pickplaetze (IST_LHM=0) in der Pickzone (niedrige Ebene),
+        # nicht gesperrt. Daraus drei Dringlichkeitsstufen:
         empty_pick = filtered[
             (filtered["IST_LHM"].fillna(0) == 0)
             & (filtered["EBENE"] <= pick_level)
             & (filtered["ZUSTAND"] < 150)
         ]
+        # dringend = leer + hohe Pickfrequenz
         urgent = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold] \
             .sort_values("ANZ_PICKS", ascending=False)
+        # ueberfaellig = dringend + schon zu lange leer (DAYS_EMPTY)
         overdue = urgent[urgent["DAYS_EMPTY"] >= overdue_days] \
             .sort_values("DAYS_EMPTY", ascending=False)
+        # mittel = leer mit mittlerer Frequenz (halbe Schwelle .. Schwelle)
         medium = empty_pick[
             (empty_pick["ANZ_PICKS"] >= medium_threshold)
             & (empty_pick["ANZ_PICKS"] < pick_threshold)
@@ -1147,15 +1478,18 @@ def main() -> None:
         reserve_level = st.slider(t("sl_reservelevel"), 2, 6, 3)
         free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
 
+        # Fast-Lane: freie A-Plaetze ganz unten -> kurze Wege fuer Schnelldreher.
         fast_lane = free_slots[
             (free_slots["ABC_KLASSE"] == "A")
             & (free_slots["EBENE"] <= 2)
             & (free_slots["ZUSTAND"] < 150)
         ].sort_values("FREE_CAPACITY", ascending=False)
+        # Reserve: freie Plaetze in hohen Ebenen -> fuer Langsamdreher/Puffer.
         reserve = free_slots[
             (free_slots["EBENE"] >= reserve_level)
             & (free_slots["ZUSTAND"] < 150)
         ].sort_values("FREE_CAPACITY", ascending=False)
+        # Gesperrt (ZUSTAND>=150): bewusst NICHT bestuecken (Warnliste).
         blocked = filtered[filtered["ZUSTAND"] >= 150] \
             .sort_values("REGAL")
 
@@ -1176,12 +1510,16 @@ def main() -> None:
             (filtered["BELEGT"]) & (filtered["ZUSTAND"] < 150)
         ]
 
+        # kritisch: belegter A-Platz mit 0 Picks -> Premiumplatz von Ladenhueter
+        # blockiert, vorrangig auslagern.
         critical = belegt[
             (belegt["ABC_KLASSE"] == "A") & (belegt["ANZ_PICKS"] == 0)
         ].sort_values(["REGAL", "EBENE", "FACH"])
+        # abgestanden: belegt, 0 Picks, aber kein A-Platz.
         stale = belegt[
             (belegt["ABC_KLASSE"] != "A") & (belegt["ANZ_PICKS"] == 0)
         ].sort_values(["REGAL", "EBENE", "FACH"])
+        # beobachten: laeuft, aber nur sehr selten (1..observe_max Picks).
         observe = belegt[
             (belegt["ANZ_PICKS"] > 0) & (belegt["ANZ_PICKS"] <= observe_max)
         ].sort_values("ANZ_PICKS")
@@ -1264,12 +1602,15 @@ def main() -> None:
                 )
                 st.dataframe(cross, use_container_width=True)
 
-                # ABC-Anpassung: Abweichungen Stamm vs. berechnet + Empfehlung
+                # ABC-Anpassung: Abweichungen Stamm vs. berechnet + Empfehlung.
+                # Trick: A/B/C als Rang 3/2/1. Ist die berechnete Klasse hoeher
+                # als die hinterlegte (_c > _m), wird der Platz mehr bewegt als
+                # gedacht -> "Hochstufen"; umgekehrt -> "Herabstufen".
                 st.markdown(t("abc_adjust_head"))
                 st.markdown(t("abc_adjust_intro"))
                 rank = {"A": 3, "B": 2, "C": 1}
                 dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
-                dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]
+                dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]  # nur Abweichungen
                 if dev.empty:
                     st.info(t("abc_no_dev"))
                 else:
@@ -1405,46 +1746,53 @@ def main() -> None:
                     _csv_download(slot_tbl, "artikel_plaetze")
 
     with tab_3d:
-        # GitHub-Release-Assets senden kein CORS -> der Browser wuerde das
-        # Modell blocken. Daher ueber den CORS-faehigen API-Proxy laden
-        # (gleiche Quelle wie die Flutter-App).
-        glb_url = "https://ssi-lagerview-api.onrender.com/model.glb"
+        import json as _json
 
-        # --- 3D-Steuerelemente ---
-        ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 1])
+        st.markdown(t("d3_click_intro"))
+
+        # Klickbares Modell: SampleScene_clickable.glb hat eine intakte
+        # Hierarchie, deren Blatt-Meshes nach PLATZ_ID benannt sind. Der
+        # three.js-Viewer (eingebettet via components.html) wirft beim Klick
+        # einen Strahl ins Modell (Raycasting), liest den getroffenen
+        # PLATZ_ID-Namen und schlaegt seine Kennzahlen in der unten injizierten
+        # JSON-Map nach. GLB wird CORS-faehig ueber die API geliefert.
+        glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
+
+        ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
         with ctrl1:
             auto_rotate = st.checkbox(t("d3_autorotate"), value=False)
         with ctrl2:
-            exposure = st.slider(t("d3_brightness"), 0.2, 2.0, 1.0, step=0.1)
+            color_abc = st.checkbox(t("d3_color_abc"), value=True)
         with ctrl3:
-            shadow = st.slider(t("d3_shadow"), 0.0, 2.0, 0.8, step=0.1)
-        with ctrl4:
             viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
-        bg = "#f5f5f7"
-        if st.button(t("d3_reset")):
-            st.rerun()
 
-        rotate_attr = 'auto-rotate auto-rotate-delay="0"' if auto_rotate else ""
-        components.html(
-            f"""
-<script type="module"
-    src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
-</script>
-<div style="width:100%;height:{viewer_height}px;background:{bg};border-radius:8px;">
-  <model-viewer
-      src="{glb_url}"
-      alt="Schaeflein BER03 Lager"
-      camera-controls
-      {rotate_attr}
-      touch-action="pan-y"
-      shadow-intensity="{shadow}"
-      exposure="{exposure}"
-      style="width:100%;height:100%;background-color:{bg};">
-  </model-viewer>
-</div>
-            """,
-            height=viewer_height + 20,
+        slot_json = load_slot_3d_map()
+        labels = {
+            "hint": t("d3_panel_hint"),
+            "platz": t("d3_f_platz"),
+            "pos": t("d3_f_pos"),
+            "halle": t("hall"),
+            "abc_m": t("d3_f_abc_m"),
+            "abc_c": t("d3_f_abc_c"),
+            "picks": t("d3_f_picks"),
+            "util": t("d3_f_util"),
+            "status": t("d3_f_status"),
+            "occupied": t("d3_occupied"),
+            "empty": t("d3_empty"),
+            "notdb": t("d3_not_in_db"),
+            "loading": "Lade Modell" if _LANG == "de" else "Loading model",
+        }
+
+        html = (
+            _THREE_VIEWER_HTML
+            .replace("__HEIGHT__", str(viewer_height))
+            .replace("__GLB__", glb_url)
+            .replace("__DATA__", slot_json)
+            .replace("__LABELS__", _json.dumps(labels, ensure_ascii=False))
+            .replace("__ROTATE__", "true" if auto_rotate else "false")
+            .replace("__ABCCOLOR__", "true" if color_abc else "false")
         )
+        components.html(html, height=viewer_height + 16)
         st.caption(t("d3_caption"))
 
         st.divider()
