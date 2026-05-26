@@ -1139,11 +1139,11 @@ def main() -> None:
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
     # Drei Gruppen: (1) Hallen + "Sonstiges" (gebuendelte Analyse-Heatmaps),
     # (2) Steuermassnahmen (Umlagern/Nachschub/Einlagern/Auslagern – dieselben
-    # Regeln wie die App), (3) Auswertung/Extras (ABC, Durchsatz, Top-Artikel,
+    # Regeln wie die App), (3) Auswertung/Extras (ABC, Top-Artikel,
     # Artikel-Detail, 3D). "Sonstiges" enthaelt die Unter-Tabs Auslastungs-/
-    # Pick-Heatmap, Bottlenecks und Free Capacity (siehe unten).
+    # Pick-Heatmap, Bottlenecks, Free Capacity und Durchsatz (siehe unten).
     (tab_hallen, tab_sonstiges, tab_umlagern,
-     tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_trend, tab_top,
+     tab_nachschub, tab_einlagern, tab_auslagern, tab_abc, tab_top,
      tab_article, tab_3d) = st.tabs([
         t("tab_halls"),
         t("tab_misc"),
@@ -1152,19 +1152,19 @@ def main() -> None:
         t("tab_putaway"),
         t("tab_retrieve"),
         t("tab_abc"),
-        t("tab_tp"),
         t("tab_top"),
         t("tab_article"),
         t("tab_3d"),
     ])
 
-    # "Sonstiges": Unter-Tabs fuer die vier Analyse-Heatmaps. Die Unter-Tab-
-    # Objekte werden hier (im Kontext von tab_sonstiges) erzeugt; ihre Inhalte
-    # folgen weiter unten als `with sub_*` und landen dadurch verschachtelt
-    # unter "Sonstiges".
+    # "Sonstiges": Unter-Tabs fuer die Analyse-Heatmaps + Durchsatz. Die Unter-
+    # Tab-Objekte werden hier (im Kontext von tab_sonstiges) erzeugt; ihre
+    # Inhalte folgen weiter unten als `with sub_*` und landen dadurch
+    # verschachtelt unter "Sonstiges".
     with tab_sonstiges:
-        sub_heat, sub_pickheat, sub_bottle, sub_free = st.tabs([
+        sub_heat, sub_pickheat, sub_bottle, sub_free, sub_trend = st.tabs([
             t("tab_util"), t("tab_pick"), t("tab_bottle"), t("tab_free"),
+            t("tab_tp"),
         ])
 
     with tab_hallen:
@@ -1667,7 +1667,7 @@ def main() -> None:
             st.dataframe(table, use_container_width=True, hide_index=True)
             _csv_download(table, "abc_articles" if by_articles else "abc_slots")
 
-    with tab_trend:
+    with sub_trend:
         st.markdown(t("tp_intro"))
         _mov_filter_note()
         use_range = st.checkbox(t("tp_use_range"), value=False)
