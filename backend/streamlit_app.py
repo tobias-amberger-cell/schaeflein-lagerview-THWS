@@ -53,6 +53,7 @@ st.set_page_config(
 #   __HEIGHT__  Hoehe in px        __GLB__    URL der klickbaren GLB
 #   __DATA__    JSON PLATZ_ID->Werte  __LABELS__ JSON uebersetzte Beschriftungen
 #   __ROTATE__  "true"/"false"     __ABCCOLOR__ "true"/"false" (ABC einfaerben)
+#   __HIDEGREY__ "true"/"false"    (Leistungsmodus: datenlose Plaetze ausblenden)
 # Ablauf im Browser: GLTF laden -> Kamera einpassen -> Klick = Raycasting ->
 # getroffenes Mesh hat als Namen die PLATZ_ID -> Kennzahlen aus __DATA__ ins
 # Panel. KEINE React/Node-Abhaengigkeit, laeuft komplett in der iframe.
@@ -79,8 +80,18 @@ const DATA = __DATA__;
 const L = __LABELS__;
 const AUTOROTATE = __ROTATE__;
 const ABCCOLOR = __ABCCOLOR__;
-const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32 };
+const HIDEGREY = __HIDEGREY__;
+const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
 const PID_RE = /^[0-9]{9}$/;
+
+// Geteilte Materialien statt pro-Mesh-Klon (26k Meshes!) -> spart Speicher
+// und Ladezeit; jedes Mesh bekommt nur eine Referenz, keinen eigenen Klon.
+const SHARED_MAT = {
+  'A': new THREE.MeshStandardMaterial({ color: ABC_HEX.A }),
+  'B': new THREE.MeshStandardMaterial({ color: ABC_HEX.B }),
+  'C': new THREE.MeshStandardMaterial({ color: ABC_HEX.C }),
+  'grey': new THREE.MeshStandardMaterial({ color: ABC_HEX.grey }),
+};
 
 const host = document.getElementById('view');
 const panel = document.getElementById('panel');
@@ -91,10 +102,16 @@ let W = host.clientWidth || 600, H = host.clientHeight || 600;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf5f5f7);
 const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.setSize(W, H);
 host.appendChild(renderer.domElement);
+
+// Render-on-Demand: nur neu zeichnen, wenn sich etwas bewegt -> im Stillstand
+// keine GPU-Last. controls feuert 'change' bei jeder Kamerabewegung (auch
+// waehrend des Damping-Nachlaufs).
+let needsRender = true;
+function requestRender(){ needsRender = true; }
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.1));
 const dir = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -105,6 +122,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.autoRotate = AUTOROTATE;
 controls.autoRotateSpeed = 0.8;
+controls.addEventListener('change', requestRender);
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -163,11 +181,12 @@ function onClick(ev){
       if(selected && selectedOrigMat){ selected.material = selectedOrigMat; }
       selected = hit.object;
       selectedOrigMat = selected.material;
-      const m = selected.material.clone();
+      const m = selected.material.clone();  // nur das EINE markierte Mesh klont
       if(m.emissive){ m.emissive = HIGHLIGHT; m.emissiveIntensity = 0.9; }
       else { m.color = HIGHLIGHT; }
       selected.material = m;
       showSlot(id);
+      requestRender();
       return;
     }
   }
@@ -203,12 +222,13 @@ new GLTFLoader().load('__GLB__',
       if(!o.isMesh || !o.name || !PID_RE.test(o.name)) return;
       const d = DATA[o.name];
       const cls = d ? d.ac : null;
-      if(cls === 'A' || cls === 'B' || cls === 'C') counts[cls] += 1;
-      else counts.grey += 1;
-      if(ABCCOLOR){
-        o.material = o.material.clone();
-        o.material.color = new THREE.Color(ABC_HEX[cls] != null ? ABC_HEX[cls] : 0x9e9e9e);
-      }
+      const key = (cls === 'A' || cls === 'B' || cls === 'C') ? cls : 'grey';
+      counts[key] += 1;
+      // Leistungsmodus: graue (datenlose) Plaetze ausblenden -> weniger
+      // Draw-Calls. Kein Datenverlust, da grau ohnehin keine DB-Daten hat.
+      if(key === 'grey' && HIDEGREY){ o.visible = false; }
+      // Einfaerben ueber GETEILTE Materialien (kein Klon pro Mesh).
+      if(ABCCOLOR){ o.material = SHARED_MAT[key]; }
     });
     fillLegend(counts);
 
@@ -223,6 +243,7 @@ new GLTFLoader().load('__GLB__',
     camera.updateProjectionMatrix();
     controls.update();
     loadingEl.style.display = 'none';
+    requestRender();
   },
   (p) => {
     if(p && p.total){ loadingEl.textContent = L.loading + ' ' + Math.round(p.loaded / p.total * 100) + '%'; }
@@ -232,8 +253,13 @@ new GLTFLoader().load('__GLB__',
 
 function animate(){
   requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
+  // controls.update() liefert true, solange das Damping die Kamera bewegt;
+  // 'change' setzt needsRender dabei ohnehin. Nur dann tatsaechlich rendern.
+  const moved = controls.update();
+  if(needsRender || moved){
+    renderer.render(scene, camera);
+    needsRender = false;
+  }
 }
 animate();
 
@@ -241,6 +267,7 @@ window.addEventListener('resize', () => {
   W = host.clientWidth; H = host.clientHeight;
   camera.aspect = W / H; camera.updateProjectionMatrix();
   renderer.setSize(W, H);
+  requestRender();
 });
 </script>
 """
@@ -646,6 +673,13 @@ TR: dict[str, dict[str, str]] = {
     },
     "d3_legend": {"de": "Plätze im Modell", "en": "Slots in model"},
     "d3_grey": {"de": "ohne Daten", "en": "no data"},
+    "d3_perf": {"de": "Leistungsmodus", "en": "Performance mode"},
+    "d3_perf_help": {
+        "de": "Blendet Plätze ohne DB-Daten (grau) aus → flüssiger. "
+              "Es gehen keine Daten verloren, graue Plätze haben ohnehin keine.",
+        "en": "Hides slots without DB data (grey) → smoother. No data is lost; "
+              "grey slots have none anyway.",
+    },
 }
 
 
@@ -1817,10 +1851,12 @@ def main() -> None:
 
         # Modell dreht sich bewusst NICHT von allein (auf Wunsch). Drehen geht
         # weiterhin manuell per Ziehen mit der Maus.
-        ctrl1, ctrl2 = st.columns([1, 1])
+        ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
         with ctrl1:
             color_abc = st.checkbox(t("d3_color_abc"), value=True)
         with ctrl2:
+            perf_mode = st.checkbox(t("d3_perf"), value=False, help=t("d3_perf_help"))
+        with ctrl3:
             viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
 
         slot_json = load_slot_3d_map()
@@ -1850,6 +1886,7 @@ def main() -> None:
             .replace("__LABELS__", _json.dumps(labels, ensure_ascii=False))
             .replace("__ROTATE__", "false")
             .replace("__ABCCOLOR__", "true" if color_abc else "false")
+            .replace("__HIDEGREY__", "true" if perf_mode else "false")
         )
         components.html(html, height=viewer_height + 16)
         st.caption(t("d3_caption"))
