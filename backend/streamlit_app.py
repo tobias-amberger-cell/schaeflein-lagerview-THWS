@@ -1114,7 +1114,15 @@ def load_platz_full() -> pd.DataFrame:
     # Platz fuer die Massnahmen-Tabellen.
     platz["WERT"] = platz["MAX_LHM"].fillna(0) * platz["ANZ_PICKS"]
     platz["HALLE"] = platz["REGAL"].apply(_hall_for_regal)
-    platz["BELEGT"] = platz["ZUSTAND"] > 0
+    # Belegt = physisch Ware vorhanden (IST_LHM > 0). ZUSTAND ist hier KEIN
+    # verlaesslicher Indikator (nur Werte 0/150; nur ~19% der 150er haben
+    # IST_LHM>0). Konsistent mit UTILIZATION/FREE_CAPACITY, die ebenfalls auf
+    # IST_LHM beruhen.
+    platz["BELEGT"] = platz["IST_LHM"].fillna(0) > 0
+    # Gesperrt = SPERR_KNZ gesetzt (alles ausser leer/0). Das ist der echte
+    # Sperr-Indikator (NICHT ZUSTAND); gleiche Definition wie der Sidebar-Filter.
+    _sperr = platz["SPERR_KNZ"].astype(str).str.strip().str.lower()
+    platz["GESPERRT"] = ~_sperr.isin(["", "0", "nan", "none"])
     platz["DAYS_EMPTY"] = (
         pd.Timestamp.now().normalize()
         - pd.to_datetime(platz["LEER_DATUM"], errors="coerce")
@@ -1821,11 +1829,10 @@ def main() -> None:
             high_level = st.slider(t("sl_highlevel"), 2, 6, 4)
 
         # Regel 1: A-Platz (Premium) ohne Picks -> Premiumplatz verschwendet.
-        # ZUSTAND < 150 = nicht gesperrt.
         unused_a = filtered[
             (filtered["ABC_KLASSE"] == "A")
             & (filtered["ANZ_PICKS"] == 0)
-            & (filtered["ZUSTAND"] < 150)
+            & (~filtered["GESPERRT"])
         ].sort_values(["REGAL", "EBENE", "FACH"])
         # Regel 2: C-Platz mit vielen Picks -> falsch klassifiziert, hochstufen.
         hot_c = filtered[
@@ -1844,7 +1851,7 @@ def main() -> None:
         # plaetze -> Ziel fuer heisse C-Plaetze und A-Plaetze von oben; hohe
         # Ebenen (>=3) = Reserve -> Ziel fuer ungenutzte Premiumplaetze.
         free_pool = filtered[
-            (filtered["FREE_CAPACITY"] > 0) & (filtered["ZUSTAND"] < 150)
+            (filtered["FREE_CAPACITY"] > 0) & (~filtered["GESPERRT"])
         ]
         free_low = free_pool[free_pool["EBENE"] <= 2] \
             .sort_values("FREE_CAPACITY", ascending=False)
@@ -1897,7 +1904,7 @@ def main() -> None:
         empty_pick = filtered[
             (filtered["IST_LHM"].fillna(0) == 0)
             & (filtered["EBENE"] <= pick_level)
-            & (filtered["ZUSTAND"] < 150)
+            & (~filtered["GESPERRT"])
         ]
         # dringend = leer + hohe Pickfrequenz
         urgent = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold] \
@@ -1924,7 +1931,7 @@ def main() -> None:
         fast_lane = free_slots[
             (free_slots["ABC_KLASSE"] == "A")
             & (free_slots["EBENE"] <= fast_level)
-            & (free_slots["ZUSTAND"] < 150)
+            & (~free_slots["GESPERRT"])
         ].sort_values("FREE_CAPACITY", ascending=False)
 
         _massnahme_kategorie(
@@ -1941,9 +1948,12 @@ def main() -> None:
             retr_zone = st.slider(t("sl_retrzone"), 1, 6, 2)
         with c2:
             observe_max = st.slider(t("sl_observe"), 1, 50, 5)
+        # belegt = physisch Ware vorhanden (IST_LHM>0, siehe BELEGT) in der
+        # Pickzone. KEIN ZUSTAND<150-Filter mehr (ZUSTAND ist hier nur 0/150 und
+        # kein Sperr-Indikator -> hat zuvor alle belegten Plaetze ausgeschlossen,
+        # darum war der Tab leer). Gesperrte ueber den Sidebar-Filter ausblenden.
         belegt = filtered[
             (filtered["BELEGT"])
-            & (filtered["ZUSTAND"] < 150)
             & (filtered["EBENE"] <= retr_zone)
         ]
 
