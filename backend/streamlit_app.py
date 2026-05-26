@@ -453,7 +453,14 @@ const ids = Object.keys(DATA);
 const rackFach = {};
 ids.forEach(id => { const d = DATA[id]; (rackFach[d.r] = rackFach[d.r] || new Set()).add(d.f); });
 const regals = Object.keys(rackFach).map(Number).sort((a,b) => a-b);
-const rackX = {}; regals.forEach((r,i) => rackX[r] = i);
+// Regale entlang X aufreihen, mit breiterem Gang zwischen den Hallen.
+const HALL = (r) => r <= 16 ? 1 : (r <= 32 ? 2 : 3);
+const rackX = {}; let _xi = 0, _prevH = null;
+regals.forEach(r => {
+  const h = HALL(r);
+  if(_prevH !== null && h !== _prevH) _xi += 2;  // Hallen-Gang
+  rackX[r] = _xi; _xi += 1; _prevH = h;
+});
 const fachCol = {};
 regals.forEach(r => { const arr=[...rackFach[r]].sort((a,b)=>a-b); const m={}; arr.forEach((f,i)=>m[f]=i); fachCol[r]=m; });
 
@@ -467,6 +474,8 @@ const dummy = new THREE.Object3D();
 const idByInst = new Array(N), instById = {}, pos = new Array(N), baseColor = new Array(N);
 const counts = { A:0, B:0, C:0 };
 const col = new THREE.Color();
+const rackMaxZ = {}, rackMaxY = {};  // Ausmaße je Regal (fuer die Rahmen)
+let gMinX=1e9, gMaxX=-1e9, gMinZ=1e9, gMaxZ=-1e9;  // Gesamt-Ausmaße (Boden)
 for(let i=0; i<N; i++){
   const id = ids[i], d = DATA[id];
   const x = rackX[d.r] * RACK_PITCH, z = fachCol[d.r][d.f] * CELL, y = d.e * CELL;
@@ -475,12 +484,50 @@ for(let i=0; i<N; i++){
   if(counts[key]!=null) counts[key]++;
   col.setHex(ABC_HEX[key]); inst.setColorAt(i, col);
   baseColor[i] = ABC_HEX[key]; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z};
+  if(z > (rackMaxZ[d.r]||0)) rackMaxZ[d.r] = z;
+  if(y > (rackMaxY[d.r]||0)) rackMaxY[d.r] = y;
+  if(x<gMinX) gMinX=x; if(x>gMaxX) gMaxX=x;
+  if(z<gMinZ) gMinZ=z; if(z>gMaxZ) gMaxZ=z;
 }
 inst.instanceMatrix.needsUpdate = true;
 if(inst.instanceColor) inst.instanceColor.needsUpdate = true;
 scene.add(inst);
 fillLegend(counts);
 loadingEl.style.display = 'none';
+
+// --- Lager-Optik: Boden, Regal-Rahmen, Regal-Beschriftung -----------------
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry((gMaxX-gMinX)+8, (gMaxZ-gMinZ)+8),
+  new THREE.MeshStandardMaterial({ color: 0xe4e4e7, roughness: 1.0 })
+);
+floor.rotation.x = -Math.PI/2;
+floor.position.set((gMinX+gMaxX)/2, -CELL*0.6, (gMinZ+gMaxZ)/2);
+scene.add(floor);
+
+const frameMat = new THREE.LineBasicMaterial({ color: 0x90a4ae });
+const frameGroup = new THREE.Group();
+function makeLabel(text){
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(0,0,128,64);
+  ctx.strokeStyle = '#9e9e9e'; ctx.strokeRect(1,1,126,62);
+  ctx.fillStyle = '#263238'; ctx.font = 'bold 34px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 64, 34);
+  return new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c) }));
+}
+regals.forEach(r => {
+  const x = rackX[r] * RACK_PITCH;
+  const zmax = rackMaxZ[r] || 0, ymax = rackMaxY[r] || 0;
+  const bg = new THREE.BoxGeometry(CELL, ymax + CELL, zmax + CELL);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(bg), frameMat);
+  edges.position.set(x, ymax/2, zmax/2);
+  frameGroup.add(edges);
+  const lab = makeLabel('R' + r);
+  lab.position.set(x, ymax + CELL*2.0, -CELL*1.5);
+  lab.scale.set(3, 1.5, 1);
+  frameGroup.add(lab);
+});
+scene.add(frameGroup);
 
 // Kamera einpassen
 const box = new THREE.Box3().setFromObject(inst);
