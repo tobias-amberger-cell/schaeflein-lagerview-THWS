@@ -744,32 +744,22 @@ def get_abc_articles(
 def get_abc_slots(
     warehouse_id: str,
     limit: int = Query(default=10000, ge=1, le=100000),
+    with_top_article: bool = Query(default=False),
 ) -> list[dict[str, Any]]:
     """Per-Platz ABC: PLATZ_ID, Halle, Regal, Fach, Ebene, ANZ_PICKS,
-    Cumulative %, ABC_CALC (aus Picks), ABC_KLASSE (Master) + Top-Artikel."""
+    Cumulative %, ABC_CALC (aus Picks), ABC_KLASSE (Master).
+
+    Top-Artikel je Platz ist optional (with_top_article=true). Er ist teuer
+    (Fensterfunktion ueber alle Bewegungen) und wuerde sonst auf kleinen
+    Instanzen in einen Timeout laufen; daher standardmaessig aus.
+    """
     if warehouse_id != WAREHOUSE_ID:
         raise HTTPException(status_code=404, detail="Warehouse not found.")
     try:
         with _connect() as conn:
+            # Schnelle Basis-Abfrage nur auf der (kleinen) Platz-Tabelle.
             rows = conn.execute(
                 f"""
-                WITH top_article AS (
-                    SELECT
-                      TRIM(COALESCE(t.Q_PLATZ, '')) AS place_id,
-                      TRIM(COALESCE(t.ARTIKELNR, '')) AS article_id,
-                      TRIM(COALESCE(t.ARTBEZ1, '')) AS article_description,
-                      COUNT(*) AS picks_for_article,
-                      ROW_NUMBER() OVER (
-                        PARTITION BY TRIM(COALESCE(t.Q_PLATZ, ''))
-                        ORDER BY COUNT(*) DESC, TRIM(COALESCE(t.ARTIKELNR, '')) ASC
-                      ) AS rn
-                    FROM {TPA_TABLE} t
-                    WHERE TRIM(COALESCE(t.Q_PLATZ, '')) <> ''
-                    GROUP BY
-                      TRIM(COALESCE(t.Q_PLATZ, '')),
-                      TRIM(COALESCE(t.ARTIKELNR, '')),
-                      TRIM(COALESCE(t.ARTBEZ1, ''))
-                )
                 SELECT
                   TRIM(COALESCE(p.PLATZ_ID, '')) AS place_id,
                   TRIM(COALESCE(p.HAUSNR, '')) AS halle,
@@ -780,19 +770,48 @@ def get_abc_slots(
                   CAST(COALESCE(p.ANZ_PICKS, 0) AS INTEGER) AS anz_picks,
                   UPPER(TRIM(COALESCE(p.ABC_KLASSE, ''))) AS abc_klasse,
                   CAST(COALESCE(p.MAX_LHM, 0) AS REAL) AS max_lhm,
-                  CAST(COALESCE(p.IST_LHM, 0) AS REAL) AS ist_lhm,
-                  COALESCE(a.article_id, '') AS article_id,
-                  COALESCE(a.article_description, '') AS article_description
+                  CAST(COALESCE(p.IST_LHM, 0) AS REAL) AS ist_lhm
                 FROM {PLATZ_TABLE} p
-                LEFT JOIN top_article a
-                  ON a.place_id = TRIM(COALESCE(p.PLATZ_ID, ''))
-                 AND a.rn = 1
                 WHERE TRIM(COALESCE(p.PLATZ_ID, '')) <> ''
                 ORDER BY anz_picks DESC, place_id ASC
                 LIMIT ?
                 """,
                 (limit,),
             ).fetchall()
+
+            # Top-Artikel nur fuer die zurueckgegebenen Plaetze (opt-in).
+            top_map: dict[str, tuple[str, str]] = {}
+            place_ids = [str(r["place_id"]) for r in rows if r["place_id"]]
+            if with_top_article and place_ids:
+                placeholders = ",".join("?" * len(place_ids))
+                ta_rows = conn.execute(
+                    f"""
+                    SELECT place_id, article_id, article_description FROM (
+                      SELECT
+                        TRIM(COALESCE(t.Q_PLATZ, '')) AS place_id,
+                        TRIM(COALESCE(t.ARTIKELNR, '')) AS article_id,
+                        TRIM(COALESCE(t.ARTBEZ1, '')) AS article_description,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY TRIM(COALESCE(t.Q_PLATZ, ''))
+                          ORDER BY COUNT(*) DESC, TRIM(COALESCE(t.ARTIKELNR, '')) ASC
+                        ) AS rn
+                      FROM {TPA_TABLE} t
+                      WHERE TRIM(COALESCE(t.Q_PLATZ, '')) IN ({placeholders})
+                      GROUP BY
+                        TRIM(COALESCE(t.Q_PLATZ, '')),
+                        TRIM(COALESCE(t.ARTIKELNR, '')),
+                        TRIM(COALESCE(t.ARTBEZ1, ''))
+                    ) WHERE rn = 1
+                    """,
+                    place_ids,
+                ).fetchall()
+                top_map = {
+                    str(r["place_id"]): (
+                        str(r["article_id"] or ""),
+                        str(r["article_description"] or ""),
+                    )
+                    for r in ta_rows
+                }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"DB-Fehler: {exc}") from exc
 
@@ -819,6 +838,9 @@ def get_abc_slots(
         ist_lhm = float(row["ist_lhm"] or 0)
         free_cap = max_lhm - ist_lhm
         util = round((ist_lhm / max_lhm) * 100, 2) if max_lhm > 0 else 0.0
+        article_id, article_description = top_map.get(
+            str(row["place_id"] or ""), ("", "")
+        )
         result.append(
             {
                 "place_id": str(row["place_id"] or ""),
@@ -831,8 +853,8 @@ def get_abc_slots(
                 "cumulative_pct": cum_pct,
                 "abc_calc": abc_calc,
                 "abc_class": master,
-                "article_id": str(row["article_id"] or ""),
-                "article_description": str(row["article_description"] or ""),
+                "article_id": article_id,
+                "article_description": article_description,
                 "max_lhm": max_lhm,
                 "ist_lhm": ist_lhm,
                 "free_capacity": free_cap,
