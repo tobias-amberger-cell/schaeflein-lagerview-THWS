@@ -286,7 +286,19 @@ TR: dict[str, dict[str, str]] = {
     "m_slots": {"de": "Stellplaetze", "en": "Slots"},
     "m_occupied": {"de": "Belegt", "en": "Occupied"},
     "m_avg_util": {"de": "Ø Auslastung", "en": "Avg. utilization"},
-    "m_overloaded": {"de": "Ueberlastet (>100 %)", "en": "Overloaded (>100%)"},
+    # KPI-Hilfetexte (Tooltip am ?-Symbol der Kacheln)
+    "m_slots_help": {
+        "de": "Anzahl Stellplaetze in der aktuellen Filter-Auswahl.",
+        "en": "Number of slots in the current filter selection.",
+    },
+    "m_occupied_help": {
+        "de": "Plaetze mit Ware (ZUSTAND > 0). Delta = Anteil belegter Plaetze.",
+        "en": "Slots with goods (ZUSTAND > 0). Delta = share of occupied slots.",
+    },
+    "m_avg_util_help": {
+        "de": "Mittelwert von IST_LHM / MAX_LHM x 100 ueber alle gefilterten Plaetze.",
+        "en": "Average of IST_LHM / MAX_LHM x 100 across all filtered slots.",
+    },
     # Tab-Titel
     "tab_halls": {"de": "Hallen", "en": "Halls"},
     "tab_util": {"de": "Auslastungs-Heatmap", "en": "Utilization heatmap"},
@@ -376,7 +388,7 @@ TR: dict[str, dict[str, str]] = {
     "free_byhall": {"de": "Freie Kapazität (LHM) je Halle", "en": "Free capacity (LHM) per hall"},
     # Maßnahmen
     "reloc_head": {
-        "de": "### 🔄 Umlagern\nDatenbasierte Umlager-Vorschläge (gleiche Logik wie die App).",
+        "de": "### 🔄 Umlagern\nDatenbasierte Umlager-Vorschläge.",
         "en": "### 🔄 Relocate\nData-driven relocation suggestions (same logic as the app).",
     },
     "sl_hotc": {"de": "Heiße C-Plätze ab Picks", "en": "Hot C slots from picks"},
@@ -551,6 +563,12 @@ TR: dict[str, dict[str, str]] = {
     "no_data_filters": {
         "de": "Keine Daten mit aktuellen Filtern.",
         "en": "No data with current filters.",
+    },
+    "mov_filtered": {
+        "de": "🔗 Live gefiltert: nur Bewegungen aus den {n} aktuell gewählten Plätzen "
+              "(Q_PLATZ). Filter leeren = ganzes Lager.",
+        "en": "🔗 Live-filtered: only movements from the {n} currently selected slots "
+              "(Q_PLATZ). Clear filters = whole warehouse.",
     },
     "d3_autorotate": {"de": "Auto-Rotation", "en": "Auto-rotate"},
     "d3_brightness": {"de": "Helligkeit", "en": "Brightness"},
@@ -760,81 +778,105 @@ def load_platz_full() -> pd.DataFrame:
 # einen Tab. Trennung von Datenbeschaffung (hier) und Darstellung (in main()).
 
 
-@st.cache_data(ttl=3600)
-def load_throughput_trend(days: int = 30) -> pd.DataFrame:
-    """Bewegungen je Tag der letzten `days` Tage (Tab 'Durchsatz')."""
+@st.cache_data(ttl=3600, show_spinner="Lade Bewegungen ...")
+def load_tpa_raw() -> pd.DataFrame:
+    """Rohe TPA-Bewegungen (nur ~74k Zeilen) als EINE Quelle fuer alle
+    bewegungsbasierten Tabs (Pick-Heatmap, Durchsatz, Top-Artikel, Artikel,
+    ABC-nach-Artikeln).
+
+    Frueher hatte jeder dieser Tabs sein eigenes GROUP-BY-SQL und ignorierte
+    dadurch die Sidebar-Filter. Jetzt laden wir die Bewegungen einmal roh und
+    aggregieren in Pandas – so kann ueber Q_PLATZ -> PLATZ_ID dieselbe
+    Platz-Auswahl angewandt werden wie ueberall sonst. @st.cache_data cacht den
+    Roh-Frame pro Session; die Aggregationen darauf sind bei der Datenmenge
+    vernachlaessigbar guenstig.
+    """
     con = get_connection()
     df = pd.read_sql_query(
-        f"""
-        SELECT DATE(ENDE_DATUM) AS day, COUNT(*) AS movements
-        FROM "{TPA_TABLE}"
-        WHERE TRIM(COALESCE(ENDE_DATUM, '')) <> ''
-        GROUP BY DATE(ENDE_DATUM)
-        ORDER BY DATE(ENDE_DATUM) DESC
-        LIMIT ?
-        """,
+        f"SELECT TRIM(COALESCE(Q_PLATZ, '')) AS q_platz, "
+        f"TRIM(COALESCE(ARTIKELNR, '')) AS artikel, "
+        f"TRIM(COALESCE(ARTBEZ1, '')) AS bezeichnung, "
+        f"ENDE_DATUM, ENDE_ZEIT "
+        f'FROM "{TPA_TABLE}"',
         con,
-        params=[days],
     )
-    df["day"] = pd.to_datetime(df["day"], errors="coerce")
-    return df.dropna(subset=["day"]).sort_values("day")
-
-
-@st.cache_data(ttl=3600)
-def load_top_articles(limit: int = 25) -> pd.DataFrame:
-    con = get_connection()
-    return pd.read_sql_query(
-        f"""
-        SELECT TRIM(ARTIKELNR) AS artikel,
-               TRIM(COALESCE(ARTBEZ1, '')) AS bezeichnung,
-               COUNT(*) AS bewegungen
-        FROM "{TPA_TABLE}"
-        WHERE TRIM(COALESCE(ARTIKELNR, '')) <> ''
-        GROUP BY artikel
-        ORDER BY bewegungen DESC
-        LIMIT ?
-        """,
-        con,
-        params=[limit],
+    df["day"] = pd.to_datetime(df["ENDE_DATUM"], errors="coerce")
+    # Wochentag wie SQLite strftime('%w'): 0=So..6=Sa (Pandas: Mo=0..So=6).
+    df["weekday"] = (df["day"].dt.dayofweek + 1) % 7
+    df["hour"] = pd.to_numeric(
+        df["ENDE_ZEIT"].astype(str).str.slice(0, 2), errors="coerce"
     )
+    return df
 
 
-@st.cache_data(ttl=3600, show_spinner="Lade Pick-Heatmap ...")
-def load_pick_heatmap() -> pd.DataFrame:
-    """Picks je Wochentag (0=So..6=Sa) und Stunde aus den TPA-Bewegungen."""
-    con = get_connection()
-    return pd.read_sql_query(
-        f"""
-        SELECT CAST(strftime('%w', ENDE_DATUM) AS INTEGER) AS weekday,
-               CAST(substr(ENDE_ZEIT, 1, 2) AS INTEGER) AS hour,
-               COUNT(*) AS picks
-        FROM "{TPA_TABLE}"
-        WHERE TRIM(COALESCE(ENDE_DATUM, '')) <> ''
-          AND TRIM(COALESCE(ENDE_ZEIT, '')) <> ''
-        GROUP BY weekday, hour
-        """,
-        con,
+def filter_tpa(tpa: pd.DataFrame, allowed_pids: set[str] | None) -> pd.DataFrame:
+    """Bewegungen auf erlaubte Quellplaetze einschraenken (None = alle Plaetze)."""
+    if allowed_pids is None:
+        return tpa
+    return tpa[tpa["q_platz"].isin(allowed_pids)]
+
+
+def agg_pick_heatmap(tpa: pd.DataFrame) -> pd.DataFrame:
+    """Picks je Wochentag (0=So..6=Sa) und Stunde."""
+    sub = tpa.dropna(subset=["day", "hour"])
+    if sub.empty:
+        return pd.DataFrame(columns=["weekday", "hour", "picks"])
+    return (
+        sub.assign(weekday=sub["weekday"].astype(int), hour=sub["hour"].astype(int))
+        .groupby(["weekday", "hour"]).size().reset_index(name="picks")
     )
 
 
-@st.cache_data(ttl=3600, show_spinner="Lade Artikel-ABC ...")
-def load_abc_articles(limit: int = 50000) -> pd.DataFrame:
-    """Bewegungen je Artikel (ARTIKELNR) aus den TPA-Daten."""
-    con = get_connection()
-    return pd.read_sql_query(
-        f"""
-        SELECT TRIM(ARTIKELNR) AS artikel,
-               TRIM(COALESCE(ARTBEZ1, '')) AS bezeichnung,
-               COUNT(*) AS bewegungen
-        FROM "{TPA_TABLE}"
-        WHERE TRIM(COALESCE(ARTIKELNR, '')) <> ''
-        GROUP BY artikel
-        ORDER BY bewegungen DESC
-        LIMIT ?
-        """,
-        con,
-        params=[limit],
+def agg_movements_by_day(tpa: pd.DataFrame) -> pd.DataFrame:
+    """Bewegungen je Kalendertag (chronologisch)."""
+    sub = tpa.dropna(subset=["day"])
+    if sub.empty:
+        return pd.DataFrame(columns=["day", "movements"])
+    return (
+        sub.assign(d=sub["day"].dt.normalize())
+        .groupby("d").size().reset_index(name="movements")
+        .rename(columns={"d": "day"}).sort_values("day")
     )
+
+
+def agg_throughput_trend(tpa: pd.DataFrame, days: int = 30) -> pd.DataFrame:
+    """Bewegungen je Tag der letzten `days` Tage mit Bewegung."""
+    daily = agg_movements_by_day(tpa)
+    return daily.tail(days).reset_index(drop=True)
+
+
+def agg_articles(tpa: pd.DataFrame, limit: int | None = None) -> pd.DataFrame:
+    """Bewegungen je Artikel (ARTIKELNR), absteigend. `limit` schneidet Top-N ab."""
+    sub = tpa[tpa["artikel"] != ""]
+    if sub.empty:
+        return pd.DataFrame(columns=["artikel", "bezeichnung", "bewegungen"])
+    g = (
+        sub.groupby("artikel")
+        .agg(bezeichnung=("bezeichnung", "first"), bewegungen=("artikel", "size"))
+        .reset_index().sort_values("bewegungen", ascending=False)
+        .reset_index(drop=True)
+    )
+    g = g[["artikel", "bezeichnung", "bewegungen"]]
+    return g.head(limit) if limit else g
+
+
+def agg_article_detail(
+    tpa: pd.DataFrame, artikelnr: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fuer einen Artikel: Picks je Quellplatz und Bewegungen je Tag."""
+    sub = tpa[tpa["artikel"] == artikelnr]
+    slots = (
+        sub[sub["q_platz"] != ""].groupby("q_platz").size()
+        .reset_index(name="picks").rename(columns={"q_platz": "platz"})
+        .sort_values("picks", ascending=False)
+    )
+    dated = sub.dropna(subset=["day"])
+    days = (
+        dated.assign(d=dated["day"].dt.normalize())
+        .groupby("d").size().reset_index(name="picks")
+        .rename(columns={"d": "day"}).sort_values("day")
+    )
+    return slots, days
 
 
 def classify_abc(
@@ -859,54 +901,6 @@ def classify_abc(
         out["CUM_%"] = 0.0
         out["ABC"] = "C"
     return out
-
-
-@st.cache_data(ttl=3600, show_spinner="Lade Bewegungen ...")
-def load_movements_by_day() -> pd.DataFrame:
-    """Alle Tage mit Bewegungs-Anzahl (fuer Datumsbereich-Auswahl)."""
-    con = get_connection()
-    df = pd.read_sql_query(
-        f"""
-        SELECT DATE(ENDE_DATUM) AS day, COUNT(*) AS movements
-        FROM "{TPA_TABLE}"
-        WHERE TRIM(COALESCE(ENDE_DATUM, '')) <> ''
-        GROUP BY DATE(ENDE_DATUM)
-        ORDER BY day
-        """,
-        con,
-    )
-    df["day"] = pd.to_datetime(df["day"], errors="coerce")
-    return df.dropna(subset=["day"])
-
-
-@st.cache_data(ttl=3600, show_spinner="Lade Artikel-Detail ...")
-def load_article_detail(artikelnr: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Pro Artikel: Picks je Quellplatz (Q_PLATZ) und Bewegungen je Tag."""
-    con = get_connection()
-    slots = pd.read_sql_query(
-        f"""
-        SELECT TRIM(Q_PLATZ) AS platz, COUNT(*) AS picks
-        FROM "{TPA_TABLE}"
-        WHERE TRIM(ARTIKELNR) = ? AND TRIM(COALESCE(Q_PLATZ, '')) <> ''
-        GROUP BY platz
-        ORDER BY picks DESC
-        """,
-        con,
-        params=[artikelnr],
-    )
-    days = pd.read_sql_query(
-        f"""
-        SELECT DATE(ENDE_DATUM) AS day, COUNT(*) AS picks
-        FROM "{TPA_TABLE}"
-        WHERE TRIM(ARTIKELNR) = ? AND TRIM(COALESCE(ENDE_DATUM, '')) <> ''
-        GROUP BY day
-        ORDER BY day
-        """,
-        con,
-        params=[artikelnr],
-    )
-    days["day"] = pd.to_datetime(days["day"], errors="coerce")
-    return slots, days.dropna(subset=["day"])
 
 
 @st.cache_data(ttl=3600, show_spinner="Baue 3D-Platzdaten ...")
@@ -1106,19 +1100,38 @@ def main() -> None:
         sperr_mode=sperr_mode,
     )
 
+    # Bewegungsdaten (TPA) einmal roh laden und auf die gefilterten Plaetze
+    # einschraenken (ueber Q_PLATZ -> PLATZ_ID). So wirken die Sidebar-Filter
+    # jetzt LIVE auch in den bewegungsbasierten Tabs (Pick-Heatmap, Durchsatz,
+    # Top-Artikel, Artikel, ABC-nach-Artikeln). Ist kein Filter aktiv (gleiche
+    # Zeilenzahl wie das volle Platz-DF), bleibt der schnelle Voll-Datensatz.
+    tpa_all = load_tpa_raw()
+    movements_filtered = len(filtered) != len(platz)
+    allowed_pids = (
+        set(filtered["PLATZ_ID"].astype(str).str.strip())
+        if movements_filtered else None
+    )
+    tpa = filter_tpa(tpa_all, allowed_pids)
+
+    def _mov_filter_note() -> None:
+        """Hinweis in bewegungsbasierten Tabs, wenn die Platz-Filter greifen."""
+        if movements_filtered:
+            st.caption(t("mov_filtered").format(
+                n=f"{len(filtered):,}".replace(",", ".")))
+
     # --- KPI-Kacheln oben (beziehen sich auf die gefilterte Auswahl) ---
     total = len(filtered) or 1
     occupied = int(filtered["BELEGT"].sum())
-    overloaded = int((filtered["UTILIZATION"] > 100).sum())
     avg_util = filtered["UTILIZATION"].mean()
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric(t("m_slots"), f"{len(filtered):,}".replace(",", "."))
+    c1, c2, c3 = st.columns(3)
+    c1.metric(t("m_slots"), f"{len(filtered):,}".replace(",", "."),
+              help=t("m_slots_help"))
     c2.metric(t("m_occupied"), f"{occupied:,}".replace(",", "."),
-              f"{occupied/total*100:.1f}%")
+              f"{occupied/total*100:.1f}%", help=t("m_occupied_help"))
     c3.metric(t("m_avg_util"),
-              f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—")
-    c4.metric(t("m_overloaded"), f"{overloaded:,}".replace(",", "."))
+              f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—",
+              help=t("m_avg_util_help"))
 
     # --- Register/Tabs ---------------------------------------------------
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
@@ -1244,7 +1257,8 @@ def main() -> None:
 
     with tab_pickheat:
         st.markdown(t("pick_intro"))
-        ph = load_pick_heatmap()
+        _mov_filter_note()
+        ph = agg_pick_heatmap(tpa)
         if ph.empty:
             st.info(t("no_data_filters"))
         else:
@@ -1551,7 +1565,8 @@ def main() -> None:
 
         if by_articles:
             st.markdown(t("abc_intro_articles"))
-            base = load_abc_articles()
+            _mov_filter_note()
+            base = agg_articles(tpa)
             data = classify_abc(base, "bewegungen", a_thr, b_thr) \
                 if not base.empty else base
             px_label = t("abc_px_articles")
@@ -1639,9 +1654,10 @@ def main() -> None:
 
     with tab_trend:
         st.markdown(t("tp_intro"))
+        _mov_filter_note()
         use_range = st.checkbox(t("tp_use_range"), value=False)
         if use_range:
-            all_days = load_movements_by_day()
+            all_days = agg_movements_by_day(tpa)
             if all_days.empty:
                 trend = all_days
             else:
@@ -1659,7 +1675,7 @@ def main() -> None:
                     trend = all_days.copy()
                 trend = trend.sort_values("day")
         else:
-            trend = load_throughput_trend(days)
+            trend = agg_throughput_trend(tpa, days)
         if trend.empty:
             st.info(t("no_data_filters"))
         else:
@@ -1688,7 +1704,8 @@ def main() -> None:
 
     with tab_top:
         st.markdown(t("top_intro"))
-        top = load_top_articles(article_limit)
+        _mov_filter_note()
+        top = agg_articles(tpa, article_limit)
         if top.empty:
             st.info(t("no_data_filters"))
         else:
@@ -1706,7 +1723,8 @@ def main() -> None:
 
     with tab_article:
         st.markdown(t("art_intro"))
-        opts = load_abc_articles(limit=500)
+        _mov_filter_note()
+        opts = agg_articles(tpa, limit=500)
         labels = (
             (opts["artikel"] + " — " + opts["bezeichnung"]).tolist()
             if not opts.empty else []
@@ -1721,7 +1739,7 @@ def main() -> None:
         if not artikelnr:
             st.info(t("art_none"))
         else:
-            slots, day_df = load_article_detail(artikelnr)
+            slots, day_df = agg_article_detail(tpa, artikelnr)
             total = int(slots["picks"].sum()) if not slots.empty else 0
             if total == 0 and day_df.empty:
                 st.info(t("art_none"))
