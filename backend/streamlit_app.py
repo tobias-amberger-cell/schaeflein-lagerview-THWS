@@ -504,7 +504,14 @@ floor.rotation.x = -Math.PI/2;
 floor.position.set((gMinX+gMaxX)/2, -CELL*0.6, (gMinZ+gMaxZ)/2);
 scene.add(floor);
 
-const frameMat = new THREE.LineBasicMaterial({ color: 0x90a4ae });
+// Regalstruktur im Pallet-Racking-Look: vertikale Staender + horizontale
+// Querträger (wie im CAD). Beides via InstancedMesh -> performant.
+const upM = [], beamM = [];
+const _q = new THREE.Quaternion(), _sc = new THREE.Vector3(), _pp = new THREE.Vector3();
+function pushBox(arr, px, py, pz, sx, sy, sz){
+  const m = new THREE.Matrix4(); _pp.set(px,py,pz); _sc.set(sx,sy,sz);
+  m.compose(_pp, _q, _sc); arr.push(m);
+}
 const frameGroup = new THREE.Group();
 function makeLabel(text){
   const c = document.createElement('canvas'); c.width = 128; c.height = 64;
@@ -517,16 +524,38 @@ function makeLabel(text){
 }
 regals.forEach(r => {
   const x = rackX[r] * RACK_PITCH;
-  const zmax = rackMaxZ[r] || 0, ymax = rackMaxY[r] || 0;
-  const bg = new THREE.BoxGeometry(CELL, ymax + CELL, zmax + CELL);
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(bg), frameMat);
-  edges.position.set(x, ymax/2, zmax/2);
-  frameGroup.add(edges);
+  const ncols = Object.keys(fachCol[r]).length;
+  const zmax = (ncols - 1) * CELL, ymax = rackMaxY[r] || 0;
+  const levels = Math.round(ymax / CELL);
+  const postH = ymax + CELL;
+  // Staender alle 6 Faecher (+ am Regalende), beidseitig leicht versetzt
+  for(let c = 0; c <= ncols - 1; c += 6){
+    pushBox(upM, x-0.45, ymax/2, c*CELL, 0.12, postH, 0.12);
+    pushBox(upM, x+0.45, ymax/2, c*CELL, 0.12, postH, 0.12);
+  }
+  pushBox(upM, x-0.45, ymax/2, zmax, 0.12, postH, 0.12);
+  pushBox(upM, x+0.45, ymax/2, zmax, 0.12, postH, 0.12);
+  // Querträger je Ebene (Fachboden, knapp unter den Paletten)
+  for(let e = 0; e <= levels; e++){
+    pushBox(beamM, x-0.4, e*CELL - 0.45, zmax/2, 0.08, 0.09, zmax + CELL);
+    pushBox(beamM, x+0.4, e*CELL - 0.45, zmax/2, 0.08, 0.09, zmax + CELL);
+  }
   const lab = makeLabel('R' + r);
   lab.position.set(x, ymax + CELL*2.0, -CELL*1.5);
   lab.scale.set(3, 1.5, 1);
   frameGroup.add(lab);
 });
+function makeInstanced(mats, hex, metal, rough){
+  const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),
+    new THREE.MeshStandardMaterial({ color: hex, metalness: metal, roughness: rough }),
+    mats.length);
+  im.frustumCulled = false;
+  mats.forEach((m,i) => im.setMatrixAt(i, m));
+  im.instanceMatrix.needsUpdate = true;
+  return im;
+}
+scene.add(makeInstanced(upM, 0x455a64, 0.1, 0.7));   // Staender stahlblau
+scene.add(makeInstanced(beamM, 0xfb8c00, 0.1, 0.6)); // Träger orange
 scene.add(frameGroup);
 
 // Kamera einpassen
