@@ -461,6 +461,31 @@ def get_model_glb() -> FileResponse:
     )
 
 
+def _clickable_model_path() -> Path:
+    """Klickbare GLB (mit intakter Hierarchie + PLATZ_ID-benannten Meshes).
+
+    Liegt klein (~4 MB) mit im Repo unter backend/data/, daher kein Download
+    noetig. Wird vom three.js-Viewer im Streamlit-3D-Tab geladen; CORS-Header
+    kommen aus der CORSMiddleware.
+    """
+    return Path(__file__).resolve().parents[1] / "data" / "SampleScene_clickable.glb"
+
+
+@app.get("/model-clickable.glb")
+def get_clickable_model() -> FileResponse:
+    path = _clickable_model_path()
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Klickbares 3D-Modell (SampleScene_clickable.glb) fehlt.",
+        )
+    return FileResponse(
+        str(path),
+        media_type="model/gltf-binary",
+        filename="SampleScene_clickable.glb",
+    )
+
+
 @app.get("/meta/schema")
 def get_meta_schema(
     include_row_counts: bool = Query(default=True),
