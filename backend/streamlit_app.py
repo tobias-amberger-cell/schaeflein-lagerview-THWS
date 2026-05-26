@@ -386,14 +386,19 @@ const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 host.appendChild(renderer.domElement);
 
 let needsRender = true;
 function requestRender(){ needsRender = true; }
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.2));
-const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa0a6, 1.0));
+const dir = new THREE.DirectionalLight(0xffffff, 1.1);
 dir.position.set(1, 2, 1); scene.add(dir);
+const dir2 = new THREE.DirectionalLight(0xffffff, 0.5);  // Gegenlicht/Fill
+dir2.position.set(-1, 1.2, -1); scene.add(dir2);
+scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = false;
@@ -450,8 +455,12 @@ function fillLegend(counts){
 
 // --- Layout aus den Daten bauen -------------------------------------------
 const ids = Object.keys(DATA);
+// Sonderplaetze (REGAL 0: VA/EN/VD/GS = Versand/Eingang etc.) haben kein
+// echtes Regal-Raster -> als kompakter Block, nicht als Turm.
+const specialIds = ids.filter(id => DATA[id].r === 0);
+const gridIds = ids.filter(id => DATA[id].r !== 0);
 const rackFach = {};
-ids.forEach(id => { const d = DATA[id]; (rackFach[d.r] = rackFach[d.r] || new Set()).add(d.f); });
+gridIds.forEach(id => { const d = DATA[id]; (rackFach[d.r] = rackFach[d.r] || new Set()).add(d.f); });
 const regals = Object.keys(rackFach).map(Number).sort((a,b) => a-b);
 // Regale entlang X aufreihen, mit breiterem Gang zwischen den Hallen.
 const HALL = (r) => r <= 16 ? 1 : (r <= 32 ? 2 : 3);
@@ -463,6 +472,10 @@ regals.forEach(r => {
 });
 const fachCol = {};
 regals.forEach(r => { const arr=[...rackFach[r]].sort((a,b)=>a-b); const m={}; arr.forEach((f,i)=>m[f]=i); fachCol[r]=m; });
+const CELL_ = 1.0;
+const SPECIAL_X = -CELL_ * 5;        // Sonderblock links vom ersten Regal
+const specialPos = {};               // id -> {c: Spalte, e: Reihe} (4 Reihen)
+specialIds.forEach((id,k) => { specialPos[id] = { c: Math.floor(k/4), e: k%4 }; });
 
 const CELL = 1.0, RACK_PITCH = 2.2;
 const N = ids.length;
@@ -478,14 +491,20 @@ const rackMaxZ = {}, rackMaxY = {};  // Ausmaße je Regal (fuer die Rahmen)
 let gMinX=1e9, gMaxX=-1e9, gMinZ=1e9, gMaxZ=-1e9;  // Gesamt-Ausmaße (Boden)
 for(let i=0; i<N; i++){
   const id = ids[i], d = DATA[id];
-  const x = rackX[d.r] * RACK_PITCH, z = fachCol[d.r][d.f] * CELL, y = d.e * CELL;
+  let x, y, z;
+  if(d.r === 0){                       // Sonderplatz -> kompakter Block
+    const sp = specialPos[id];
+    x = SPECIAL_X; z = sp.c * CELL; y = sp.e * CELL;
+  } else {                             // normales Regal
+    x = rackX[d.r] * RACK_PITCH; z = fachCol[d.r][d.f] * CELL; y = d.e * CELL;
+    if(z > (rackMaxZ[d.r]||0)) rackMaxZ[d.r] = z;
+    if(y > (rackMaxY[d.r]||0)) rackMaxY[d.r] = y;
+  }
   dummy.position.set(x, y, z); dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
   const key = (d.ac==='A'||d.ac==='B'||d.ac==='C') ? d.ac : 'grey';
   if(counts[key]!=null) counts[key]++;
   col.setHex(ABC_HEX[key]); inst.setColorAt(i, col);
   baseColor[i] = ABC_HEX[key]; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z};
-  if(z > (rackMaxZ[d.r]||0)) rackMaxZ[d.r] = z;
-  if(y > (rackMaxY[d.r]||0)) rackMaxY[d.r] = y;
   if(x<gMinX) gMinX=x; if(x>gMaxX) gMaxX=x;
   if(z<gMinZ) gMinZ=z; if(z>gMaxZ) gMaxZ=z;
 }
@@ -503,6 +522,11 @@ const floor = new THREE.Mesh(
 floor.rotation.x = -Math.PI/2;
 floor.position.set((gMinX+gMaxX)/2, -CELL*0.6, (gMinZ+gMaxZ)/2);
 scene.add(floor);
+// dezentes Boden-Raster fuer Tiefenwirkung
+const gsize = Math.max((gMaxX-gMinX), (gMaxZ-gMinZ)) + 10;
+const grid = new THREE.GridHelper(gsize, Math.round(gsize/2), 0xb0bec5, 0xcfd8dc);
+grid.position.set((gMinX+gMaxX)/2, -CELL*0.58, (gMinZ+gMaxZ)/2);
+scene.add(grid);
 
 // Regalstruktur im Pallet-Racking-Look: vertikale Staender + horizontale
 // Querträger (wie im CAD). Beides via InstancedMesh -> performant.
@@ -545,6 +569,12 @@ regals.forEach(r => {
   lab.scale.set(3, 1.5, 1);
   frameGroup.add(lab);
 });
+if(specialIds.length){   // Beschriftung fuer den Sonderplatz-Block
+  const sl = makeLabel('Sonder');
+  sl.position.set(SPECIAL_X, 4*CELL, -CELL*1.5);
+  sl.scale.set(3.5, 1.7, 1);
+  frameGroup.add(sl);
+}
 function makeInstanced(mats, hex, metal, rough){
   const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),
     new THREE.MeshStandardMaterial({ color: hex, metalness: metal, roughness: rough }),
