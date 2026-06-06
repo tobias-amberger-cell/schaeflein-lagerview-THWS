@@ -1,4 +1,3 @@
-
 """Streamlit-Dashboard fuer Schaeflein LagerView.
 
 Visualisiert dieselben Daten wie die Flutter-App direkt aus der warehouse.db
@@ -215,7 +214,6 @@ function showSlot(id){
     const status = d.b ? L.occupied : L.empty;
     const rows = [
       [L.pos, d.r + ' / ' + d.f + ' / ' + d.e],
-      [L.halle, d.h],
       [L.abc_m, d.a],
       [L.abc_c, d.ac],
       [L.picks, d.p],
@@ -443,7 +441,7 @@ function showSlot(id){
   else {
     const util = (d.u==null) ? '—' : (d.u + ' %');
     const status = d.b ? L.occupied : L.empty;
-    const rows = [[L.pos, d.r+' / '+d.f+' / '+d.e],[L.halle,d.h],[L.abc_m,d.a],[L.abc_c,d.ac],[L.picks,d.p],[L.util,util],[L.status,status]];
+    const rows = [[L.pos, d.r+' / '+d.f+' / '+d.e],[L.abc_m,d.a],[L.abc_c,d.ac],[L.picks,d.p],[L.util,util],[L.status,status]];
     h += '<table style="border-collapse:collapse;width:100%;">';
     for(const r of rows){ h += '<tr><td style="color:#777;padding:3px 8px 3px 0;vertical-align:top;">'+r[0]+'</td><td style="text-align:right;font-weight:500;">'+fmt(r[1])+'</td></tr>'; }
     h += '</table>';
@@ -470,14 +468,9 @@ const gridIds = ids.filter(id => DATA[id].r !== 0);
 const rackFach = {};
 gridIds.forEach(id => { const d = DATA[id]; (rackFach[d.r] = rackFach[d.r] || new Set()).add(d.f); });
 const regals = Object.keys(rackFach).map(Number).sort((a,b) => a-b);
-// Regale entlang X aufreihen, mit breiterem Gang zwischen den Hallen.
-const HALL = (r) => r <= 16 ? 1 : (r <= 32 ? 2 : 3);
-const rackX = {}; let _xi = 0, _prevH = null;
-regals.forEach(r => {
-  const h = HALL(r);
-  if(_prevH !== null && h !== _prevH) _xi += 2;  // Hallen-Gang
-  rackX[r] = _xi; _xi += 1; _prevH = h;
-});
+// Regale entlang X aufreihen (eine Halle, keine Hallen-Trennung).
+const rackX = {}; let _xi = 0;
+regals.forEach(r => { rackX[r] = _xi; _xi += 1; });
 const fachCol = {};
 regals.forEach(r => { const arr=[...rackFach[r]].sort((a,b)=>a-b); const m={}; arr.forEach((f,i)=>m[f]=i); fachCol[r]=m; });
 const CELL_ = 1.0;
@@ -753,7 +746,7 @@ TR: dict[str, dict[str, str]] = {
         "en": "Average of IST_LHM / MAX_LHM x 100 across all filtered slots.",
     },
     # Tab-Titel
-    "tab_halls": {"de": "Hallen", "en": "Halls"},
+    "tab_halls": {"de": "Übersicht", "en": "Overview"},
     "tab_misc": {"de": "Sonstiges", "en": "Other"},
     "tab_util": {"de": "Auslastungs-Heatmap", "en": "Utilization heatmap"},
     "tab_pick": {"de": "Pick-Heatmap", "en": "Pick heatmap"},
@@ -776,15 +769,15 @@ TR: dict[str, dict[str, str]] = {
     "dl": {"de": "⬇️ Als CSV", "en": "⬇️ As CSV"},
     # Tab-Erklaerungen / Ueberschriften
     "halls_intro": {
-        "de": "**Hallen-Übersicht** — Belegung, Auslastung und ABC-Verteilung je "
-              "Halle (Regal 1–16 = Halle 1, 17–32 = Halle 2, Rest = Halle 3).",
-        "en": "**Hall overview** — occupancy, utilization and ABC distribution per "
-              "hall (rack 1–16 = Hall 1, 17–32 = Hall 2, rest = Hall 3).",
+        "de": "**Lager-Übersicht** — Belegung, Auslastung und ABC-Verteilung für "
+              "das gesamte Lager BER03 (eine Halle, keine Trennung).",
+        "en": "**Warehouse overview** — occupancy, utilization and ABC "
+              "distribution for the whole warehouse BER03 (single hall).",
     },
-    "halls_kpis": {"de": "**Kennzahlen je Halle**", "en": "**Metrics per hall**"},
+    "halls_kpis": {"de": "**Kennzahlen Lager gesamt**", "en": "**Metrics (whole warehouse)**"},
     "halls_chart": {
-        "de": "Belegung pro Halle (gefiltert)",
-        "en": "Occupancy per hall (filtered)",
+        "de": "Belegung Lager gesamt (gefiltert)",
+        "en": "Occupancy whole warehouse (filtered)",
     },
     "heat_chart": {
         "de": "Auslastung je Regal/Ebene (IST/MAX × 100)",
@@ -1197,15 +1190,6 @@ def get_connection() -> sqlite3.Connection:
     uri = f"file:{Path(path).absolute().as_posix()}?mode=ro"
     return sqlite3.connect(uri, uri=True, check_same_thread=False)
 
-from typing import Optional
-
-def _hall_for_regal(regal: int) -> str:
-    if 1 <= regal <= 16:
-        return "Halle 1"
-    if 17 <= regal <= 32:
-        return "Halle 2"
-    return "Halle 3"
-
 
 @st.cache_data(ttl=3600, show_spinner="Lade Stellplaetze ...")
 def load_platz_full() -> pd.DataFrame:
@@ -1215,7 +1199,7 @@ def load_platz_full() -> pd.DataFrame:
     Schritte:
       1. Stammdaten je Platz aus der PLATZ-Tabelle lesen
       2. Spalten in Zahlen wandeln (DB liefert teils Strings)
-      3. Kennzahlen ableiten: UTILIZATION (%), FREE_CAPACITY, HALLE, BELEGT,
+      3. Kennzahlen ableiten: UTILIZATION (%), FREE_CAPACITY, BELEGT,
          DAYS_EMPTY (Tage seit LEER_DATUM)
       4. Pick-Frequenz aus FAHRPOS dazumergen (PICK_COUNT_FAHR)
       5. ABC_CALC: ABC-Klasse aus der kumulativen Pick-Verteilung berechnen
@@ -1251,7 +1235,6 @@ def load_platz_full() -> pd.DataFrame:
     # (GEWICHT liegt in den Daten nur als 0 vor) -> grober Bedeutungswert je
     # Platz fuer die Massnahmen-Tabellen.
     platz["WERT"] = platz["MAX_LHM"].fillna(0) * platz["ANZ_PICKS"]
-    platz["HALLE"] = platz["REGAL"].apply(_hall_for_regal)
     # Belegt = physisch Ware vorhanden (IST_LHM > 0). ZUSTAND ist hier KEIN
     # verlaesslicher Indikator (nur Werte 0/150; nur ~19% der 150er haben
     # IST_LHM>0). Konsistent mit UTILIZATION/FREE_CAPACITY, die ebenfalls auf
@@ -1465,7 +1448,6 @@ def load_slot_3d_map() -> str:
             "r": int(row.REGAL),
             "f": int(row.FACH),
             "e": int(row.EBENE),
-            "h": row.HALLE,
             "a": (row.ABC_KLASSE or "—"),
             "ac": (row.ABC_CALC if isinstance(row.ABC_CALC, str) else "—"),
             "p": int(row.ANZ_PICKS),
@@ -1512,7 +1494,6 @@ def _csv_download(df: pd.DataFrame, key: str, label: str | None = None) -> None:
 
 def apply_filters(
     df: pd.DataFrame,
-    hallen: list[str],
     abc: list[str],
     util_range: tuple[float, float],
     only_occupied: bool,
@@ -1527,8 +1508,6 @@ def apply_filters(
     Jeder Block ist ein optionaler Filter (leer/Default = nicht einschraenken).
     """
     out = df
-    if hallen:
-        out = out[out["HALLE"].isin(hallen)]
     if abc:
         out = out[out["ABC_KLASSE"].isin(abc) | out["ABC_CALC"].isin(abc)]
     lo, hi = util_range
@@ -1594,12 +1573,6 @@ def main() -> None:
 
     with st.sidebar:
         st.header(t("filter"))
-        hallen = st.multiselect(
-            t("hall"),
-            options=["Halle 1", "Halle 2", "Halle 3"],
-            default=[],
-            help=t("hall_help"),
-        )
         abc = st.multiselect(
             t("abc"),
             options=["A", "B", "C"],
@@ -1633,7 +1606,7 @@ def main() -> None:
 
     # Einmal filtern -> alle Tabs nutzen dasselbe gefilterte DataFrame.
     filtered = apply_filters(
-        platz, hallen, abc, util_range, only_occupied,
+        platz, abc, util_range, only_occupied,
         regal_range=regal_range,
         ebene_range=ebene_range,
         min_picks=min_picks,
@@ -1677,11 +1650,11 @@ def main() -> None:
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
     # ACHTUNG: Die Anzeige-Reihenfolge der Reiter bestimmt allein diese Liste –
     # die `with tab_*`-Bloecke weiter unten duerfen in beliebiger Code-Reihen-
-    # folge stehen. Reihenfolge: Hallen, 3D, ABC, Steuermassnahmen (Umlagern/
+    # folge stehen. Reihenfolge: Übersicht, 3D, ABC, Steuermassnahmen (Umlagern/
     # Nachschub/Einlagern/Auslagern), Artikel, und ganz am Ende "Sonstiges".
     # "Sonstiges" buendelt Auslastungs-/Pick-Heatmap, Bottlenecks, Free
     # Capacity, Durchsatz und Top-Artikel (siehe unten).
-    (tab_hallen, tab_3d, tab_abc, tab_umlagern, tab_nachschub,
+    (tab_uebersicht, tab_3d, tab_abc, tab_umlagern, tab_nachschub,
      tab_einlagern, tab_auslagern, tab_article, tab_sonstiges) = st.tabs([
         t("tab_halls"),
         t("tab_3d"),
@@ -1705,10 +1678,13 @@ def main() -> None:
             t("tab_tp"), t("tab_top"), t("tab_pick"),
         ])
 
-    with tab_hallen:
+    with tab_uebersicht:
         st.markdown(t("halls_intro"))
+        # Eine Halle: das gesamte (gefilterte) Lager als EIN Block zusammenfassen.
+        # Kein Regal->Halle-Split mehr; HALLE ist hier nur ein konstantes Label.
+        df_h = filtered.assign(HALLE="Lager BER03")
         zones = (
-            filtered.groupby("HALLE")
+            df_h.groupby("HALLE")
             .agg(
                 total_slots=("PLATZ_ID", "count"),
                 occupied=("BELEGT", "sum"),
@@ -1720,9 +1696,8 @@ def main() -> None:
         zones["frei"] = zones["total_slots"] - zones["occupied"]
         zones["Belegung_%"] = (zones["occupied"] / zones["total_slots"] * 100).round(1)
         zones["Ø_Auslastung_%"] = zones["avg_util"].round(1)
-        # ABC-Verteilung je Halle.
         abc_pivot = (
-            filtered.pivot_table(
+            df_h.pivot_table(
                 index="HALLE", columns="ABC_CALC", values="PLATZ_ID",
                 aggfunc="count", fill_value=0,
             )
@@ -1750,11 +1725,11 @@ def main() -> None:
             "HALLE", "total_slots", "occupied", "frei", "Belegung_%",
             "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
         ]].rename(columns={
-            "HALLE": "Halle", "total_slots": "Plätze", "occupied": "Belegt",
+            "HALLE": "Lager", "total_slots": "Plätze", "occupied": "Belegt",
             "frei": "Frei", "picks": "Picks gesamt",
         })
         st.dataframe(show, use_container_width=True, hide_index=True)
-        _csv_download(show, "hallen_kennzahlen")
+        _csv_download(show, "lager_kennzahlen")
 
     with sub_heat:
         st.markdown(t("heat_intro"))
@@ -1788,14 +1763,14 @@ def main() -> None:
 
             st.markdown(t("heat_racks"))
             rack_util = (
-                filtered.groupby(["HALLE", "REGAL"])
+                filtered.groupby(["REGAL"])
                 .agg(
                     Plätze=("PLATZ_ID", "count"),
                     Ø_Auslastung_=("UTILIZATION", "mean"),
                     Überlastet=("UTILIZATION", lambda s: int((s > 100).sum())),
                 )
                 .reset_index()
-                .rename(columns={"HALLE": "Halle", "REGAL": "Regal",
+                .rename(columns={"REGAL": "Regal",
                                  "Ø_Auslastung_": "Ø Auslastung %"})
             )
             rack_util["Ø Auslastung %"] = rack_util["Ø Auslastung %"].round(1)
@@ -1875,7 +1850,7 @@ def main() -> None:
             )
             .sort_values(["PICK_TOTAL", "UTILIZATION"], ascending=[False, False])
             .head(50)[
-                ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                  "ANZ_PICKS", "PICK_TOTAL", "MAX_LHM", "IST_LHM", "UTILIZATION"]
             ]
         )
@@ -1896,20 +1871,10 @@ def main() -> None:
                   f"{free_all['FREE_CAPACITY'].mean():.1f}"
                   if not free_all.empty else "—")
 
-        if not free_all.empty:
-            by_hall = (
-                free_all.groupby("HALLE")["FREE_CAPACITY"].sum().reset_index()
-            )
-            st.plotly_chart(
-                px.bar(by_hall, x="HALLE", y="FREE_CAPACITY",
-                       title=t("free_byhall"),
-                       labels=dict(FREE_CAPACITY=t("free_total"), HALLE=t("hall"))),
-                use_container_width=True,
-            )
         free = (
             free_all.sort_values("FREE_CAPACITY", ascending=False)
             .head(100)[
-                ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                  "MAX_LHM", "IST_LHM", "FREE_CAPACITY", "UTILIZATION"]
             ]
         )
@@ -1923,7 +1888,7 @@ def main() -> None:
     # Anzahl-Kennzahl, Tabelle und CSV-Download. Die Regeln (welche Plaetze in
     # welche Kategorie fallen) entsprechen der Logik der Flutter-App.
     _MASSNAHME_COLS = [
-        "PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+        "PLATZ_ID", "REGAL", "FACH", "EBENE",
         "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM", "WERT",
     ]
 
@@ -2001,7 +1966,7 @@ def main() -> None:
             freier Kapazitaet) zuordnen; Quellplaetze selbst sind nie Ziel."""
             tgt = targets[~targets["PLATZ_ID"].isin(src["PLATZ_ID"])]
             labels = [
-                f"{r.PLATZ_ID} · {r.HALLE} R{int(r.REGAL)}/E{int(r.EBENE)} "
+                f"{r.PLATZ_ID} · R{int(r.REGAL)}/E{int(r.EBENE)} "
                 f"(frei {int(r.FREE_CAPACITY)})"
                 for r in tgt.itertuples(index=False)
             ]
@@ -2144,7 +2109,7 @@ def main() -> None:
         else:
             st.markdown(t("abc_intro"))
             data = classify_abc(filtered, "ANZ_PICKS", a_thr, b_thr)
-            table_cols = ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+            table_cols = ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                           "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC"]
 
         if data.empty:
@@ -2191,7 +2156,7 @@ def main() -> None:
                     mcols[0].metric(t("abc_promote"), f"{n_prom:,}".replace(",", "."))
                     mcols[1].metric(t("abc_demote"), f"{n_dem:,}".replace(",", "."))
                     dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
-                        ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                        ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                          "ANZ_PICKS", "ABC_KLASSE", "ABC", t("abc_rec")]
                     ].rename(columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet"}).head(200)
                     st.dataframe(dev_tbl, use_container_width=True, hide_index=True)
@@ -2335,7 +2300,6 @@ def main() -> None:
             "hint": t("d3_panel_hint"),
             "platz": t("d3_f_platz"),
             "pos": t("d3_f_pos"),
-            "halle": t("hall"),
             "abc_m": t("d3_f_abc_m"),
             "abc_c": t("d3_f_abc_c"),
             "picks": t("d3_f_picks"),
@@ -2428,14 +2392,13 @@ def main() -> None:
 
             abc_tbl = (
                 df_abc.sort_values(["ABC", "ANZ_PICKS"], ascending=[True, False])[
-                    ["PLATZ_ID", "HALLE", "REGAL", "FACH", "EBENE",
+                    ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                      "ANZ_PICKS", "ABC"]
                 ]
             )
             st.dataframe(abc_tbl, use_container_width=True, hide_index=True)
             _csv_download(abc_tbl, "abc_je_platz")
 
-    return "Halle"
 
 if __name__ == "__main__":
     main()
