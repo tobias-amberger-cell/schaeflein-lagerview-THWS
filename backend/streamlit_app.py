@@ -370,9 +370,24 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const DATA = __DATA__;
 const L = __LABELS__;
 const FOCUS = "__FOCUS__";
-const ABCCOLOR = __ABCCOLOR__;        // true = nach ABC faerben, false = neutral
+const COLORMODE = "__COLORMODE__";    // 'neutral' | 'abc' | 'util' | 'occ'
 const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
 const WOOD = 0xc19a6b;                // neutrale Paletten-Farbe
+const OCC_HEX = { occ:0xef6c00, empty:0xbdbdbd };
+// Auslastung -> Ampelfarbe (gruen 0 % -> gelb 60 % -> rot 120 %+); ohne Wert grau.
+function utilColor(u){
+  if(u==null) return 0x9e9e9e;
+  const x = Math.max(0, Math.min(120, u))/120;
+  const r = x<0.5 ? Math.round(2*x*255) : 255;
+  const g = x<0.5 ? 205 : Math.round((1-(x-0.5)*2)*205);
+  return (r<<16)|(g<<8)|0x22;
+}
+function colorFor(d){
+  if(COLORMODE==='abc'){ const k=(d.ac==='A'||d.ac==='B'||d.ac==='C')?d.ac:'grey'; return ABC_HEX[k]; }
+  if(COLORMODE==='util'){ return utilColor(d.u); }
+  if(COLORMODE==='occ'){ return d.b ? OCC_HEX.occ : OCC_HEX.empty; }
+  return WOOD;
+}
 
 const host = document.getElementById('view');
 const panel = document.getElementById('panel');
@@ -448,15 +463,19 @@ function showSlot(id){
   }
   panel.innerHTML = h;
 }
-function fillLegend(counts){
+function fillLegend(counts, nOcc, nEmp, total){
   const fmtN = (n) => n.toLocaleString('de-DE');
-  if(!ABCCOLOR){   // neutrale Paletten -> nur Gesamtzahl statt ABC-Farben
-    const total = counts.A + counts.B + counts.C;
-    legendEl.innerHTML = '<div style="font-weight:600;">'+L.legend+': '+fmtN(total)+'</div>';
-    return;
-  }
   const row = (hex, label, n) => '<div style="display:flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:2px;background:'+hex+';display:inline-block;"></span><span style="flex:1;">'+label+'</span><span style="font-weight:600;margin-left:8px;">'+fmtN(n)+'</span></div>';
-  legendEl.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">'+L.legend+'</div>'+row('#c62828','A',counts.A)+row('#f9a825','B',counts.B)+row('#2e7d32','C',counts.C);
+  const head = '<div style="font-weight:600;margin-bottom:4px;">'+L.legend+'</div>';
+  if(COLORMODE==='abc'){
+    legendEl.innerHTML = head+row('#c62828','A',counts.A)+row('#f9a825','B',counts.B)+row('#2e7d32','C',counts.C);
+  } else if(COLORMODE==='occ'){
+    legendEl.innerHTML = head+row('#ef6c00',L.occupied,nOcc)+row('#bdbdbd',L.empty,nEmp);
+  } else if(COLORMODE==='util'){
+    legendEl.innerHTML = head+'<div style="display:flex;align-items:center;gap:6px;"><span style="width:64px;height:12px;border-radius:2px;display:inline-block;background:linear-gradient(90deg,#33cc22,#ffd622,#ff3322);"></span><span style="flex:1;">0–120 %</span></div>';
+  } else {
+    legendEl.innerHTML = '<div style="font-weight:600;">'+L.legend+': '+fmtN(total)+'</div>';
+  }
 }
 
 // --- Layout aus den Daten bauen -------------------------------------------
@@ -489,7 +508,7 @@ const inst = new THREE.InstancedMesh(geo, mat, N);
 inst.frustumCulled = false;
 const dummy = new THREE.Object3D();
 const idByInst = new Array(N), instById = {}, pos = new Array(N), baseColor = new Array(N);
-const counts = { A:0, B:0, C:0 };
+const counts = { A:0, B:0, C:0 }; let nOcc=0, nEmp=0;
 const col = new THREE.Color();
 const rackMaxCol = {}, rackMaxY = {};  // max Spalte/Ebene je Regal (fuer Struktur)
 let gMinX=1e9, gMaxX=-1e9, gMinZ=1e9, gMaxZ=-1e9;
@@ -508,7 +527,8 @@ for(let i=0; i<N; i++){
   dummy.position.set(x, y, z); dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
   const key = (d.ac==='A'||d.ac==='B'||d.ac==='C') ? d.ac : 'grey';
   if(counts[key]!=null) counts[key]++;
-  const cval = ABCCOLOR ? ABC_HEX[key] : WOOD;
+  if(d.b) nOcc++; else nEmp++;
+  const cval = colorFor(d);
   col.setHex(cval); inst.setColorAt(i, col);
   baseColor[i] = cval; idByInst[i] = id; instById[id] = i; pos[i] = {x,y,z};
   if(x<gMinX) gMinX=x; if(x>gMaxX) gMaxX=x;
@@ -530,7 +550,7 @@ for(let i=0; i<N; i++){
 }
 baseInst.instanceMatrix.needsUpdate = true;
 scene.add(baseInst);
-fillLegend(counts);
+fillLegend(counts, nOcc, nEmp, N);
 loadingEl.style.display = 'none';
 
 // --- Lager-Optik: Boden, Regal-Rahmen, Regal-Beschriftung -----------------
@@ -1083,6 +1103,11 @@ TR: dict[str, dict[str, str]] = {
               "directly to the database.",
     },
     "d3_color_abc": {"de": "Nach ABC einfärben", "en": "Color by ABC"},
+    "d3_colormode": {"de": "Färben nach", "en": "Color by"},
+    "d3_cm_neutral": {"de": "Neutral (Holz)", "en": "Neutral (wood)"},
+    "d3_cm_abc": {"de": "ABC-Klasse", "en": "ABC class"},
+    "d3_cm_util": {"de": "Auslastung", "en": "Utilization"},
+    "d3_cm_occ": {"de": "Belegt / Frei", "en": "Occupied / Free"},
     "d3_panel_hint": {
         "de": "Klicke einen Lagerplatz im Modell an.",
         "en": "Click a storage slot in the model.",
@@ -1103,15 +1128,16 @@ TR: dict[str, dict[str, str]] = {
     "d3_legend": {"de": "Plätze im Modell", "en": "Slots in model"},
     "d3_grey": {"de": "ohne Daten", "en": "no data"},
     "d3_view": {"de": "Ansicht", "en": "View"},
-    "d3_view_cad": {"de": "CAD-Modell", "en": "CAD model"},
-    "d3_view_schema": {"de": "Schema (alle Plätze)", "en": "Schema (all slots)"},
+    "d3_view_cad": {"de": "CAD-Modell (Teildaten)", "en": "CAD model (partial)"},
+    "d3_view_schema": {"de": "Daten-Modell (alle Plätze)", "en": "Data model (all slots)"},
     "d3_schema_intro": {
-        "de": "**Schema aus den Daten** — jeder Lagerplatz der Datenbank als Box, "
+        "de": "**Daten-Modell** — jeder Lagerplatz der Datenbank als Box, "
               "positioniert nach Regal/Fach/Ebene. Zeigt **alle 22.429 Plätze** "
-              "(kein Grau, keine fehlenden Regale), eingefärbt nach ABC.",
-        "en": "**Schema from the data** — every database slot as a box, placed by "
+              "(kein Grau, keine fehlenden Regale), wahlweise eingefärbt nach "
+              "Auslastung, Belegung oder ABC.",
+        "en": "**Data model** — every database slot as a box, placed by "
               "rack/bin/level. Shows **all 22,429 slots** (no grey, no missing "
-              "racks), colored by ABC.",
+              "racks), colored by utilization, occupancy or ABC.",
     },
     "d3_schema_caption": {
         "de": "Steuerung: Ziehen = drehen, Scrollen = zoomen, **WASD = fliegen** "
@@ -2320,8 +2346,16 @@ def main() -> None:
         if schema_mode:
             sc1, sc2 = st.columns([1, 1])
             with sc1:
-                schema_abc = st.checkbox(t("d3_color_abc"), value=False,
-                                         key="d3_abc_schema")
+                # Färben nach Auslastung (Default = 3D-Heatmap), Belegung, ABC
+                # oder neutral. Alle Modi nutzen dieselben DB-Daten je Box.
+                cm_opts = [t("d3_cm_util"), t("d3_cm_occ"), t("d3_cm_abc"),
+                           t("d3_cm_neutral")]
+                cm_choice = st.selectbox(t("d3_colormode"), cm_opts, index=0,
+                                         key="d3_cm_schema")
+                colormode = {
+                    t("d3_cm_util"): "util", t("d3_cm_occ"): "occ",
+                    t("d3_cm_abc"): "abc", t("d3_cm_neutral"): "neutral",
+                }[cm_choice]
             with sc2:
                 viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
                                           key="d3_height_schema")
@@ -2331,7 +2365,7 @@ def main() -> None:
                 .replace("__DATA__", slot_json)
                 .replace("__LABELS__", labels_json)
                 .replace("__FOCUS__", focus_id)
-                .replace("__ABCCOLOR__", "true" if schema_abc else "false")
+                .replace("__COLORMODE__", colormode)
             )
             components.html(html, height=viewer_height + 16)
             st.caption(t("d3_schema_caption"))
