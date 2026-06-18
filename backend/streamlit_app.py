@@ -2359,45 +2359,6 @@ def render_3d(filtered: pd.DataFrame) -> None:
         components.html(html, height=viewer_height + 16)
         st.caption(t("d3_caption"))
 
-    st.divider()
-    st.markdown(t("abc3d_head"))
-    st.markdown(t("abc3d_intro"))
-
-    a1, a2 = st.columns([1, 1])
-    with a1:
-        src_opts = [t("abc3d_calc"), t("abc3d_master")]
-        src_choice = st.radio(t("abc3d_src"), src_opts, horizontal=True)
-        abc_col = "ABC_KLASSE" if src_choice == t("abc3d_master") else "ABC_CALC"
-    with a2:
-        sel_classes = st.multiselect(
-            t("abc3d_classfilter"), options=["A", "B", "C"], default=["A", "B", "C"],
-        )
-
-    if filtered.empty:
-        st.info(t("no_data_filters"))
-    else:
-        df_abc = filtered.copy()
-        df_abc["ABC"] = df_abc[abc_col].where(
-            df_abc[abc_col].isin(["A", "B", "C"]), "—"
-        )
-        if sel_classes:
-            df_abc = df_abc[df_abc["ABC"].isin(sel_classes)]
-
-        counts = df_abc["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
-        mc = st.columns(3)
-        mc[0].metric("A", de_num(int(counts['A'])))
-        mc[1].metric("B", de_num(int(counts['B'])))
-        mc[2].metric("C", de_num(int(counts['C'])))
-
-        abc_tbl = (
-            df_abc.sort_values(["ABC", "ANZ_PICKS"], ascending=[True, False])[
-                ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                 "ANZ_PICKS", "ABC"]
-            ]
-        )
-        st.dataframe(abc_tbl, use_container_width=True, hide_index=True)
-        _csv_download(abc_tbl, "abc_je_platz")
-
 
 def main() -> None:
     """Baut die komplette Oberflaeche auf (Streamlit rendert top-down und fuehrt
