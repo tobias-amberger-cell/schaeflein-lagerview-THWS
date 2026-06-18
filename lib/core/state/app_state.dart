@@ -145,10 +145,9 @@ class AppState extends ChangeNotifier
   bool _hasLoadedRelocation = false;
   bool _hasLoadedReplenishment = false;
   int _dashboardKpiHorizonDays = 30;
-  final Set<String> _dashboardSelectedHalls = <String>{};
   final Set<String> _dashboardSelectedAbcClasses = <String>{};
   double _dashboardUtilizationFilterMin = 0;
-  double _dashboardUtilizationFilterMax = 150;
+  double _dashboardUtilizationFilterMax = 100;
   bool _dashboardOnlyOccupied = false;
   int _dashboardTopArticlesLimit = 100;
 
@@ -186,8 +185,6 @@ class AppState extends ChangeNotifier
   ReplenishmentCandidateSummary get replenishmentCandidates =>
       _replenishmentCandidates;
   int get dashboardKpiHorizonDays => _dashboardKpiHorizonDays;
-  Set<String> get dashboardSelectedHalls =>
-      Set<String>.unmodifiable(_dashboardSelectedHalls);
   Set<String> get dashboardSelectedAbcClasses =>
       Set<String>.unmodifiable(_dashboardSelectedAbcClasses);
   double get dashboardUtilizationFilterMin => _dashboardUtilizationFilterMin;
@@ -195,11 +192,10 @@ class AppState extends ChangeNotifier
   bool get dashboardOnlyOccupied => _dashboardOnlyOccupied;
   int get dashboardTopArticlesLimit => _dashboardTopArticlesLimit;
   bool get hasDashboardStorageFilters =>
-      _dashboardSelectedHalls.isNotEmpty ||
       _dashboardSelectedAbcClasses.isNotEmpty ||
       _dashboardOnlyOccupied;
   bool get hasDashboardUtilizationFilter =>
-      _dashboardUtilizationFilterMin > 0 || _dashboardUtilizationFilterMax < 150;
+      _dashboardUtilizationFilterMin > 0 || _dashboardUtilizationFilterMax < 100;
   List<String> get availableDatabasePaths =>
       List<String>.unmodifiable(_availableDatabasePaths);
   String? get activeDatabasePath => _activeDatabasePath;
@@ -387,20 +383,6 @@ class AppState extends ChangeNotifier
     notifyListeners();
   }
 
-  void setDashboardSelectedHalls(Iterable<String> halls) {
-    final normalized = halls
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
-    if (setEquals(normalized, _dashboardSelectedHalls)) {
-      return;
-    }
-    _dashboardSelectedHalls
-      ..clear()
-      ..addAll(normalized);
-    notifyListeners();
-  }
-
   void setDashboardSelectedAbcClasses(Iterable<String> classes) {
     final normalized = classes
         .map((value) => value.trim().toUpperCase())
@@ -419,8 +401,8 @@ class AppState extends ChangeNotifier
     required double min,
     required double max,
   }) {
-    final nextMin = min.clamp(0.0, 150.0).toDouble();
-    final nextMax = max.clamp(0.0, 150.0).toDouble();
+    final nextMin = min.clamp(0.0, 100.0).toDouble();
+    final nextMax = max.clamp(0.0, 100.0).toDouble();
     final safeMin = nextMin <= nextMax ? nextMin : nextMax;
     final safeMax = nextMax >= nextMin ? nextMax : nextMin;
     if (_dashboardUtilizationFilterMin == safeMin &&

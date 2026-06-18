@@ -787,9 +787,6 @@ class _SidebarFilterHamburgerState extends State<_SidebarFilterHamburger> {
     const sliderColor = Color(0xFF005AA4);
     const labelColor = Color(0xFF1F324D);
     const hintColor = Color(0xFF8A94A5);
-    final selectedHall = appState.dashboardSelectedHalls.isEmpty
-        ? null
-        : appState.dashboardSelectedHalls.first;
     final selectedAbc = appState.dashboardSelectedAbcClasses.isEmpty
         ? null
         : appState.dashboardSelectedAbcClasses.first;
@@ -847,34 +844,6 @@ class _SidebarFilterHamburgerState extends State<_SidebarFilterHamburger> {
               ),
             ),
             if (_expanded) ...<Widget>[
-              const SizedBox(height: 14),
-              _filterLabelRow(
-                context,
-                label: 'Halle',
-              ),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: selectedHall,
-                hint: Text(
-                  'Choose options',
-                  style: textTheme.titleMedium?.copyWith(color: hintColor),
-                ),
-                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                decoration: _dropdownDecoration(fieldBackground),
-                items: const <DropdownMenuItem<String>>[
-                  DropdownMenuItem<String>(value: '', child: Text('Alle')),
-                  DropdownMenuItem<String>(value: 'Halle 1', child: Text('Halle 1')),
-                  DropdownMenuItem<String>(value: 'Halle 2', child: Text('Halle 2')),
-                  DropdownMenuItem<String>(value: 'Halle 3', child: Text('Halle 3')),
-                ],
-                onChanged: (value) {
-                  appState.setDashboardSelectedHalls(
-                    value == null || value.isEmpty
-                        ? const <String>[]
-                        : <String>[value],
-                  );
-                },
-              ),
               const SizedBox(height: 14),
               _filterLabelRow(
                 context,
@@ -947,8 +916,8 @@ class _SidebarFilterHamburgerState extends State<_SidebarFilterHamburger> {
                 ),
                 child: RangeSlider(
                   min: 0,
-                  max: 150,
-                  divisions: 150,
+                  max: 100,
+                  divisions: 100,
                   values: utilizationRange,
                   onChanged: (value) {
                     appState.setDashboardUtilizationFilter(
