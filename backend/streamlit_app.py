@@ -220,6 +220,11 @@ function showSlot(id){
       [L.util, util],
       [L.status, status],
     ];
+    if(d.mx != null) rows.push([L.cap, (d.il==null?0:d.il) + ' / ' + d.mx + ' LHM']);
+    if(d.fc != null) rows.push([L.free, d.fc + ' LHM']);
+    rows.push([L.locked, d.g ? L.yes : L.no]);
+    if(d.lz) rows.push([L.lastacc, d.lz.split('-').reverse().join('.')]);
+    if(!d.b && d.dl != null) rows.push([L.daysempty, d.dl]);
     h += '<table style="border-collapse:collapse;width:100%;">';
     for(const r of rows){
       h += '<tr><td style="color:#777;padding:3px 8px 3px 0;vertical-align:top;">'
@@ -457,6 +462,11 @@ function showSlot(id){
     const util = (d.u==null) ? '—' : (d.u + ' %');
     const status = d.b ? L.occupied : L.empty;
     const rows = [[L.pos, d.r+' / '+d.f+' / '+d.e],[L.abc_m,d.a],[L.abc_c,d.ac],[L.picks,d.p],[L.util,util],[L.status,status]];
+    if(d.mx != null) rows.push([L.cap, (d.il==null?0:d.il) + ' / ' + d.mx + ' LHM']);
+    if(d.fc != null) rows.push([L.free, d.fc + ' LHM']);
+    rows.push([L.locked, d.g ? L.yes : L.no]);
+    if(d.lz) rows.push([L.lastacc, d.lz.split('-').reverse().join('.')]);
+    if(!d.b && d.dl != null) rows.push([L.daysempty, d.dl]);
     h += '<table style="border-collapse:collapse;width:100%;">';
     for(const r of rows){ h += '<tr><td style="color:#777;padding:3px 8px 3px 0;vertical-align:top;">'+r[0]+'</td><td style="text-align:right;font-weight:500;">'+fmt(r[1])+'</td></tr>'; }
     h += '</table>';
@@ -1143,6 +1153,13 @@ TR: dict[str, dict[str, str]] = {
     "d3_f_picks": {"de": "Picks", "en": "Picks"},
     "d3_f_util": {"de": "Auslastung", "en": "Utilization"},
     "d3_f_status": {"de": "Status", "en": "Status"},
+    "d3_f_cap": {"de": "Kapazität (belegt/max)", "en": "Capacity (used/max)"},
+    "d3_f_free": {"de": "Frei (LHM)", "en": "Free (LHM)"},
+    "d3_f_locked": {"de": "Gesperrt", "en": "Locked"},
+    "d3_f_lastacc": {"de": "Letzter Zugriff", "en": "Last access"},
+    "d3_f_daysempty": {"de": "Tage leer", "en": "Days empty"},
+    "d3_yes": {"de": "Ja", "en": "Yes"},
+    "d3_no": {"de": "Nein", "en": "No"},
     "d3_occupied": {"de": "belegt", "en": "occupied"},
     "d3_empty": {"de": "frei", "en": "empty"},
     "d3_not_in_db": {
@@ -1258,7 +1275,7 @@ def load_platz_full() -> pd.DataFrame:
     con = get_connection()
     platz = pd.read_sql_query(
         f'SELECT PLATZ_ID, REGAL, FACH, EBENE, ABC_KLASSE, MAX_LHM, IST_LHM, '
-        f'ANZ_PICKS, ANZ_NACHSCHUB, ZUSTAND, SPERR_KNZ, LEER_DATUM '
+        f'ANZ_PICKS, ANZ_NACHSCHUB, ZUSTAND, SPERR_KNZ, LEER_DATUM, ZUGRIFF_DATUM '
         f'FROM "{PLATZ_TABLE}" '
         f"WHERE TRIM(COALESCE(PLATZ_ID, '')) <> ''",
         con,
@@ -1494,6 +1511,11 @@ def load_slot_3d_map() -> str:
         if not pid:
             continue
         util = getattr(row, "UTILIZATION")
+        mx = getattr(row, "MAX_LHM")
+        il = getattr(row, "IST_LHM")
+        fc = getattr(row, "FREE_CAPACITY")
+        de = getattr(row, "DAYS_EMPTY")
+        zd = str(getattr(row, "ZUGRIFF_DATUM") or "").strip()[:10]
         out[pid] = {
             "r": int(row.REGAL),
             "f": int(row.FACH),
@@ -1503,6 +1525,14 @@ def load_slot_3d_map() -> str:
             "p": int(row.ANZ_PICKS),
             "u": (None if pd.isna(util) else round(float(util), 1)),
             "b": bool(row.BELEGT),
+            # Kapazitaet in Ladehilfsmitteln (belegt/max), freie Kapazitaet,
+            # Sperr-Status, letzter Zugriff (Datum) und Tage seit Leerstand.
+            "mx": (None if pd.isna(mx) else round(float(mx), 1)),
+            "il": (None if pd.isna(il) else round(float(il), 1)),
+            "fc": (None if pd.isna(fc) else round(float(fc), 1)),
+            "g": bool(getattr(row, "GESPERRT")),
+            "lz": (zd if len(zd) == 10 and zd[4] == "-" else None),
+            "dl": (None if pd.isna(de) else int(de)),
         }
     return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
 
@@ -1613,10 +1643,10 @@ def main() -> None:
         with col_logo:
             st.image(str(logo), width=110)
         with col_title:
-            st.title("Schaeflein LagerView v1.134")
+            st.title("Schaeflein LagerView v1.135")
             st.caption(t("caption"))
     else:
-        st.title("📦 Schaeflein LagerView v1.134")
+        st.title("📦 Schaeflein LagerView v1.135")
         st.caption(t("caption"))
 
     try:
@@ -2368,6 +2398,13 @@ def main() -> None:
             "picks": t("d3_f_picks"),
             "util": t("d3_f_util"),
             "status": t("d3_f_status"),
+            "cap": t("d3_f_cap"),
+            "free": t("d3_f_free"),
+            "locked": t("d3_f_locked"),
+            "lastacc": t("d3_f_lastacc"),
+            "daysempty": t("d3_f_daysempty"),
+            "yes": t("d3_yes"),
+            "no": t("d3_no"),
             "occupied": t("d3_occupied"),
             "empty": t("d3_empty"),
             "notdb": t("d3_not_in_db"),
