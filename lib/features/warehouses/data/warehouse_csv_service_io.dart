@@ -874,11 +874,7 @@ class WarehouseCsvService {
       ),
       placed AS (
         SELECT
-          CASE
-            WHEN rack BETWEEN 1 AND 16 THEN 'Halle 1'
-            WHEN rack BETWEEN 17 AND 32 THEN 'Halle 2'
-            ELSE 'Halle 3'
-          END AS zone_name,
+          'Lager BER03' AS zone_name,
           platz,
           abc_class,
           CASE WHEN occ.platz IS NULL THEN 0 ELSE 1 END AS occupied

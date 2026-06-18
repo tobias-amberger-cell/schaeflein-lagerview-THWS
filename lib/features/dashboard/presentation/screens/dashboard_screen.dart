@@ -61,15 +61,6 @@ String _deEn(
   return Localizations.localeOf(context).languageCode == 'en' ? en : de;
 }
 
-String _hallForRackNumber(int rackNumber) {
-  if (rackNumber >= 1 && rackNumber <= 16) {
-    return 'Halle 1';
-  }
-  if (rackNumber >= 17 && rackNumber <= 32) {
-    return 'Halle 2';
-  }
-  return 'Halle 3';
-}
 
 bool _isOccupiedStorageStatus(String rawStatus) {
   final value = rawStatus.trim().toLowerCase();
@@ -94,20 +85,15 @@ List<WarehouseStorageLocation> _applyDashboardStorageFilters({
   final minUtil = appState.dashboardUtilizationFilterMin;
   final maxUtil = appState.dashboardUtilizationFilterMax;
   if (warehouse != null &&
-      (minUtil > 0 || maxUtil < 150) &&
+      (minUtil > 0 || maxUtil < 100) &&
       (warehouse.utilizationPercent < minUtil ||
           warehouse.utilizationPercent > maxUtil)) {
     return const <WarehouseStorageLocation>[];
   }
 
-  final selectedHalls = appState.dashboardSelectedHalls;
   final selectedAbc = appState.dashboardSelectedAbcClasses;
   final onlyOccupied = appState.dashboardOnlyOccupied;
   return samples.where((sample) {
-    if (selectedHalls.isNotEmpty &&
-        !selectedHalls.contains(_hallForRackNumber(sample.rackNumber))) {
-      return false;
-    }
     final abc = sample.abcClass.trim().toUpperCase();
     if (selectedAbc.isNotEmpty && !selectedAbc.contains(abc)) {
       return false;
@@ -1906,7 +1892,6 @@ class _FreeCapacityCard extends StatelessWidget {
                 minWidth: 820,
                 columns: const <DataColumn2>[
                   DataColumn2(label: Text('PLATZ_ID'), size: ColumnSize.M),
-                  DataColumn2(label: Text('HALLE'), size: ColumnSize.S),
                   DataColumn2(label: Text('REGAL'), numeric: true, size: ColumnSize.S),
                   DataColumn2(label: Text('FACH'), numeric: true, size: ColumnSize.S),
                   DataColumn2(label: Text('EBENE'), numeric: true, size: ColumnSize.S),
@@ -1919,7 +1904,6 @@ class _FreeCapacityCard extends StatelessWidget {
                   return DataRow(
                     cells: <DataCell>[
                       DataCell(Text(s.placeId)),
-                      DataCell(Text(_hallForRegal(s.regal))),
                       DataCell(Text(s.regal)),
                       DataCell(Text(s.fach)),
                       DataCell(Text(s.ebene)),
@@ -3041,29 +3025,20 @@ class _DashboardStreamlitFilterBar extends StatefulWidget {
 
 class _DashboardStreamlitFilterBarState
     extends State<_DashboardStreamlitFilterBar> {
-  static const List<String> _hallOptions = <String>[
-    'Halle 1',
-    'Halle 2',
-    'Halle 3',
-  ];
   static const List<String> _abcOptions = <String>['A', 'B', 'C'];
 
-  final Set<String> _selectedHalls = <String>{};
   final Set<String> _selectedAbc = <String>{};
-  RangeValues _utilizationRange = const RangeValues(0, 150);
+  RangeValues _utilizationRange = const RangeValues(0, 100);
   bool _onlyOccupied = false;
   int _days = 30;
   int _topArticles = 25;
 
   int get _activeFilterCount {
     var count = 0;
-    if (_selectedHalls.isNotEmpty) {
-      count++;
-    }
     if (_selectedAbc.isNotEmpty) {
       count++;
     }
-    if (_utilizationRange.start > 0 || _utilizationRange.end < 150) {
+    if (_utilizationRange.start > 0 || _utilizationRange.end < 100) {
       count++;
     }
     if (_onlyOccupied) {
@@ -3078,16 +3053,6 @@ class _DashboardStreamlitFilterBarState
     return count;
   }
 
-  void _toggleHall(String hall) {
-    setState(() {
-      if (_selectedHalls.contains(hall)) {
-        _selectedHalls.remove(hall);
-      } else {
-        _selectedHalls.add(hall);
-      }
-    });
-  }
-
   void _toggleAbc(String abc) {
     setState(() {
       if (_selectedAbc.contains(abc)) {
@@ -3100,9 +3065,8 @@ class _DashboardStreamlitFilterBarState
 
   void _resetFilters() {
     setState(() {
-      _selectedHalls.clear();
       _selectedAbc.clear();
-      _utilizationRange = const RangeValues(0, 150);
+      _utilizationRange = const RangeValues(0, 100);
       _onlyOccupied = false;
       _days = 30;
       _topArticles = 25;
@@ -3217,22 +3181,6 @@ class _DashboardStreamlitFilterBarState
               runSpacing: AppSpacing.sm,
               children: <Widget>[
                 _FilterBlock(
-                  title: _deEn(context, de: 'Halle', en: 'Hall'),
-                  child: Wrap(
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
-                    children: _hallOptions
-                        .map(
-                          (hall) => FilterChip(
-                            label: Text(hall),
-                            selected: _selectedHalls.contains(hall),
-                            onSelected: (_) => _toggleHall(hall),
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
-                ),
-                _FilterBlock(
                   title: _deEn(context, de: 'ABC-Klasse', en: 'ABC class'),
                   child: Wrap(
                     spacing: AppSpacing.xs,
@@ -3258,8 +3206,8 @@ class _DashboardStreamlitFilterBarState
                 children: <Widget>[
                   RangeSlider(
                     min: 0,
-                    max: 150,
-                    divisions: 30,
+                    max: 100,
+                    divisions: 20,
                     values: _utilizationRange,
                     labels: RangeLabels(
                       _utilizationRange.start.round().toString(),
@@ -3725,7 +3673,6 @@ class _AbcAnalysisCardState extends State<_AbcAnalysisCard> {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final topArticlesLimit = appState.dashboardTopArticlesLimit;
-    final selectedHalls = appState.dashboardSelectedHalls;
     final selectedAbcClasses = appState.dashboardSelectedAbcClasses;
     final abc = widget.abc;
     final warehouse = widget.warehouse;
@@ -3768,9 +3715,6 @@ class _AbcAnalysisCardState extends State<_AbcAnalysisCard> {
         ? const <WarehouseAbcSlotSummary>[]
         : appState.getAbcSlotsForWarehouse(warehouse.id);
     final slotSummaries = slotSummariesBase.where((entry) {
-      if (selectedHalls.isNotEmpty && !selectedHalls.contains(entry.halle)) {
-        return false;
-      }
       final abcClass = entry.abcClass.trim().toUpperCase();
       if (selectedAbcClasses.isNotEmpty &&
           !selectedAbcClasses.contains(abcClass)) {
@@ -4200,12 +4144,6 @@ class _AbcArticleSummary {
   final int maxIdleDays;
 }
 
-String _hallForRegal(String regalStr) {
-  final regal = int.tryParse(regalStr.trim()) ?? 0;
-  if (regal >= 1 && regal <= 16) return 'Halle 1';
-  if (regal >= 17 && regal <= 32) return 'Halle 2';
-  return 'Halle 3';
-}
 
 class _AbcSlotFlatTable extends StatelessWidget {
   const _AbcSlotFlatTable({required this.items});
@@ -4221,7 +4159,6 @@ class _AbcSlotFlatTable extends StatelessWidget {
         DataColumn2(label: Text('BEZEICHNUNG'), size: ColumnSize.L),
         DataColumn2(label: Text('ABC_KLASSE'), size: ColumnSize.S),
         DataColumn2(label: Text('PLATZ_ID'), size: ColumnSize.M),
-        DataColumn2(label: Text('HALLE'), size: ColumnSize.S),
         DataColumn2(label: Text('REGAL'), numeric: true, size: ColumnSize.S),
         DataColumn2(label: Text('FACH'), numeric: true, size: ColumnSize.S),
         DataColumn2(label: Text('EBENE'), numeric: true, size: ColumnSize.S),
@@ -4248,7 +4185,6 @@ class _AbcSlotFlatTable extends StatelessWidget {
             ),
             DataCell(Text(item.abcClass.isEmpty ? '-' : item.abcClass)),
             DataCell(Text(item.placeId)),
-            DataCell(Text(_hallForRegal(item.regal))),
             DataCell(Text(item.regal)),
             DataCell(Text(item.fach)),
             DataCell(Text(item.ebene)),
