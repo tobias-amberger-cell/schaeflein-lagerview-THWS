@@ -497,7 +497,8 @@ const SPECIAL_X = -CELL_ * 5;        // Sonderblock links vom ersten Regal
 const specialPos = {};               // id -> {c: Spalte, e: Reihe} (4 Reihen)
 specialIds.forEach((id,k) => { specialPos[id] = { c: Math.floor(k/4), e: k%4 }; });
 
-const CELL = 1.0, BAY = 3, BAY_GAP = 0.6, RACK_PITCH = 3.6;
+const AISLE = __AISLE__;              // Gang-Breiten-Faktor (nur visuell)
+const CELL = 1.0, BAY = 3, BAY_GAP = 0.6, RACK_PITCH = 3.6 * AISLE;
 const BOX_D = 1.5, BOX_H = 0.78, BOX_W = 0.82;   // Palette: Tiefe(X)/Hoehe(Y)/Breite(Z)
 function zForCol(c){ return c*CELL + Math.floor(c/BAY)*BAY_GAP; }  // Bays mit Luecke
 
@@ -723,8 +724,6 @@ TR: dict[str, dict[str, str]] = {
     },
     "lang_label": {"de": "🌐 Sprache / Language", "en": "🌐 Sprache / Language"},
     "filter": {"de": "Filter", "en": "Filters"},
-    "hall": {"de": "Halle", "en": "Hall"},
-    "hall_help": {"de": "Leer = alle Hallen.", "en": "Empty = all halls."},
     "abc": {"de": "ABC-Klasse", "en": "ABC class"},
     "abc_help": {
         "de": "Filtert auf Stamm-ABC ODER kumulativ berechnete ABC.",
@@ -732,8 +731,20 @@ TR: dict[str, dict[str, str]] = {
     },
     "util": {"de": "Auslastung (%)", "en": "Utilization (%)"},
     "util_help": {
-        "de": "MAX_LHM vs. IST_LHM. 0 = leer, 100 = voll, >100 = ueberlastet.",
-        "en": "MAX_LHM vs. IST_LHM. 0 = empty, 100 = full, >100 = overloaded.",
+        "de": "IST_LHM / MAX_LHM × 100. 0 = leer, 100 = voll. Obergrenze 100 = "
+              "„100 % und mehr\" (offen) – schließt seltene Überlast-Artefakte "
+              "(≥ 200 %, MAX_LHM zu klein gepflegt) mit ein.",
+        "en": "IST_LHM / MAX_LHM × 100. 0 = empty, 100 = full. Upper bound 100 = "
+              "\"100 % and above\" (open) – includes rare overload artefacts "
+              "(≥ 200 %, MAX_LHM set too low).",
+    },
+    "level_help": {
+        "de": "Regalebene laut Feld EBENE. Obergrenze = höchste real belegte "
+              "Ebene (≥ 20 Plätze) – einzelne Ausreißer-Datensätze (EBENE 14–24, "
+              "je 1 Platz) blähen die Skala nicht mehr auf.",
+        "en": "Rack level from field EBENE. Upper bound = highest substantially "
+              "occupied level (≥ 20 slots) – single outlier records (EBENE 14–24, "
+              "1 slot each) no longer inflate the scale.",
     },
     "only_occ": {"de": "Nur belegte Plaetze", "en": "Occupied slots only"},
     "place_filter": {
@@ -1070,7 +1081,20 @@ TR: dict[str, dict[str, str]] = {
     "d3_autorotate": {"de": "Auto-Rotation", "en": "Auto-rotate"},
     "d3_brightness": {"de": "Helligkeit", "en": "Brightness"},
     "d3_shadow": {"de": "Schatten", "en": "Shadow"},
-    "d3_height": {"de": "Höhe (px)", "en": "Height (px)"},
+    "d3_height": {"de": "Anzeigehöhe (px)", "en": "Viewer height (px)"},
+    "d3_height_help": {
+        "de": "Höhe des Viewer-Fensters in Pixeln – größer = mehr Bildfläche, "
+              "kein Zoom. Zoomen per Mausrad im Modell.",
+        "en": "Height of the viewer window in pixels – larger = more canvas, "
+              "not zoom. Zoom with the mouse wheel inside the model.",
+    },
+    "d3_aisle": {"de": "Gang-Breite", "en": "Aisle width"},
+    "d3_aisle_help": {
+        "de": "Zieht die Regalreihen rein optisch weiter auseinander – breitere "
+              "Gänge zum Durchfliegen. Ändert keine Daten, nur die Darstellung.",
+        "en": "Spreads the rack rows further apart visually – wider aisles to fly "
+              "through. Changes no data, only the rendering.",
+    },
     "d3_reset": {"de": "Ansicht zurücksetzen", "en": "Reset view"},
     "d3_caption": {
         "de": "Steuerung: Ziehen = drehen, Scrollen = zoomen, Rechtsklick-Ziehen "
@@ -1537,9 +1561,14 @@ def apply_filters(
     if abc:
         out = out[out["ABC_KLASSE"].isin(abc) | out["ABC_CALC"].isin(abc)]
     lo, hi = util_range
-    if lo > 0 or hi < 150:
+    # Slider-Obergrenze 100 bedeutet "100 % und mehr" (nach oben offen), damit
+    # seltene Ueberlast-Artefakte (>=200 %) und Plaetze ohne MAX_LHM im Default
+    # nicht ausgeblendet werden. Nur einschraenken, wenn der Nutzer den Bereich
+    # tatsaechlich verengt hat.
+    if lo > 0 or hi < 100:
         util_filled = out["UTILIZATION"].fillna(-1)
-        out = out[(util_filled >= lo) & (util_filled <= hi)]
+        upper = float("inf") if hi >= 100 else hi
+        out = out[(util_filled >= lo) & (util_filled <= upper)]
     if only_occupied:
         out = out[out["BELEGT"]]
     if regal_range is not None:
@@ -1584,10 +1613,10 @@ def main() -> None:
         with col_logo:
             st.image(str(logo), width=110)
         with col_title:
-            st.title("Schaeflein LagerView v1.133")
+            st.title("Schaeflein LagerView v1.134")
             st.caption(t("caption"))
     else:
-        st.title("📦 Schaeflein LagerView v1.133")
+        st.title("📦 Schaeflein LagerView v1.134")
         st.caption(t("caption"))
 
     try:
@@ -1606,15 +1635,23 @@ def main() -> None:
             help=t("abc_help"),
         )
         util_range = st.slider(
-            t("util"), 0, 150, (0, 150), step=5, help=t("util_help"),
+            t("util"), 0, 100, (0, 100), step=5, help=t("util_help"),
         )
         only_occupied = st.checkbox(t("only_occ"), value=False)
         with st.expander(t("place_filter")):
             regal_max = max(int(platz["REGAL"].max()), 1)
-            ebene_max = max(int(platz["EBENE"].max()), 1)
+            # EBENE enthaelt vereinzelte Ausreisser-Datensaetze bis 24 (je 1 Platz),
+            # waehrend echte Ebenen substanziell belegt sind (0-6 sowie Cluster 10-13).
+            # Obergrenze = hoechste Ebene mit nennenswerter Belegung (>= 20 Plaetze),
+            # damit Einzel-Ausreisser die Skala nicht aufblaehen.
+            _ebene_counts = platz["EBENE"].value_counts()
+            _ebene_real = _ebene_counts[_ebene_counts >= 20].index
+            ebene_max = (max(int(_ebene_real.max()), 1) if len(_ebene_real)
+                         else max(int(platz["EBENE"].max()), 1))
             picks_max = max(int(platz["ANZ_PICKS"].max()), 1)
             regal_range = st.slider(t("rack"), 0, regal_max, (0, regal_max))
-            ebene_range = st.slider(t("level"), 0, ebene_max, (0, ebene_max))
+            ebene_range = st.slider(t("level"), 0, ebene_max, (0, ebene_max),
+                                    help=t("level_help"))
             min_picks = st.slider(t("min_picks"), 0, picks_max, 0)
             sperr_opts = [t("lock_all"), t("lock_only"), t("lock_without")]
             sperr_choice = st.radio(
@@ -2358,10 +2395,14 @@ def main() -> None:
                 }[cm_choice]
             with sc2:
                 viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
-                                          key="d3_height_schema")
+                                          key="d3_height_schema",
+                                          help=t("d3_height_help"))
+                aisle = st.slider(t("d3_aisle"), 1.0, 3.0, 1.0, step=0.1,
+                                  key="d3_aisle_schema", help=t("d3_aisle_help"))
             html = (
                 _SCHEMA_VIEWER_HTML
                 .replace("__HEIGHT__", str(viewer_height))
+                .replace("__AISLE__", str(aisle))
                 .replace("__DATA__", slot_json)
                 .replace("__LABELS__", labels_json)
                 .replace("__FOCUS__", focus_id)
@@ -2379,7 +2420,8 @@ def main() -> None:
             with ctrl2:
                 perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
             with ctrl3:
-                viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20)
+                viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
+                                          help=t("d3_height_help"))
             html = (
                 _THREE_VIEWER_HTML
                 .replace("__HEIGHT__", str(viewer_height))
