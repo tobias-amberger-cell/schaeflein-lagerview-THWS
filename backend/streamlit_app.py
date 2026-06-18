@@ -2,7 +2,7 @@
 
 Visualisiert dieselben Daten wie die Flutter-App direkt aus der warehouse.db
 und uebernimmt die Auswertungen aus `warehouse_project/warehouse_analytics.py`
-und `warehouse_heatmap.py` (Utilization, Bottlenecks, Free Capacity, Smart
+und `warehouse_heatmap.py` (Utilization, Hochfrequenz-Plaetze, Free Capacity, Smart
 Relocation, ABC-Analyse).
 
 Lokaler Start:
@@ -791,7 +791,7 @@ TR: dict[str, dict[str, str]] = {
     "tab_misc": {"de": "Sonstiges", "en": "Other"},
     "tab_util": {"de": "Auslastungs-Heatmap", "en": "Utilization heatmap"},
     "tab_pick": {"de": "Pick-Heatmap", "en": "Pick heatmap"},
-    "tab_bottle": {"de": "Bottlenecks", "en": "Bottlenecks"},
+    "tab_bottle": {"de": "Hochfrequenz-Plätze", "en": "High-frequency slots"},
     "tab_free": {"de": "Free Capacity", "en": "Free capacity"},
     "tab_relocate": {"de": "🔄 Umlagern", "en": "🔄 Relocate"},
     "tab_replenish": {"de": "⬆️ Nachschub", "en": "⬆️ Replenish"},
@@ -853,16 +853,16 @@ TR: dict[str, dict[str, str]] = {
     "hour_label": {"de": "Stunde", "en": "Hour"},
     "picks_label": {"de": "Picks", "en": "Picks"},
     "bottle_intro": {
-        "de": "**Bottleneck-Analyse** — Plätze mit hoher Pick-Frequenz "
-              "(`ANZ_PICKS` + `Q_PLATZ`-Count aus Fahrpos). Engpässe werden oft "
-              "angefahren und sind gleichzeitig hoch ausgelastet.",
-        "en": "**Bottleneck analysis** — slots with high pick frequency "
-              "(`ANZ_PICKS` + `Q_PLATZ` count from Fahrpos). Bottlenecks are "
-              "visited often and are highly utilized at the same time.",
+        "de": "**Hochfrequenz-Plätze** — Plätze mit hoher Pick-Frequenz "
+              "(`ANZ_PICKS` + `Q_PLATZ`-Count aus Fahrpos). Diese Plätze werden "
+              "am häufigsten angefahren und sind oft hoch ausgelastet.",
+        "en": "**High-frequency slots** — slots with high pick frequency "
+              "(`ANZ_PICKS` + `Q_PLATZ` count from Fahrpos). These slots are "
+              "visited most often and are frequently highly utilized.",
     },
     "bottle_chart": {
-        "de": "Top-15 Engpässe (Picks gesamt, Farbe = Auslastung %)",
-        "en": "Top-15 bottlenecks (total picks, color = utilization %)",
+        "de": "Top-15 Hochfrequenz-Plätze (Picks gesamt, Farbe = Auslastung %)",
+        "en": "Top-15 high-frequency slots (total picks, color = utilization %)",
     },
     "free_intro": {
         "de": "**Free Capacity** — Plätze mit Restkapazität, sortiert nach "
@@ -1643,10 +1643,10 @@ def main() -> None:
         with col_logo:
             st.image(str(logo), width=110)
         with col_title:
-            st.title("Schaeflein LagerView v1.135")
+            st.title("Schaeflein LagerView v1.136")
             st.caption(t("caption"))
     else:
-        st.title("📦 Schaeflein LagerView v1.135")
+        st.title("📦 Schaeflein LagerView v1.136")
         st.caption(t("caption"))
 
     try:
@@ -1745,7 +1745,7 @@ def main() -> None:
     # die `with tab_*`-Bloecke weiter unten duerfen in beliebiger Code-Reihen-
     # folge stehen. Reihenfolge: Übersicht, 3D, ABC, Steuermassnahmen (Umlagern/
     # Nachschub/Einlagern/Auslagern), Artikel, und ganz am Ende "Sonstiges".
-    # "Sonstiges" buendelt Auslastungs-/Pick-Heatmap, Bottlenecks, Free
+    # "Sonstiges" buendelt Auslastungs-/Pick-Heatmap, Hochfrequenz-Plaetze, Free
     # Capacity, Durchsatz und Top-Artikel (siehe unten).
     (tab_uebersicht, tab_3d, tab_abc, tab_umlagern, tab_nachschub,
      tab_einlagern, tab_auslagern, tab_article, tab_sonstiges) = st.tabs([
@@ -1937,7 +1937,7 @@ def main() -> None:
 
     with sub_bottle:
         st.markdown(t("bottle_intro"))
-        bottlenecks = (
+        high_freq = (
             filtered.assign(
                 PICK_TOTAL=lambda d: d["ANZ_PICKS"] + d["PICK_COUNT_FAHR"]
             )
@@ -1947,11 +1947,11 @@ def main() -> None:
                  "ANZ_PICKS", "PICK_TOTAL", "MAX_LHM", "IST_LHM", "UTILIZATION"]
             ]
         )
-        if bottlenecks.empty:
+        if high_freq.empty:
             st.info(t("no_data_filters"))
         else:
-            st.dataframe(bottlenecks, use_container_width=True, hide_index=True)
-            _csv_download(bottlenecks, "bottlenecks")
+            st.dataframe(high_freq, use_container_width=True, hide_index=True)
+            _csv_download(high_freq, "hochfrequenz_plaetze")
 
     with sub_free:
         st.markdown(t("free_intro"))
