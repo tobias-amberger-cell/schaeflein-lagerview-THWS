@@ -497,7 +497,8 @@ const SPECIAL_X = -CELL_ * 5;        // Sonderblock links vom ersten Regal
 const specialPos = {};               // id -> {c: Spalte, e: Reihe} (4 Reihen)
 specialIds.forEach((id,k) => { specialPos[id] = { c: Math.floor(k/4), e: k%4 }; });
 
-const CELL = 1.0, BAY = 3, BAY_GAP = 0.6, RACK_PITCH = 3.6;
+const AISLE = __AISLE__;              // Gang-Breiten-Faktor (nur visuell)
+const CELL = 1.0, BAY = 3, BAY_GAP = 0.6, RACK_PITCH = 3.6 * AISLE;
 const BOX_D = 1.5, BOX_H = 0.78, BOX_W = 0.82;   // Palette: Tiefe(X)/Hoehe(Y)/Breite(Z)
 function zForCol(c){ return c*CELL + Math.floor(c/BAY)*BAY_GAP; }  // Bays mit Luecke
 
@@ -1086,6 +1087,13 @@ TR: dict[str, dict[str, str]] = {
               "kein Zoom. Zoomen per Mausrad im Modell.",
         "en": "Height of the viewer window in pixels – larger = more canvas, "
               "not zoom. Zoom with the mouse wheel inside the model.",
+    },
+    "d3_aisle": {"de": "Gang-Breite", "en": "Aisle width"},
+    "d3_aisle_help": {
+        "de": "Zieht die Regalreihen rein optisch weiter auseinander – breitere "
+              "Gänge zum Durchfliegen. Ändert keine Daten, nur die Darstellung.",
+        "en": "Spreads the rack rows further apart visually – wider aisles to fly "
+              "through. Changes no data, only the rendering.",
     },
     "d3_reset": {"de": "Ansicht zurücksetzen", "en": "Reset view"},
     "d3_caption": {
@@ -2275,9 +2283,12 @@ def render_3d(filtered: pd.DataFrame) -> None:
             viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
                                       key="d3_height_schema",
                                       help=t("d3_height_help"))
+            aisle = st.slider(t("d3_aisle"), 1.0, 3.0, 1.0, step=0.1,
+                              key="d3_aisle_schema", help=t("d3_aisle_help"))
         html = (
             _SCHEMA_VIEWER_HTML
             .replace("__HEIGHT__", str(viewer_height))
+            .replace("__AISLE__", str(aisle))
             .replace("__DATA__", slot_json)
             .replace("__LABELS__", labels_json)
             .replace("__FOCUS__", focus_id)

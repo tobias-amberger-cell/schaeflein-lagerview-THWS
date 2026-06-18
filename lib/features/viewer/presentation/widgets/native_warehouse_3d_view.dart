@@ -353,6 +353,11 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
   double _storageFocusPulseS = 0;
   _NavigationGeometry? _cachedNavigationGeometry;
   int? _cachedNavigationGeometryKey;
+  // Gang-Breiten-Faktor: zieht die Regalreihen rein visuell weiter auseinander
+  // (breitere Wege zum Durchfliegen), ohne Regale/Plaetze selbst zu veraendern.
+  // 1.0 = normal. Skaliert die Hallen-Abmessungen; die Regalgroesse wird
+  // kompensiert, sodass nur die Gaenge wachsen.
+  double _aisleSpread = 1.0;
 
   int get _availableShelfLevels {
     final fromModel = widget.model?.shelfLevels;
@@ -2402,9 +2407,10 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
     final layout = widget.warehouse.layoutSpec;
     final baseRows = (widget.model?.shelfRows ?? layout?.rackRowCount ?? 8).clamp(2, 18);
     final baseColumns = (widget.model?.shelfColumns ?? 10).clamp(3, 26);
-    final length = ((widget.model?.warehouseLengthM ?? layout?.lengthM ?? 70) * 1.72).toDouble();
-    final width = ((widget.model?.warehouseWidthM ?? layout?.widthM ?? 42) * 1.58).toDouble();
-    final cacheKey = Object.hash(length, width, baseRows, baseColumns);
+    final aisle = _aisleSpread;
+    final length = ((widget.model?.warehouseLengthM ?? layout?.lengthM ?? 70) * 1.72 * aisle).toDouble();
+    final width = ((widget.model?.warehouseWidthM ?? layout?.widthM ?? 42) * 1.58 * aisle).toDouble();
+    final cacheKey = Object.hash(length, width, baseRows, baseColumns, aisle);
     final cached = _cachedNavigationGeometry;
     if (cached != null && _cachedNavigationGeometryKey == cacheKey) {
       return cached;
@@ -2430,8 +2436,10 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
       rackAreaWidth: rackAreaWidth,
       stepX: stepX,
       stepY: stepY,
-      rackLength: stepX * 0.66,
-      rackDepth: stepY * 0.34,
+      // Regalgroesse bleibt absolut konstant (durch /aisle kompensiert) -> nur
+      // die Gaenge zwischen den Reihen/Spalten werden breiter.
+      rackLength: (stepX / aisle) * 0.66,
+      rackDepth: (stepY / aisle) * 0.34,
     );
     _cachedNavigationGeometry = geometry;
     _cachedNavigationGeometryKey = cacheKey;
@@ -3960,6 +3968,7 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
                           : 0,
                       focusedMarkerId: _focusedMarkerId,
                       inspectionMarkers: visibleMarkers,
+                      aisleSpread: _aisleSpread,
                     ),
                     child: const SizedBox.expand(),
                   ),
@@ -4076,6 +4085,87 @@ class _NativeWarehouse3DViewState extends State<NativeWarehouse3DView>
                   style: ButtonStyle(
                     backgroundColor: WidgetStatePropertyAll(
                       colorScheme.surface.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+              ),
+            if (widget.enableFirstPersonControls)
+              Positioned(
+                top: controlTop(224),
+                right: AppSpacing.sm,
+                bottom: controlBottom(224),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Tooltip(
+                          message: 'Gänge schmaler',
+                          child: IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.remove),
+                            onPressed: _aisleSpread <= 1.0
+                                ? null
+                                : () => setState(() {
+                                      _aisleSpread = (_aisleSpread - 0.25)
+                                          .clamp(1.0, 2.5)
+                                          .toDouble();
+                                    }),
+                          ),
+                        ),
+                        Tooltip(
+                          message: 'Gang-Breite zurücksetzen',
+                          child: InkWell(
+                            onTap: () => setState(() => _aisleSpread = 1.0),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 4,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.swap_horiz,
+                                    size: 16,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_aisleSpread.toStringAsFixed(2)}×',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Tooltip(
+                          message: 'Gänge breiter',
+                          child: IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.add),
+                            onPressed: _aisleSpread >= 2.5
+                                ? null
+                                : () => setState(() {
+                                      _aisleSpread = (_aisleSpread + 0.25)
+                                          .clamp(1.0, 2.5)
+                                          .toDouble();
+                                    }),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -4946,6 +5036,7 @@ class _Warehouse3DPainter extends CustomPainter {
     required this.selectedRackPulse,
     required this.focusedMarkerId,
     required this.inspectionMarkers,
+    this.aisleSpread = 1.0,
   });
 
   final ColorScheme colorScheme;
@@ -4979,6 +5070,9 @@ class _Warehouse3DPainter extends CustomPainter {
   final double selectedRackPulse;
   final String? focusedMarkerId;
   final List<_InspectionMarker> inspectionMarkers;
+  // Gang-Breiten-Faktor (nur visuell); muss identisch zu _navigationGeometry()
+  // im State sein, damit Render- und Klick-Geometrie deckungsgleich bleiben.
+  final double aisleSpread;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -5049,8 +5143,12 @@ class _Warehouse3DPainter extends CustomPainter {
     const megaLengthFactor = 1.72;
     const megaWidthFactor = 1.58;
     const megaHeightFactor = 1.22;
-    final fallbackLength = (model?.warehouseLengthM ?? layout?.lengthM ?? 70) * megaLengthFactor;
-    final fallbackWidth = (model?.warehouseWidthM ?? layout?.widthM ?? 42) * megaWidthFactor;
+    // Gang-Breiten-Faktor skaliert nur die Grundflaeche (Laenge/Breite), nicht
+    // die Hoehe. Muss identisch zu _navigationGeometry() sein, damit Render- und
+    // Klick-Geometrie deckungsgleich bleiben.
+    final aisle = aisleSpread;
+    final fallbackLength = (model?.warehouseLengthM ?? layout?.lengthM ?? 70) * megaLengthFactor * aisle;
+    final fallbackWidth = (model?.warehouseWidthM ?? layout?.widthM ?? 42) * megaWidthFactor * aisle;
     final fallbackHeight = (model?.warehouseHeightM ?? layout?.heightM ?? 14) * megaHeightFactor;
 
     final baseRows = (model?.shelfRows ?? layout?.rackRowCount ?? 8).clamp(2, 18);
@@ -5101,8 +5199,10 @@ class _Warehouse3DPainter extends CustomPainter {
       areaWidth: rackAreaWidth,
       stepX: stepX,
       stepY: stepY,
-      rackLength: stepX * 0.66,
-      rackDepth: stepY * 0.34,
+      // Regalgroesse absolut konstant halten (durch /aisle kompensiert), damit
+      // beim Aufziehen der Gaenge nur der Abstand waechst, nicht die Regale.
+      rackLength: (stepX / aisleSpread) * 0.66,
+      rackDepth: (stepY / aisleSpread) * 0.34,
       rackHeight: (base.height * 0.74).clamp(9.0, 22.0),
     );
   }
@@ -6652,7 +6752,8 @@ class _Warehouse3DPainter extends CustomPainter {
         oldDelegate.selectedRackIndex != selectedRackIndex ||
         oldDelegate.selectedRackPulse != selectedRackPulse ||
         oldDelegate.focusedMarkerId != focusedMarkerId ||
-        oldDelegate.inspectionMarkers != inspectionMarkers;
+        oldDelegate.inspectionMarkers != inspectionMarkers ||
+        oldDelegate.aisleSpread != aisleSpread;
   }
 
   bool _isProjectedOutsideViewport(
