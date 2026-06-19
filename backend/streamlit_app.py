@@ -1092,6 +1092,38 @@ TR: dict[str, dict[str, str]] = {
         "de": "Ab dieser Ebene gelten freie Nicht-A-Plätze als Reserve für Langsamdreher.",
         "en": "From this level free non-A slots count as reserve for slow movers.",
     },
+    "put_logic_t": {
+        "de": "ℹ️ Wie entsteht der Vorschlag?",
+        "en": "ℹ️ How is the suggestion derived?",
+    },
+    "put_logic_b": {
+        "de": "Der **Vorschlag** ist keine Einzelfall-Bewertung – er ergibt sich direkt daraus, in **welche "
+              "Kategorie** ein Platz fällt. Die Filterregel **ist** die Empfehlung. Alle Kriterien stehen als "
+              "Spalte in der Tabelle, der Vorschlag ist also nachprüfbar:\n\n"
+              "1. **Schnelldreher-Plätze** → *„Schnelldreher hier einlagern“*\n"
+              "   Platz ist **frei** (`Frei > 0`) **und** ABC (Platz) = **A** **und** Ebene **≤ {fast}** **und** "
+              "nicht gesperrt. Sortiert nach **Frei** absteigend (größte Lücke zuerst).\n"
+              "2. **Reserve** → *„Langsamdreher/Reserve hier einlagern“*\n"
+              "   Platz ist **frei** **und** ABC (Platz) **≠ A** **und** Ebene **≥ {reserve}** **und** nicht "
+              "gesperrt. Sortiert nach **Frei** absteigend.\n"
+              "3. **Gesperrt** → *„Nicht einlagern“*\n"
+              "   **Sperrkennzeichen gesetzt** (unabhängig von frei/belegt) – darf nicht bestückt werden.\n\n"
+              "Die beiden Ebenen-Schwellen (**{fast}** / **{reserve}**) stellst du oben mit den Reglern ein; "
+              "die Listen aktualisieren sich sofort.",
+        "en": "The **suggestion** is not a case-by-case score – it follows directly from **which category** a slot "
+              "falls into. The filter rule **is** the recommendation, and every criterion is shown as a column, so "
+              "it is verifiable:\n\n"
+              "1. **Fast-mover slots** → *“Store fast movers here”*\n"
+              "   Slot is **free** (`Free > 0`) **and** ABC (slot) = **A** **and** level **≤ {fast}** **and** not "
+              "locked. Sorted by **Free** descending (largest gap first).\n"
+              "2. **Reserve** → *“Store slow movers/reserve here”*\n"
+              "   Slot is **free** **and** ABC (slot) **≠ A** **and** level **≥ {reserve}** **and** not locked. "
+              "Sorted by **Free** descending.\n"
+              "3. **Locked** → *“Do not put away”*\n"
+              "   **Lock flag set** (regardless of free/occupied) – must not be stocked.\n\n"
+              "The two level thresholds (**{fast}** / **{reserve}**) are set with the sliders above; the lists "
+              "update instantly.",
+    },
     "put_fast_t": {"de": "Schnelldreher-Plätze", "en": "Fast-mover slots"},
     "put_fast_d": {
         "de": "Freie **A-Plätze bis Ebene {n}**: wegoptimal und auf Greifhöhe → kürzeste Wege. Hier gehören "
@@ -2032,6 +2064,43 @@ _PUTAWAY_RENAME = {
     "UTILIZATION": "Auslastung %",
 }
 
+# Hilfetexte je (umbenannter) Spalte – als ℹ️ am Tabellenkopf (col_help).
+_PUTAWAY_HELP = {
+    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im WMS.",
+    "Regal": "Regalnummer im Lager.",
+    "Fach": "Fach innerhalb des Regals.",
+    "Ebene": "Höhe/Ebene – niedrig = wegoptimale Pickzone (kurze Greifwege). "
+             "Kriterium für Schnelldreher (≤ Regler) vs. Reserve (≥ Regler).",
+    "ABC (Platz)": "Güteklasse des ORTES aus dem WMS (A = wegoptimaler "
+                   "Premiumplatz). Beschreibt den Platz, nicht den Artikel; "
+                   "entscheidet Schnelldreher-Platz (A) vs. Reserve (kein A).",
+    "Kapazität (max. LHM)": "MAX_LHM – wie viele Ladehilfsmittel "
+                            "(Paletten/Behälter) der Platz maximal fasst.",
+    "Belegt (Ist-LHM)": "IST_LHM – wie viele Ladehilfsmittel aktuell schon "
+                        "dort stehen.",
+    "Frei (LHM)": "Kapazität − Belegt – wie viele LHM noch reinpassen. "
+                  "Sortierkriterium der Liste (größte Lücke zuerst).",
+    "Auslastung %": "Belegt / Kapazität × 100. 0 % = ganz leer, < 100 % = "
+                    "noch Platz.",
+    "Sperrgrund (Kennz.)": "Sperrkennzeichen (SPERR_KNZ) aus dem WMS – warum "
+                           "der Platz gesperrt ist (z. B. Inventur/Defekt). "
+                           "Gesetzt = hier nicht einlagern.",
+}
+
+# Gesperrt-Liste: Kapazitaet/Frei sind hier irrelevant (egal ob frei, der Platz
+# darf nicht bestueckt werden). Stattdessen zeigt diese Liste den SPERRGRUND.
+_PUTAWAY_BLOCKED_COLS = [
+    "PLATZ_ID", "REGAL", "FACH", "EBENE", "ABC_KLASSE", "SPERR_KNZ",
+]
+_PUTAWAY_BLOCKED_RENAME = {
+    "PLATZ_ID": "Platz",
+    "REGAL": "Regal",
+    "FACH": "Fach",
+    "EBENE": "Ebene",
+    "ABC_KLASSE": "ABC (Platz)",
+    "SPERR_KNZ": "Sperrgrund (Kennz.)",
+}
+
 # Schlanke Spalten fuer den Nachschub-Tab: jeder Platz ist hier per Definition
 # GANZ leer (IST_LHM = 0), darum sind IST_LHM (immer 0) und WERT (= MAX_LHM x
 # Picks) keine Entscheidungshilfe. Relevant ist: Ort, Platz-Guete (ABC),
@@ -2507,6 +2576,10 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
     with c2:
         reserve_level = st.slider(t("sl_reservelevel"), 1, 6, 3,
                                   help=t("sl_reservelevel_h"))
+    # WIE entsteht der Vorschlag? Die Kategorie-Filterregel IST die Empfehlung;
+    # die Regelwerte folgen live den Reglern oben.
+    with st.expander(t("put_logic_t")):
+        st.markdown(t("put_logic_b").format(fast=fast_level, reserve=reserve_level))
     free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
 
     # Schnelldreher-Plaetze: freie A-Plaetze auf niedriger Ebene -> kurze
@@ -2533,15 +2606,18 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
     render_massnahme_kategorie(
         t("put_fast_t"), t("put_fast_d").format(n=fast_level),
         fast_lane, cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
-        rowhint=t("put_rowhint"), vorschlag=t("put_fast_v"))
+        rowhint=t("put_rowhint"), vorschlag=t("put_fast_v"),
+        col_help=_PUTAWAY_HELP)
     render_massnahme_kategorie(
         t("put_reserve_t"), t("put_reserve_d").format(n=reserve_level),
         reserve, cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
-        rowhint=t("put_rowhint"), vorschlag=t("put_reserve_v"))
+        rowhint=t("put_rowhint"), vorschlag=t("put_reserve_v"),
+        col_help=_PUTAWAY_HELP)
     render_massnahme_kategorie(
         t("put_blocked_t"), t("put_blocked_d"), blocked,
-        cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
-        rowhint=t("put_blocked_rowhint"), vorschlag=t("put_blocked_v"))
+        cols=_PUTAWAY_BLOCKED_COLS, rename=_PUTAWAY_BLOCKED_RENAME,
+        rowhint=t("put_blocked_rowhint"), vorschlag=t("put_blocked_v"),
+        col_help=_PUTAWAY_HELP)
 
 
 def render_auslagern(filtered: pd.DataFrame) -> None:
