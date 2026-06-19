@@ -1010,6 +1010,15 @@ TR: dict[str, dict[str, str]] = {
               "candidates for an ABC adjustment.",
     },
     "abc_byfreq": {"de": "**Plätze nach Pickfrequenz**", "en": "**Slots by pick frequency**"},
+    "abc_byfreq_note": {
+        "de": "Alle Einträge, sortiert nach Picks (häufigste oben). **kumul. Pick-%** "
+              "= wie viel Prozent aller Picks bis zu dieser Zeile zusammenkommen; "
+              "daraus ergibt sich die Klasse. **Stamm** = WMS-Klasse, **Berechnet** = "
+              "aus den Picks.",
+        "en": "All entries sorted by picks (most-picked on top). **cum. pick %** = how "
+              "much of all picks accumulate down to this row; the class follows from "
+              "it. **Master** = WMS class, **Calculated** = from the picks.",
+    },
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
     "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
@@ -1026,13 +1035,16 @@ TR: dict[str, dict[str, str]] = {
               "instantly (default 80 / 95 %).",
     },
     "abc_dist_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
+    "abc_dist_share": {"de": "Pick-Anteil je Klasse", "en": "Pick share per class"},
     "abc_dist_note": {
-        "de": "Tortendiagramm = **Anzahl** Plätze/Artikel je Klasse. Die Tabelle "
-              "daneben zeigt den **Pick-Anteil** je Klasse – so wird der Pareto-"
-              "Effekt sichtbar: wenige A-Einträge tragen den Großteil der Picks.",
-        "en": "Pie = **count** of slots/items per class. The table next to it shows "
-              "the **pick share** per class – making the Pareto effect visible: a "
-              "few A entries carry most of the picks.",
+        "de": "Tortendiagramm = **Anteil der Picks** je Klasse (so ist ABC definiert): "
+              "A stemmt den Großteil der Picks, C kaum etwas. Die Tabelle daneben "
+              "zeigt die exakten Zahlen – **Anzahl** Plätze/Artikel, Picks und Anteil. "
+              "Typisch: wenige A-Plätze = ~80 % der Picks (Pareto).",
+        "en": "Pie = **share of picks** per class (that's how ABC is defined): A "
+              "carries most picks, C barely any. The table next to it shows the exact "
+              "figures – **count**, picks and share. Typically: a few A slots = ~80 % "
+              "of picks (Pareto).",
     },
     "abc_col_count": {"de": "Anzahl", "en": "Count"},
     "abc_col_share": {"de": "Anteil %", "en": "Share %"},
@@ -2341,25 +2353,26 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         # Wertespalte je Sicht (Artikel = Bewegungen, Plaetze = ANZ_PICKS).
         val_col = "bewegungen" if by_articles else "ANZ_PICKS"
         val_label = t("picks_label")
-        # Verteilung: Pie = ANZAHL je Klasse; Tabelle daneben = Pick-Anteil je
-        # Klasse -> macht den Pareto-Effekt sichtbar (wenige A = Grossteil Picks).
+        # Verteilung: Pie = PICK-ANTEIL je Klasse (so ist ABC definiert, sofort
+        # verstaendlich). Tabelle daneben = exakte Zahlen inkl. Anzahl Plaetze.
         st.caption(t("abc_dist_note"))
         counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
         picks_sum = (data.groupby("ABC")[val_col].sum()
                      .reindex(["A", "B", "C"]).fillna(0))
         total_picks = picks_sum.sum() or 1
+        share = (picks_sum / total_picks * 100).round(1)
         summary = pd.DataFrame({
             t("abc_col_count"): counts.astype(int).values,
             val_label: picks_sum.astype(int).values,
-            t("abc_col_share"): (picks_sum / total_picks * 100).round(1).values,
+            t("abc_col_share"): share.values,
         }, index=["A", "B", "C"])
         summary.index.name = t("abc")
         d1, d2 = st.columns([2, 1])
         with d1:
             st.plotly_chart(
-                px.pie(names=counts.index, values=counts.values,
-                       color=counts.index, color_discrete_map=abc_color,
-                       title=t("abc_dist_count")),
+                px.pie(names=picks_sum.index, values=picks_sum.values,
+                       color=picks_sum.index, color_discrete_map=abc_color,
+                       title=t("abc_dist_share")),
                 use_container_width=True,
             )
         with d2:
@@ -2402,7 +2415,10 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                 _csv_download(dev_tbl, "abc_anpassung")
 
         st.markdown(t("abc_byfreq"))
-        table = data[[c for c in table_cols if c in data.columns]]
+        st.caption(t("abc_byfreq_note"))
+        table = data[[c for c in table_cols if c in data.columns]].rename(
+            columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet",
+                     "CUM_%": t("abc_cumcol")})
         st.dataframe(table.head(200), use_container_width=True, hide_index=True)
         _csv_download(table, "abc_articles" if by_articles else "abc_slots")
 
