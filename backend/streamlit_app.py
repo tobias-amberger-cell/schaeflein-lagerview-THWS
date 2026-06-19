@@ -1222,25 +1222,32 @@ TR: dict[str, dict[str, str]] = {
     },
     "abc_dist_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
     "abc_dist_share": {"de": "Pick-Anteil je Klasse", "en": "Pick share per class"},
+    "abc_bar_title": {"de": "Anteil je Klasse: Plätze vs. Picks",
+                      "en": "Share per class: slots vs. picks"},
     "abc_dist_note": {
-        "de": "Tortendiagramm = **Anteil der Picks** je Klasse (so ist ABC definiert): "
-              "A stemmt den Großteil der Picks, C kaum etwas. Die Tabelle daneben "
-              "zeigt die exakten Zahlen – **Anzahl** Plätze/Artikel, Picks und Anteil. "
-              "Typisch: wenige A-Plätze = ~80 % der Picks (Pareto).",
-        "en": "Pie = **share of picks** per class (that's how ABC is defined): A "
-              "carries most picks, C barely any. The table next to it shows the exact "
-              "figures – **count**, picks and share. Typically: a few A slots = ~80 % "
-              "of picks (Pareto).",
+        "de": "Balkendiagramm: je Klasse der **Anteil der Plätze** (grau) gegen den "
+              "**Anteil der Picks** (blau). Genau das ist der ABC-Effekt: wenige "
+              "A-Plätze (kleiner grauer Balken) tragen den Großteil der Picks (großer "
+              "blauer Balken). Die exakten Zahlen stehen rechts.",
+        "en": "Bar chart: per class the **share of slots** (grey) vs. the **share of "
+              "picks** (blue). That's the ABC effect: a few A slots (small grey bar) "
+              "carry most of the picks (large blue bar). Exact figures on the right.",
     },
     "abc_col_count": {"de": "Anzahl", "en": "Count"},
     "abc_col_share": {"de": "Anteil %", "en": "Share %"},
     "abc_stamm_note": {
-        "de": "**Stamm** = die im WMS hinterlegte `ABC_KLASSE`. **Berechnet** = aus "
-              "dem kumulierten Pick-Anteil (`kumul. Pick-%`). Weichen beide ab, ist "
-              "der Platz ein Kandidat für eine ABC-Anpassung.",
-        "en": "**Master** = the `ABC_KLASSE` stored in the WMS. **Calculated** = from "
-              "the cumulative pick share (`cum. pick %`). If they differ, the slot is "
-              "a candidate for an ABC adjustment.",
+        "de": "**Stamm** = die im WMS hinterlegte `ABC_KLASSE`. **Berechnet** = die "
+              "**globale** Klasse aus dem kumulierten Pick-Anteil im **ganzen Lager** "
+              "(Standard 80 / 95 %, wie in der 3D-Ansicht) – unabhängig von Filter & "
+              "Reglern. Der Filter beschränkt nur, welche Zeilen angezeigt werden. "
+              "Weichen Stamm und Berechnet ab, ist der Platz ein Kandidat für eine "
+              "ABC-Anpassung.",
+        "en": "**Master** = the `ABC_KLASSE` stored in the WMS. **Calculated** = the "
+              "**global** class from the cumulative pick share across the **whole "
+              "warehouse** (default 80 / 95 %, like the 3D view) – independent of "
+              "filters & sliders. The filter only limits which rows are shown. If "
+              "master and calculated differ, the slot is a candidate for an ABC "
+              "adjustment.",
     },
     "abc_cumcol": {"de": "kumul. Pick-%", "en": "cum. pick %"},
     "abc_pareto": {
@@ -1592,6 +1599,18 @@ def load_platz_full() -> pd.DataFrame:
     platz["DAYS_EMPTY"] = (
         pd.Timestamp.now().normalize()
         - pd.to_datetime(platz["LEER_DATUM"], errors="coerce")
+    ).dt.days
+    # Tage seit letztem Pick (ZUGRIFF_DATUM). Eigenstaendiges Staleness-Signal
+    # neben DAYS_EMPTY: besser gefuellt (auch Plaetze OHNE Leer-Datum haben ein
+    # Zugriffsdatum) und unterscheidet "kuerzlich aktiv, Nachschub vergessen" von
+    # "totes Fach". 'None'-Strings in den Rohdaten als fehlend behandeln.
+    platz["DAYS_SINCE_PICK"] = (
+        pd.Timestamp.now().normalize()
+        - pd.to_datetime(
+            platz["ZUGRIFF_DATUM"].replace(
+                {"None": np.nan, "none": np.nan, "": np.nan}),
+            errors="coerce",
+        )
     ).dt.days
 
     # Pick-Count aus Fahrpos zusaetzlich mergen (Q_PLATZ = Quellplatz).
@@ -2120,6 +2139,7 @@ _REPLEN_RENAME = {
     "ANZ_PICKS": "Picks (Häufigkeit)",
     "MAX_LHM": "Soll-LHM",
     "DAYS_EMPTY": "Tage leer",
+    "DAYS_SINCE_PICK": "Tage seit letztem Pick",
 }
 
 # Hilfetexte je (umbenannter) Spalte – als ℹ️ am Tabellenkopf (col_help).
@@ -2136,7 +2156,14 @@ _REPLEN_HELP = {
     "Soll-LHM": "MAX_LHM – auf so viele Ladehilfsmittel (Paletten/Behälter) "
                 "sollte der Platz aufgefüllt werden.",
     "Tage leer": "Tage seit dem Leer-Datum (LEER_DATUM) – wie lange der Platz "
-                 "schon ohne Ware ist.",
+                 "schon ohne Ware ist. Bei manchen Plätzen unbekannt (leer).",
+    "Tage seit letztem Pick": "Tage seit dem letzten Zugriff (ZUGRIFF_DATUM). "
+                              "Zweites Staleness-Signal: kürzlich gepickt + leer "
+                              "= vergessener Nachschub; lange kein Pick = evtl. "
+                              "totes Fach. Besser gefüllt als „Tage leer“.",
+    "Vorschlag": "Abgeleitete Handlung: Dringlichkeit aus der Listenregel "
+                 "(Picks/Tage), Menge = Soll-LHM (Platz ist leer → auf Soll "
+                 "auffüllen).",
 }
 
 
@@ -2683,8 +2710,6 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     # Erklaerung MIT den aktuellen Reglerwerten (aktualisiert sich live).
     st.caption(t("abc_thresh_note").format(a=a_thr, b=b_thr))
 
-    abc_color = {"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"}
-
     if by_articles:
         st.markdown(t("abc_intro_articles").format(a=a_thr, b=b_thr))
         mov_filter_note(movements_filtered, filtered)
@@ -2703,27 +2728,39 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     else:
         # Wertespalte je Sicht (Artikel = Bewegungen, Plaetze = ANZ_PICKS).
         val_col = "bewegungen" if by_articles else "ANZ_PICKS"
-        val_label = t("picks_label")
-        # Verteilung: Pie = PICK-ANTEIL je Klasse (so ist ABC definiert, sofort
-        # verstaendlich). Tabelle daneben = exakte Zahlen inkl. Anzahl Plaetze.
+        val_label = (("Bewegungen" if _LANG == "de" else "Movements")
+                     if by_articles else t("picks_label"))
+        ent_label = (("Artikel" if _LANG == "de" else "Articles") if by_articles
+                     else ("Plätze" if _LANG == "de" else "Slots"))
+        # Verteilung: Balkendiagramm Anteil PLAETZE vs. Anteil PICKS je Klasse
+        # (klassischer ABC-Chart -> zeigt den Pareto-Effekt direkt). Tabelle
+        # daneben = exakte Zahlen (Anzahl, Picks, Anteil).
         st.caption(t("abc_dist_note"))
         counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
         picks_sum = (data.groupby("ABC")[val_col].sum()
                      .reindex(["A", "B", "C"]).fillna(0))
         total_picks = picks_sum.sum() or 1
+        total_count = counts.sum() or 1
         share = (picks_sum / total_picks * 100).round(1)
+        count_share = (counts / total_count * 100).round(1)
         summary = pd.DataFrame({
             t("abc_col_count"): counts.astype(int).values,
             val_label: picks_sum.astype(int).values,
             t("abc_col_share"): share.values,
         }, index=["A", "B", "C"])
         summary.index.name = t("abc")
+        lbl_c, lbl_p = f"% {ent_label}", f"% {val_label}"
+        bar_df = pd.DataFrame({
+            t("abc"): ["A", "B", "C", "A", "B", "C"],
+            "Kennzahl": [lbl_c] * 3 + [lbl_p] * 3,
+            "Prozent": list(count_share.values) + list(share.values),
+        })
         d1, d2 = st.columns([2, 1])
         with d1:
             st.plotly_chart(
-                px.pie(names=picks_sum.index, values=picks_sum.values,
-                       color=picks_sum.index, color_discrete_map=abc_color,
-                       title=t("abc_dist_share")),
+                px.bar(bar_df, x=t("abc"), y="Prozent", color="Kennzahl",
+                       barmode="group", title=t("abc_bar_title"),
+                       color_discrete_map={lbl_c: "#90a4ae", lbl_p: "#1565c0"}),
                 use_container_width=True,
             )
         with d2:
@@ -2740,13 +2777,16 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
             st.markdown(t("abc_adjust_intro"))
             st.caption(t("abc_stamm_note"))
             rank = {"A": 3, "B": 2, "C": 1}
+            # Empfehlung IMMER gegen die GLOBALE Klasse (ABC_CALC, ganzes Lager,
+            # Standard 80/95 -- wie in 3D/Uebersicht). Filter wirkt nur auf die
+            # Anzeige (data ist gefiltert), nicht auf die Klassifikation.
             dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
-            dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]  # nur Abweichungen
+            dev = dev[dev["ABC_KLASSE"] != dev["ABC_CALC"]]  # nur Abweichungen
             if dev.empty:
                 st.info(t("abc_no_dev"))
             else:
                 dev["_m"] = dev["ABC_KLASSE"].map(rank)
-                dev["_c"] = dev["ABC"].map(rank)
+                dev["_c"] = dev["ABC_CALC"].map(rank)
                 dev[t("abc_rec")] = dev.apply(
                     lambda r: t("abc_promote") if r["_c"] > r["_m"]
                     else t("abc_demote"), axis=1,
@@ -2758,9 +2798,10 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                 mcols[1].metric(t("abc_demote"), de_num(n_dem))
                 dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
                     ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                     "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC", t("abc_rec")]
-                ].rename(columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet",
-                                  "CUM_%": t("abc_cumcol")})
+                     "ANZ_PICKS", "CUMULATIVE_%", "ABC_KLASSE", "ABC_CALC",
+                     t("abc_rec")]
+                ].rename(columns={"ABC_KLASSE": "Stamm", "ABC_CALC": "Berechnet",
+                                  "CUMULATIVE_%": t("abc_cumcol")})
                 st.dataframe(dev_tbl.head(200), use_container_width=True,
                              hide_index=True)
                 _csv_download(dev_tbl, "abc_anpassung")
