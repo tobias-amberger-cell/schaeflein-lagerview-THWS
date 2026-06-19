@@ -971,9 +971,14 @@ TR: dict[str, dict[str, str]] = {
               "- **ABC (Platz)** = im WMS hinterlegte **Güteklasse des Ortes** (A = wegoptimaler Premiumplatz). "
               "Beschreibt den **Platz**, wird hier **nicht** aus Picks berechnet.\n"
               "- **Soll-LHM** = `MAX_LHM` = auf wie viele Ladehilfsmittel der Platz **aufgefüllt** werden soll.\n"
-              "- **Tage leer** = `DAYS_EMPTY`, Tage seit dem Leer-Datum (`LEER_DATUM`).\n\n"
+              "- **Tage leer** = `DAYS_EMPTY`, Tage seit dem Leer-Datum (`LEER_DATUM`). Bei manchen Plätzen leer.\n"
+              "- **Tage seit letztem Pick** = `ZUGRIFF_DATUM`, zweites Staleness-Signal (besser gefüllt als das "
+              "Leer-Datum): *kürzlich gepickt + leer* = vergessener Nachschub; *lange kein Pick* = evtl. totes Fach.\n"
+              "- **Vorschlag** = **abgeleitete** Handlung, kein fester Text: Dringlichkeit aus der Listenregel, "
+              "Menge = **Soll-LHM** (Platz leer → auf Soll auffüllen), bei *Überfällig* zusätzlich die Tage leer.\n\n"
               "Eine **Wert-Spalte** (`MAX_LHM × Picks`) gibt es hier bewusst **nicht** – die Dringlichkeit ergibt "
-              "sich allein aus **Pickhäufigkeit** und **Tage leer**.",
+              "sich allein aus **Pickhäufigkeit** und **Tage leer/ohne Pick**. *(`ANZ_NACHSCHUB` aus dem WMS ist in "
+              "diesen Daten durchgehend 0 und daher nicht verwertbar.)*",
         "en": "- **Empty** = **completely empty**: `IST_LHM = 0`, **no** load unit (pallet/bin) at the slot. "
               "*Partially* filled slots (spare capacity but goods present) are **not** here but in the "
               "**Put-away / Free Capacity** tab.\n"
@@ -1015,8 +1020,8 @@ TR: dict[str, dict[str, str]] = {
         "en": "Empty + high pick frequency – important pick slot, replenish urgently.",
     },
     "replen_urgent_v": {
-        "de": "Sofort nachfüllen (häufiger Pickplatz leer)",
-        "en": "Refill now (frequent pick slot empty)",
+        "de": "Sofort auffüllen (Soll {x} LHM) – wichtiger Pickplatz leer",
+        "en": "Refill now (target {x} LU) – important pick slot empty",
     },
     "replen_overdue_t": {"de": "Überfällig", "en": "Overdue"},
     "replen_overdue_d": {
@@ -1024,8 +1029,8 @@ TR: dict[str, dict[str, str]] = {
         "en": "Urgent slots already empty for ≥ {n} days – replenishment forgotten?",
     },
     "replen_overdue_v": {
-        "de": "Priorisiert nachfüllen + Ursache prüfen",
-        "en": "Refill with priority + check root cause",
+        "de": "Priorisiert auffüllen (Soll {x} LHM) – seit {d} T leer, Ursache prüfen",
+        "en": "Refill with priority (target {x} LU) – empty {d} d, check root cause",
     },
     "replen_medium_t": {"de": "Mittlere Frequenz", "en": "Medium frequency"},
     "replen_medium_d": {
@@ -1033,8 +1038,8 @@ TR: dict[str, dict[str, str]] = {
         "en": "Empty with medium pick frequency – schedule, but less urgent.",
     },
     "replen_medium_v": {
-        "de": "Bei nächster Tour mitfüllen",
-        "en": "Refill on next round",
+        "de": "Bei nächster Tour auffüllen (Soll {x} LHM)",
+        "en": "Refill on next round (target {x} LU)",
     },
     "put_head": {
         "de": "### 📥 Einlagern / Putaway\n**Wohin mit eingehender Ware?** Die Listen zeigen **freie Plätze** "
@@ -1053,6 +1058,14 @@ TR: dict[str, dict[str, str]] = {
     "put_glossary_t": {
         "de": "ℹ️ Was bedeuten die Spalten?",
         "en": "ℹ️ What do the columns mean?",
+    },
+    "put_info_t": {
+        "de": "ℹ️ Was bedeutet das? (Sinn des Tabs + Spalten erklärt)",
+        "en": "ℹ️ What does this mean? (purpose of the tab + columns)",
+    },
+    "put_cols_head": {
+        "de": "**Spalten in den Tabellen:**",
+        "en": "**Columns in the tables:**",
     },
     "put_glossary_b": {
         "de": "- **ABC (Platz)** = im WMS hinterlegte **Güteklasse des Ortes** (A = wegoptimaler Premiumplatz). "
@@ -2521,6 +2534,28 @@ def render_umlagern(filtered: pd.DataFrame) -> None:
         st.info(t("reloc_pick_abc"))
 
 
+def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
+    """Fuegt eine ABGELEITETE Vorschlag-Spalte hinzu (1 Zeile = 1 konkrete
+    Handlung). Die Empfehlung ist nicht fix, sondern entsteht aus:
+      - der Listenregel (kind: urgent/overdue/medium) -> Dringlichkeit/Wortlaut,
+      - x = Soll-LHM (MAX_LHM; Platz ist leer -> auf Soll auffuellen),
+      - bei 'overdue' zusaetzlich d = Tage leer (DAYS_EMPTY).
+    So ist im Tab nachvollziehbar, WIE der Vorschlag zustande kommt."""
+    out = df.copy()
+    lhm = (pd.to_numeric(out["MAX_LHM"], errors="coerce")
+           .fillna(0).astype(int).clip(lower=1))
+    if kind == "overdue":
+        days = (pd.to_numeric(out["DAYS_EMPTY"], errors="coerce")
+                .fillna(0).astype(int))
+        tmpl = t("replen_overdue_v")
+        col = [tmpl.format(x=x, d=d) for x, d in zip(lhm, days)]
+    else:
+        tmpl = t("replen_urgent_v") if kind == "urgent" else t("replen_medium_v")
+        col = [tmpl.format(x=x) for x in lhm]
+    out[t("col_vorschlag")] = col
+    return out
+
+
 def render_nachschub(filtered: pd.DataFrame) -> None:
     """Tab 'Nachschub': leere Pickplaetze nach Dringlichkeit."""
     st.markdown(t("replen_head"))
@@ -2569,33 +2604,37 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
     k4.metric(t("replen_medium_t"), de_num(len(medium)))
     st.divider()
 
+    # Spaltenende je Liste: zwei Staleness-Signale + abgeleiteter Vorschlag.
+    replen_extra = ["DAYS_EMPTY", "DAYS_SINCE_PICK", t("col_vorschlag")]
     render_massnahme_kategorie(
-        t("replen_urgent_t"), t("replen_urgent_d"), urgent,
-        cols=_REPLEN_COLS, extra_cols=["DAYS_EMPTY"],
-        rename=_REPLEN_RENAME, vorschlag=t("replen_urgent_v"),
-        col_help=_REPLEN_HELP)
+        t("replen_urgent_t"), t("replen_urgent_d"),
+        _replen_vorschlag_col(urgent, "urgent"),
+        cols=_REPLEN_COLS, extra_cols=replen_extra,
+        rename=_REPLEN_RENAME, col_help=_REPLEN_HELP)
     render_massnahme_kategorie(
         t("replen_overdue_t"),
         t("replen_overdue_d").format(n=overdue_days),
-        overdue, cols=_REPLEN_COLS, extra_cols=["DAYS_EMPTY"],
-        rename=_REPLEN_RENAME, vorschlag=t("replen_overdue_v"),
-        col_help=_REPLEN_HELP)
+        _replen_vorschlag_col(overdue, "overdue"),
+        cols=_REPLEN_COLS, extra_cols=replen_extra,
+        rename=_REPLEN_RENAME, col_help=_REPLEN_HELP)
     render_massnahme_kategorie(
-        t("replen_medium_t"), t("replen_medium_d"), medium,
-        cols=_REPLEN_COLS, extra_cols=["DAYS_EMPTY"],
-        rename=_REPLEN_RENAME, vorschlag=t("replen_medium_v"),
-        col_help=_REPLEN_HELP)
+        t("replen_medium_t"), t("replen_medium_d"),
+        _replen_vorschlag_col(medium, "medium"),
+        cols=_REPLEN_COLS, extra_cols=replen_extra,
+        rename=_REPLEN_RENAME, col_help=_REPLEN_HELP)
 
 
 def render_einlagern(filtered: pd.DataFrame) -> None:
     """Tab 'Einlagern': wohin eingehende Ware (freie A-Plaetze + Reserve)."""
     st.markdown(t("put_head"))
-    # WARUM dieser Tab existiert + das Einlager-Prinzip (kurze Wege fuer
-    # Schnelldreher) – beantwortet die "Sinn"-Frage direkt im Tab.
-    st.caption(t("put_principle"))
-    # Kurz-Glossar: was bedeuten ABC-Klasse / MAX_LHM / freie Kapazitaet?
-    with st.expander(t("put_glossary_t")):
+    # Klare, gestapelte Reihenfolge (Lehrer-Feedback "uebersichtlicher"):
+    # 1) WAS BEDEUTET DAS? — Prinzip (Warum) + Spalten-Glossar, eingeklappt,
+    #    damit oben kein Textblock dauerhaft zustellt.
+    with st.expander(t("put_info_t")):
+        st.markdown(t("put_principle"))
+        st.markdown(t("put_cols_head"))
         st.markdown(t("put_glossary_b"))
+    # 2) SCHIEBEREGLER
     c1, c2 = st.columns(2)
     with c1:
         fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2,
@@ -2603,8 +2642,8 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
     with c2:
         reserve_level = st.slider(t("sl_reservelevel"), 1, 6, 3,
                                   help=t("sl_reservelevel_h"))
-    # WIE entsteht der Vorschlag? Die Kategorie-Filterregel IST die Empfehlung;
-    # die Regelwerte folgen live den Reglern oben.
+    # 3) WIE ENTSTEHT DER VORSCHLAG? Die Kategorie-Filterregel IST die Empfehlung;
+    #    die Regelwerte folgen live den Reglern oben.
     with st.expander(t("put_logic_t")):
         st.markdown(t("put_logic_b").format(fast=fast_level, reserve=reserve_level))
     free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
