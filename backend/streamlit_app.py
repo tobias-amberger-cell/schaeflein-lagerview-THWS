@@ -726,6 +726,10 @@ _DB_CANDIDATES = [
 # noch t("...") verwenden. Tabellen-Spaltennamen (Datenfelder) bleiben bewusst
 # unuebersetzt, damit sie zur DB passen.
 _LANG = "de"
+# Menschenlesbare Beschreibung der aktuell aktiven Sidebar-Filter. Wird in
+# main() gesetzt und von _csv_download() als Kommentarzeile in jede CSV
+# geschrieben -> Downloads sind "unter Angabe der Filter" nachvollziehbar.
+_FILTER_LABEL = ""
 
 TR: dict[str, dict[str, str]] = {
     "caption": {
@@ -748,6 +752,13 @@ TR: dict[str, dict[str, str]] = {
               "\"100 % and above\" (open) – includes rare overload artefacts "
               "(≥ 200 %, MAX_LHM set too low).",
     },
+    "only_occ": {"de": "Nur belegte Plaetze", "en": "Occupied slots only"},
+    "place_filter": {
+        "de": "Platz-Filter (Regal/Ebene/Picks/Sperre)",
+        "en": "Slot filter (rack/level/picks/lock)",
+    },
+    "rack": {"de": "Regal", "en": "Rack"},
+    "level": {"de": "Ebene", "en": "Level"},
     "level_help": {
         "de": "Regalebene laut Feld EBENE. Obergrenze = höchste real belegte "
               "Ebene (≥ 20 Plätze) – einzelne Ausreißer-Datensätze (EBENE 14–24, "
@@ -756,13 +767,6 @@ TR: dict[str, dict[str, str]] = {
               "occupied level (≥ 20 slots) – single outlier records (EBENE 14–24, "
               "1 slot each) no longer inflate the scale.",
     },
-    "only_occ": {"de": "Nur belegte Plaetze", "en": "Occupied slots only"},
-    "place_filter": {
-        "de": "Platz-Filter (Regal/Ebene/Picks/Sperre)",
-        "en": "Slot filter (rack/level/picks/lock)",
-    },
-    "rack": {"de": "Regal", "en": "Rack"},
-    "level": {"de": "Ebene", "en": "Level"},
     "min_picks": {"de": "Min. Picks (ANZ_PICKS)", "en": "Min. picks (ANZ_PICKS)"},
     "lock_status": {"de": "Sperr-Status", "en": "Lock status"},
     "lock_all": {"de": "Alle", "en": "All"},
@@ -964,8 +968,8 @@ TR: dict[str, dict[str, str]] = {
     },
     "put_blocked_t": {"de": "Gesperrt – nicht bestücken", "en": "Locked – do not stock"},
     "put_blocked_d": {
-        "de": "Gesperrte Plätze (ZUSTAND ≥ 150) – nicht einlagern.",
-        "en": "Locked slots (ZUSTAND ≥ 150) – do not put away.",
+        "de": "Gesperrte Plätze (Sperrkennzeichen gesetzt) – nicht einlagern.",
+        "en": "Locked slots (lock flag set) – do not put away.",
     },
     "retr_head": {
         "de": "### 📤 Auslagern / Retrieval\nLangsamdreher/Ladenhüter, die gute Plätze blockieren und ausgelagert werden sollten.",
@@ -1207,6 +1211,40 @@ TR: dict[str, dict[str, str]] = {
         "en": "Hides the grey slots that have no DB record (model-only). On by "
               "default – cleaner and smoother. No data is lost.",
     },
+    # --- Erklaerungen/Beschriftungen (Lehrer-Feedback) ---
+    "active_filters": {"de": "Aktive Filter", "en": "Active filters"},
+    "filter_none": {"de": "keine (ganzes Lager)", "en": "none (whole warehouse)"},
+    "hide_weekend": {"de": "Wochenende ausblenden", "en": "Hide weekend"},
+    "tab_reloc_retr": {"de": "🔄 Um-/Auslagern", "en": "🔄 Relocate / retrieve"},
+    "massn_rowhint": {
+        "de": "Jede Zeile = 1 Lagerplatz mit dem aktuell dort liegenden Artikel.",
+        "en": "Each row = 1 storage slot with the article currently stored there.",
+    },
+    "hf_note": {
+        "de": "Spalten: **Picks (Stamm)** = `ANZ_PICKS` aus den Platz-Stammdaten, "
+              "**Picks gesamt** = zusätzlich die Anfahrten aus den Fahrpos-Daten "
+              "(`Q_PLATZ`). Sind beide gleich, gab es keine zusätzlichen Fahrpos-"
+              "Anfahrten. **Auslastung 0 %** bedeutet: oft angefahren, aber gerade "
+              "leer (Pickplatz, der nachgefüllt werden muss).",
+        "en": "Columns: **Picks (master)** = `ANZ_PICKS` from slot master data, "
+              "**Picks total** = plus visits from the Fahrpos data (`Q_PLATZ`). If "
+              "both are equal there were no extra Fahrpos visits. **Utilization 0 %** "
+              "means: visited often but currently empty (pick slot to be refilled).",
+    },
+    "free_note": {
+        "de": "**MAX_LHM** ist die maximale Anzahl Ladehilfsmittel je Platz – kann "
+              "> 1 sein (ein Platz fasst mehrere LHM). **Auslastung 0 %** = leerer "
+              "Platz mit voller Restkapazität.",
+        "en": "**MAX_LHM** is the max number of load units per slot – can be > 1 (a "
+              "slot holds several units). **Utilization 0 %** = empty slot with full "
+              "remaining capacity.",
+    },
+    "pick_note": {
+        "de": "Jede Zelle zählt die TPA-Bewegungen (Auftragspositionen) in diesem "
+              "Wochentag/Stunden-Fenster.",
+        "en": "Each cell counts the TPA movements (order lines) in that weekday/hour "
+              "window.",
+    },
 }
 
 
@@ -1404,6 +1442,18 @@ def filter_tpa(tpa: pd.DataFrame, allowed_pids: set[str] | None) -> pd.DataFrame
     if allowed_pids is None:
         return tpa
     return tpa[tpa["q_platz"].isin(allowed_pids)]
+
+
+def drop_weekend(df: pd.DataFrame, day_col: str = "day") -> pd.DataFrame:
+    """Entfernt Samstag/Sonntag aus einem Tages-DataFrame (Mo=0..So=6).
+
+    Wird in den Zeitreihen (Durchsatz, Artikel) genutzt, da das Lager am
+    Wochenende kaum/keine regulaeren Bewegungen hat und die Tage die Diagramme
+    sonst optisch verzerren.
+    """
+    if df.empty or day_col not in df.columns:
+        return df
+    return df[pd.to_datetime(df[day_col]).dt.dayofweek < 5]
 
 
 def agg_pick_heatmap(tpa: pd.DataFrame) -> pd.DataFrame:
@@ -1671,10 +1721,19 @@ def _logo_path() -> Path | None:
 
 
 def _csv_download(df: pd.DataFrame, key: str, label: str | None = None) -> None:
-    """Einheitlicher CSV-Export-Button (utf-8-sig fuer Excel-Umlaute)."""
+    """Einheitlicher CSV-Export-Button (utf-8-sig fuer Excel-Umlaute).
+
+    Exportiert IMMER den vollstaendigen uebergebenen DataFrame (alle Treffer der
+    aktuellen Filter, nicht nur die in der Tabelle angezeigten Zeilen). Die
+    aktiven Filter werden als fuehrende Kommentarzeile in die CSV geschrieben,
+    damit der Download nachvollziehbar "unter Angabe der Filter" ist.
+    """
+    csv = df.to_csv(index=False)
+    if _FILTER_LABEL:
+        csv = f"# {t('active_filters')}: {_FILTER_LABEL}\n" + csv
     st.download_button(
         label or t("dl"),
-        df.to_csv(index=False).encode("utf-8-sig"),
+        csv.encode("utf-8-sig"),
         file_name=f"{key}.csv",
         mime="text/csv",
         key=f"dl_{key}",
@@ -1725,6 +1784,803 @@ def apply_filters(
     return out
 
 
+def de_num(n) -> str:
+    """Deutsche Tausendertrennung fuer ganze Zahlen: 12345 -> '12.345'."""
+    return f"{int(n):,}".replace(",", ".")
+
+
+def mov_filter_note(movements_filtered: bool, filtered: pd.DataFrame) -> None:
+    """Hinweis in bewegungsbasierten Tabs, wenn die Platz-Filter greifen."""
+    if movements_filtered:
+        st.caption(t("mov_filtered").format(n=de_num(len(filtered))))
+
+
+# Spalten, die jede Massnahmen-Tabelle (Umlagern/Nachschub/Einlagern/Auslagern)
+# zeigt; tab-spezifische Zusatzspalten kommen ueber `extra_cols` dazu.
+_MASSNAHME_COLS = [
+    "PLATZ_ID", "REGAL", "FACH", "EBENE",
+    "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM", "WERT",
+]
+
+
+def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
+                               extra_cols: list[str] | None = None,
+                               vorschlag: str | None = None) -> None:
+    """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV).
+
+    `vorschlag`: optionaler Text, der als zusaetzliche Spalte "Vorschlag"
+    (konkrete Handlungsempfehlung) in jede Zeile geschrieben wird.
+
+    Anzeige ist auf 200 Zeilen begrenzt (Performance), der CSV-Download enthaelt
+    jedoch ALLE Treffer.
+    """
+    cols = _MASSNAHME_COLS + (extra_cols or [])
+    cols = [c for c in cols if c in df.columns]
+    st.markdown(f"**{titel}** — {beschreibung}")
+    st.metric(t("cat_slots"), de_num(len(df)))
+    st.caption(t("massn_rowhint"))
+    if df.empty:
+        st.info(t("cat_empty"))
+    else:
+        show = df[cols].copy()
+        if vorschlag:
+            show[t("col_vorschlag")] = vorschlag
+        st.dataframe(
+            show.head(200), use_container_width=True, hide_index=True
+        )
+        key = "".join(c if c.isalnum() else "_" for c in titel.lower())
+        _csv_download(show, f"massnahme_{key}")
+    st.divider()
+
+
+def render_uebersicht(filtered: pd.DataFrame) -> None:
+    """Tab 'Übersicht': Belegung/Auslastung/ABC fuer das gesamte Lager."""
+    st.markdown(t("halls_intro"))
+    # Eine Halle: das gesamte (gefilterte) Lager als EIN Block zusammenfassen.
+    # Kein Regal->Halle-Split mehr; HALLE ist hier nur ein konstantes Label.
+    df_h = filtered.assign(HALLE="Lager BER03")
+    zones = (
+        df_h.groupby("HALLE")
+        .agg(
+            total_slots=("PLATZ_ID", "count"),
+            occupied=("BELEGT", "sum"),
+            avg_util=("UTILIZATION", "mean"),
+            picks=("ANZ_PICKS", "sum"),
+        )
+        .reset_index()
+    )
+    zones["frei"] = zones["total_slots"] - zones["occupied"]
+    zones["Belegung_%"] = (zones["occupied"] / zones["total_slots"] * 100).round(1)
+    zones["Ø_Auslastung_%"] = zones["avg_util"].round(1)
+    abc_pivot = (
+        df_h.pivot_table(
+            index="HALLE", columns="ABC_CALC", values="PLATZ_ID",
+            aggfunc="count", fill_value=0,
+        )
+        .reindex(columns=["A", "B", "C"], fill_value=0)
+        .reset_index()
+        .rename(columns={"A": "A-Plätze", "B": "B-Plätze", "C": "C-Plätze"})
+    )
+    zones = zones.merge(abc_pivot, on="HALLE", how="left")
+
+    fig = px.bar(
+        zones.melt(
+            id_vars="HALLE",
+            value_vars=["occupied", "frei"],
+            var_name="Status",
+            value_name="Plaetze",
+        ),
+        x="HALLE", y="Plaetze", color="Status", barmode="stack",
+        color_discrete_map={"occupied": "#ef6c00", "frei": "#bdbdbd"},
+        title=t("halls_chart"),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown(t("halls_kpis"))
+    show = zones[[
+        "HALLE", "total_slots", "occupied", "frei", "Belegung_%",
+        "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
+    ]].rename(columns={
+        "HALLE": "Lager", "total_slots": "Plätze", "occupied": "Belegt",
+        "frei": "Frei", "picks": "Picks gesamt",
+    })
+    st.dataframe(show, use_container_width=True, hide_index=True)
+    _csv_download(show, "lager_kennzahlen")
+
+
+def render_heatmap(filtered: pd.DataFrame) -> None:
+    """Unter-Tab 'Auslastungs-Heatmap': Ø Auslastung je Regal/Ebene."""
+    st.markdown(t("heat_intro"))
+    if filtered.empty:
+        st.info(t("no_data_filters"))
+    else:
+        pivot = filtered.pivot_table(
+            index="EBENE", columns="REGAL",
+            values="UTILIZATION", aggfunc="mean",
+        )
+        fig = px.imshow(
+            pivot,
+            color_continuous_scale="RdYlGn_r",
+            range_color=[0, 120],
+            aspect="auto",
+            labels=dict(x="Regal", y="Ebene", color="Auslastung %"),
+            title=t("heat_chart"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        color_counts = (
+            filtered["UTILIZATION"].apply(heatmap_color)
+            .value_counts()
+            .reindex(["GREEN", "YELLOW", "RED", "GREY"]).fillna(0)
+        )
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("🟢 < 40 %", int(color_counts["GREEN"]))
+        col2.metric("🟡 40–79 %", int(color_counts["YELLOW"]))
+        col3.metric("🔴 ≥ 80 %", int(color_counts["RED"]))
+        col4.metric("⚪ unbekannt", int(color_counts["GREY"]))
+
+        st.markdown(t("heat_racks"))
+        rack_util = (
+            filtered.groupby(["REGAL"])
+            .agg(
+                Plätze=("PLATZ_ID", "count"),
+                Ø_Auslastung_=("UTILIZATION", "mean"),
+                Überlastet=("UTILIZATION", lambda s: int((s > 100).sum())),
+            )
+            .reset_index()
+            .rename(columns={"REGAL": "Regal",
+                             "Ø_Auslastung_": "Ø Auslastung %"})
+        )
+        rack_util["Ø Auslastung %"] = rack_util["Ø Auslastung %"].round(1)
+        rack_util = rack_util.sort_values("Ø Auslastung %", ascending=False)
+        st.dataframe(rack_util, use_container_width=True, hide_index=True)
+        _csv_download(rack_util, "regal_auslastung")
+
+
+def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
+                    filtered: pd.DataFrame) -> None:
+    """Unter-Tab 'Pick-Heatmap': Picks je Wochentag/Stunde aus TPA."""
+    st.markdown(t("pick_intro"))
+    st.caption(t("pick_note"))
+    mov_filter_note(movements_filtered, filtered)
+    ph = agg_pick_heatmap(tpa)
+    if ph.empty:
+        st.info(t("no_data_filters"))
+    else:
+        weekday_names = {
+            0: "So", 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa",
+        }
+        ph = ph[(ph["weekday"].between(0, 6)) & (ph["hour"].between(0, 23))]
+        pivot = (
+            ph.pivot_table(
+                index="weekday", columns="hour", values="picks", aggfunc="sum"
+            )
+            .reindex(range(7))
+            .reindex(columns=range(24))
+        )
+        pivot.index = [weekday_names[i] for i in pivot.index]
+        fig = px.imshow(
+            pivot,
+            color_continuous_scale="YlOrRd",
+            aspect="auto",
+            labels=dict(x="Stunde", y="Wochentag", color="Picks"),
+            title=t("pick_chart"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        busiest = ph.sort_values("picks", ascending=False).head(1)
+        if not busiest.empty:
+            row = busiest.iloc[0]
+            st.caption(
+                t("pick_peak").format(
+                    wd=weekday_names[int(row["weekday"])],
+                    h=int(row["hour"]),
+                    p=de_num(int(row['picks'])),
+                )
+            )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            per_wd = (
+                ph.groupby("weekday")["picks"].sum().reindex(range(7), fill_value=0)
+            )
+            per_wd.index = [weekday_names[i] for i in per_wd.index]
+            st.plotly_chart(
+                px.bar(per_wd, title=t("pick_by_wd"),
+                       labels=dict(value=t("picks_label"), index=t("wd_label"))),
+                use_container_width=True,
+            )
+        with c2:
+            per_hour = (
+                ph.groupby("hour")["picks"].sum().reindex(range(24), fill_value=0)
+            )
+            st.plotly_chart(
+                px.bar(per_hour, title=t("pick_by_hour"),
+                       labels=dict(value=t("picks_label"), index=t("hour_label"))),
+                use_container_width=True,
+            )
+        tbl = ph.copy()
+        tbl["weekday"] = tbl["weekday"].map(weekday_names)
+        tbl = tbl.rename(columns={"weekday": "Wochentag", "hour": "Stunde",
+                                  "picks": "Picks"})
+        _csv_download(tbl[["Wochentag", "Stunde", "Picks"]], "pick_heatmap")
+
+
+def render_high_frequency_slots(filtered: pd.DataFrame) -> None:
+    """Unter-Tab 'Hochfrequenz-Plaetze': Plaetze mit hoher Pick-Frequenz."""
+    st.markdown(t("bottle_intro"))
+    st.caption(t("hf_note"))
+    # Voller, sortierter Satz fuer den Export; Anzeige auf Top 50 begrenzt.
+    high_freq_full = (
+        filtered.assign(
+            PICK_TOTAL=lambda d: d["ANZ_PICKS"] + d["PICK_COUNT_FAHR"]
+        )
+        .sort_values(["PICK_TOTAL", "UTILIZATION"], ascending=[False, False])[
+            ["PLATZ_ID", "REGAL", "FACH", "EBENE",
+             "ANZ_PICKS", "PICK_TOTAL", "MAX_LHM", "IST_LHM", "UTILIZATION"]
+        ]
+        .rename(columns={"ANZ_PICKS": "Picks (Stamm)",
+                         "PICK_TOTAL": "Picks gesamt",
+                         "UTILIZATION": "Auslastung %"})
+    )
+    if high_freq_full.empty:
+        st.info(t("no_data_filters"))
+    else:
+        st.dataframe(high_freq_full.head(50), use_container_width=True,
+                     hide_index=True)
+        _csv_download(high_freq_full, "hochfrequenz_plaetze")
+
+
+def render_free(filtered: pd.DataFrame) -> None:
+    """Unter-Tab 'Free Capacity': Plaetze mit Restkapazitaet."""
+    st.markdown(t("free_intro"))
+    st.caption(t("free_note"))
+    free_all = filtered[filtered["FREE_CAPACITY"] > 0]
+    c1, c2, c3 = st.columns(3)
+    c1.metric(t("free_count"), de_num(len(free_all)))
+    c2.metric(t("free_total"),
+              de_num(int(free_all['FREE_CAPACITY'].sum())))
+    c3.metric(t("free_avg"),
+              f"{free_all['FREE_CAPACITY'].mean():.1f}"
+              if not free_all.empty else "—")
+
+    # Voller, sortierter Satz fuer den Export; Anzeige auf Top 100 begrenzt.
+    free_full = (
+        free_all.sort_values("FREE_CAPACITY", ascending=False)[
+            ["PLATZ_ID", "REGAL", "FACH", "EBENE",
+             "MAX_LHM", "IST_LHM", "FREE_CAPACITY", "UTILIZATION"]
+        ]
+    )
+    st.dataframe(free_full.head(100), use_container_width=True, hide_index=True)
+    _csv_download(free_full, "free_capacity")
+
+
+def render_umlagern(filtered: pd.DataFrame) -> None:
+    """Tab 'Umlagern': datenbasierte Umlager-Vorschlaege (3 Regeln)."""
+    st.markdown(t("reloc_head"))
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        # A/B/C-Auswahl: blendet die Kategorien nach ihrer Ziel-Klasse ein.
+        # A -> "Premium ungenutzt" + "A weit oben", C -> "Heisse C-Plaetze".
+        reloc_abc = st.multiselect(
+            t("abc"), ["A", "B", "C"], default=["A", "B", "C"],
+            key="reloc_abc", help=t("reloc_abc_help"))
+    with c2:
+        hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10)
+    with c3:
+        high_level = st.slider(t("sl_highlevel"), 2, 6, 4)
+
+    # Regel 1: A-Platz (Premium) ohne Picks -> Premiumplatz verschwendet.
+    unused_a = filtered[
+        (filtered["ABC_KLASSE"] == "A")
+        & (filtered["ANZ_PICKS"] == 0)
+        & (~filtered["GESPERRT"])
+    ].sort_values(["REGAL", "EBENE", "FACH"])
+    # Regel 2: C-Platz mit vielen Picks -> falsch klassifiziert, hochstufen.
+    hot_c = filtered[
+        (filtered["ABC_KLASSE"] == "C")
+        & (filtered["ANZ_PICKS"] >= hot_c_threshold)
+    ].sort_values("ANZ_PICKS", ascending=False)
+    # Regel 3: aktiver A-Artikel weit oben -> ergonomisch nach unten holen.
+    high_level_a = filtered[
+        (filtered["ABC_KLASSE"] == "A")
+        & (filtered["EBENE"] >= high_level)
+        & (filtered["ANZ_PICKS"] > 0)
+    ].sort_values("ANZ_PICKS", ascending=False)
+
+    # Konkrete Zielplatz-Vorschlaege aus den freien (nicht gesperrten)
+    # Plaetzen der aktuellen Auswahl. Niedrige Ebenen (<=2) = gute Pick-
+    # plaetze -> Ziel fuer heisse C-Plaetze und A-Plaetze von oben; hohe
+    # Ebenen (>=3) = Reserve -> Ziel fuer ungenutzte Premiumplaetze.
+    free_pool = filtered[
+        (filtered["FREE_CAPACITY"] > 0) & (~filtered["GESPERRT"])
+    ]
+    free_low = free_pool[free_pool["EBENE"] <= 2] \
+        .sort_values("FREE_CAPACITY", ascending=False)
+    free_high = free_pool[free_pool["EBENE"] >= 3] \
+        .sort_values("FREE_CAPACITY", ascending=False)
+
+    def _add_ziel(src: pd.DataFrame, targets: pd.DataFrame) -> pd.DataFrame:
+        """Greedy 1:1 – jedem Quellplatz genau einen freien Zielplatz (nach
+        freier Kapazitaet) zuordnen; Quellplaetze selbst sind nie Ziel."""
+        tgt = targets[~targets["PLATZ_ID"].isin(src["PLATZ_ID"])]
+        labels = [
+            f"{r.PLATZ_ID} · R{int(r.REGAL)}/E{int(r.EBENE)} "
+            f"(frei {int(r.FREE_CAPACITY)})"
+            for r in tgt.itertuples(index=False)
+        ]
+        col = [labels[i] if i < len(labels) else t("ziel_none")
+               for i in range(len(src))]
+        return src.assign(**{t("col_ziel"): col})
+
+    if "A" in reloc_abc:
+        render_massnahme_kategorie(
+            t("reloc_unusedA_t"), t("reloc_unusedA_d"),
+            _add_ziel(unused_a, free_high),
+            extra_cols=[t("col_ziel")], vorschlag=t("reloc_unusedA_v"))
+    if "C" in reloc_abc:
+        render_massnahme_kategorie(
+            t("reloc_hotC_t"), t("reloc_hotC_d"),
+            _add_ziel(hot_c, free_low),
+            extra_cols=[t("col_ziel")], vorschlag=t("reloc_hotC_v"))
+    if "A" in reloc_abc:
+        render_massnahme_kategorie(
+            t("reloc_highA_t"), t("reloc_highA_d"),
+            _add_ziel(high_level_a, free_low),
+            extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
+    if not reloc_abc:
+        st.info(t("reloc_pick_abc"))
+
+
+def render_nachschub(filtered: pd.DataFrame) -> None:
+    """Tab 'Nachschub': leere Pickplaetze nach Dringlichkeit."""
+    st.markdown(t("replen_head"))
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        pick_level = st.slider(t("sl_picklevel"), 1, 6, 2)
+    with c2:
+        pick_threshold = st.slider(t("sl_pickthresh"), 10, 300, 50, step=10)
+    with c3:
+        overdue_days = st.slider(t("sl_overdue"), 3, 60, 14)
+
+    # Basis: leere Pickplaetze (IST_LHM=0) in der Pickzone (niedrige Ebene),
+    # nicht gesperrt. Daraus drei Dringlichkeitsstufen:
+    empty_pick = filtered[
+        (filtered["IST_LHM"].fillna(0) == 0)
+        & (filtered["EBENE"] <= pick_level)
+        & (~filtered["GESPERRT"])
+    ]
+    # dringend = leer + hohe Pickfrequenz
+    urgent = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold] \
+        .sort_values("ANZ_PICKS", ascending=False)
+    # ueberfaellig = dringend + schon zu lange leer (DAYS_EMPTY)
+    overdue = urgent[urgent["DAYS_EMPTY"] >= overdue_days] \
+        .sort_values("DAYS_EMPTY", ascending=False)
+    # mittlere Frequenz = leer mit Picks unterhalb der Dringend-Schwelle (>0)
+    medium = empty_pick[
+        (empty_pick["ANZ_PICKS"] > 0)
+        & (empty_pick["ANZ_PICKS"] < pick_threshold)
+    ].sort_values("ANZ_PICKS", ascending=False)
+
+    render_massnahme_kategorie(
+        t("replen_urgent_t"), t("replen_urgent_d"), urgent,
+        extra_cols=["DAYS_EMPTY"])
+    render_massnahme_kategorie(
+        t("replen_overdue_t"),
+        t("replen_overdue_d").format(n=overdue_days),
+        overdue, extra_cols=["DAYS_EMPTY"])
+    render_massnahme_kategorie(
+        t("replen_medium_t"), t("replen_medium_d"), medium,
+        extra_cols=["DAYS_EMPTY"])
+
+
+def render_einlagern(filtered: pd.DataFrame) -> None:
+    """Tab 'Einlagern': wohin eingehende Ware (freie A-Plaetze + Reserve)."""
+    st.markdown(t("put_head"))
+    c1, c2 = st.columns(2)
+    with c1:
+        fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2)
+    with c2:
+        reserve_level = st.slider(t("sl_reservelevel"), 1, 6, 3)
+    free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
+
+    # Schnelldreher-Plaetze: freie A-Plaetze auf niedriger Ebene -> kurze
+    # Wege. Schwelle ueber den Slider fast_level einstellbar.
+    fast_lane = free_slots[
+        (free_slots["ABC_KLASSE"] == "A")
+        & (free_slots["EBENE"] <= fast_level)
+        & (~free_slots["GESPERRT"])
+    ].sort_values("FREE_CAPACITY", ascending=False)
+
+    # Reserve fuer Langsamdreher / Nicht-A-Produkte: freie Plaetze auf hoeheren
+    # Ebenen, NICHT A-Klasse (B/C oder ohne Stamm-ABC) -> zweite Vorschlagsliste,
+    # wenn die Ware kein Schnelldreher ist.
+    reserve = free_slots[
+        (free_slots["ABC_KLASSE"] != "A")
+        & (free_slots["EBENE"] >= reserve_level)
+        & (~free_slots["GESPERRT"])
+    ].sort_values("FREE_CAPACITY", ascending=False)
+
+    # Gesperrte Plaetze nicht bestuecken.
+    blocked = filtered[filtered["GESPERRT"]].sort_values(
+        ["REGAL", "EBENE", "FACH"])
+
+    render_massnahme_kategorie(
+        t("put_fast_t"), t("put_fast_d").format(n=fast_level),
+        fast_lane, extra_cols=["FREE_CAPACITY"])
+    render_massnahme_kategorie(
+        t("put_reserve_t"), t("put_reserve_d").format(n=reserve_level),
+        reserve, extra_cols=["FREE_CAPACITY"])
+    render_massnahme_kategorie(
+        t("put_blocked_t"), t("put_blocked_d"), blocked,
+        extra_cols=["FREE_CAPACITY"])
+
+
+def render_auslagern(filtered: pd.DataFrame) -> None:
+    """Tab 'Auslagern': Langsamdreher/Ladenhueter in der Pickzone."""
+    st.markdown(t("retr_head"))
+    c1, c2 = st.columns(2)
+    with c1:
+        # Pickzone: nur niedrige Ebenen betrachten. 88% aller Plaetze haben
+        # 0 Picks (v.a. Reserve weit oben) -> ohne diese Grenze waeren die
+        # 0-Pick-Listen unbrauchbar gross. Standard: bis Ebene 2.
+        retr_zone = st.slider(t("sl_retrzone"), 1, 6, 2)
+    with c2:
+        observe_max = st.slider(t("sl_observe"), 1, 50, 5)
+    # belegt = physisch Ware vorhanden (IST_LHM>0, siehe BELEGT) in der
+    # Pickzone. KEIN ZUSTAND<150-Filter mehr (ZUSTAND ist hier nur 0/150 und
+    # kein Sperr-Indikator -> hat zuvor alle belegten Plaetze ausgeschlossen,
+    # darum war der Tab leer). Gesperrte ueber den Sidebar-Filter ausblenden.
+    belegt = filtered[
+        (filtered["BELEGT"])
+        & (filtered["EBENE"] <= retr_zone)
+    ]
+
+    # kritisch: belegter A-Platz mit 0 Picks -> Premiumplatz von Ladenhueter
+    # blockiert, vorrangig auslagern.
+    critical = belegt[
+        (belegt["ABC_KLASSE"] == "A") & (belegt["ANZ_PICKS"] == 0)
+    ].sort_values(["REGAL", "EBENE", "FACH"])
+    # abgestanden: belegt, 0 Picks, aber kein A-Platz.
+    stale = belegt[
+        (belegt["ABC_KLASSE"] != "A") & (belegt["ANZ_PICKS"] == 0)
+    ].sort_values(["REGAL", "EBENE", "FACH"])
+    # beobachten: laeuft, aber nur sehr selten (1..observe_max Picks).
+    observe = belegt[
+        (belegt["ANZ_PICKS"] > 0) & (belegt["ANZ_PICKS"] <= observe_max)
+    ].sort_values("ANZ_PICKS")
+
+    render_massnahme_kategorie(
+        t("retr_crit_t"), t("retr_crit_d"), critical)
+    render_massnahme_kategorie(
+        t("retr_stale_t"), t("retr_stale_d"), stale)
+    render_massnahme_kategorie(
+        t("retr_observe_t"),
+        t("retr_observe_d").format(n=observe_max), observe)
+
+
+def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
+               movements_filtered: bool) -> None:
+    """Tab 'ABC-Analyse': Verteilung, Stamm-vs-berechnet, Anpassungs-Tipps."""
+    abc_mode = st.radio(
+        t("abc_mode"),
+        options=[t("abc_by_slots"), t("abc_by_articles")],
+        horizontal=True,
+    )
+    by_articles = abc_mode == t("abc_by_articles")
+
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        a_thr = st.slider(t("abc_a_thresh"), 50, 95, 80, step=1)
+    with cc2:
+        b_thr = st.slider(t("abc_b_thresh"), a_thr + 1, 99, max(a_thr + 1, 95),
+                          step=1)
+
+    abc_color = {"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"}
+
+    if by_articles:
+        st.markdown(t("abc_intro_articles"))
+        mov_filter_note(movements_filtered, filtered)
+        base = agg_articles(tpa)
+        data = classify_abc(base, "bewegungen", a_thr, b_thr) \
+            if not base.empty else base
+        table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
+    else:
+        st.markdown(t("abc_intro"))
+        data = classify_abc(filtered, "ANZ_PICKS", a_thr, b_thr)
+        table_cols = ["PLATZ_ID", "REGAL", "FACH", "EBENE",
+                      "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC"]
+
+    if data.empty:
+        st.info(t("no_data_filters"))
+    else:
+        # Verteilung (Pie + Anzahl je Klasse)
+        counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
+        d1, d2 = st.columns([2, 1])
+        with d1:
+            st.plotly_chart(
+                px.pie(names=counts.index, values=counts.values,
+                       color=counts.index, color_discrete_map=abc_color,
+                       title=t("abc_dist")),
+                use_container_width=True,
+            )
+        with d2:
+            st.markdown(f"**{t('abc_count')}**")
+            for klasse in ["A", "B", "C"]:
+                st.metric(klasse, de_num(int(counts[klasse])),
+                          help=fhelp("abc_calc"))
+
+        # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
+        if not by_articles:
+            # ABC-Anpassung: Abweichungen Stamm vs. berechnet + Empfehlung.
+            # Trick: A/B/C als Rang 3/2/1. Ist die berechnete Klasse hoeher
+            # als die hinterlegte (_c > _m), wird der Platz mehr bewegt als
+            # gedacht -> "Hochstufen"; umgekehrt -> "Herabstufen".
+            st.markdown(t("abc_adjust_head"))
+            st.markdown(t("abc_adjust_intro"))
+            rank = {"A": 3, "B": 2, "C": 1}
+            dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
+            dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]  # nur Abweichungen
+            if dev.empty:
+                st.info(t("abc_no_dev"))
+            else:
+                dev["_m"] = dev["ABC_KLASSE"].map(rank)
+                dev["_c"] = dev["ABC"].map(rank)
+                dev[t("abc_rec")] = dev.apply(
+                    lambda r: t("abc_promote") if r["_c"] > r["_m"]
+                    else t("abc_demote"), axis=1,
+                )
+                n_prom = int((dev["_c"] > dev["_m"]).sum())
+                n_dem = int((dev["_c"] < dev["_m"]).sum())
+                mcols = st.columns(2)
+                mcols[0].metric(t("abc_promote"), de_num(n_prom))
+                mcols[1].metric(t("abc_demote"), de_num(n_dem))
+                dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
+                    ["PLATZ_ID", "REGAL", "FACH", "EBENE",
+                     "ANZ_PICKS", "ABC_KLASSE", "ABC", t("abc_rec")]
+                ].rename(columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet"})
+                st.dataframe(dev_tbl.head(200), use_container_width=True,
+                             hide_index=True)
+                _csv_download(dev_tbl, "abc_anpassung")
+
+        st.markdown(t("abc_byfreq"))
+        table = data[[c for c in table_cols if c in data.columns]]
+        st.dataframe(table.head(200), use_container_width=True, hide_index=True)
+        _csv_download(table, "abc_articles" if by_articles else "abc_slots")
+
+
+def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
+                 filtered: pd.DataFrame) -> None:
+    """Unter-Tab 'Durchsatz': Bewegungen je Tag (letzte N Tage o. Bereich)."""
+    st.markdown(t("tp_intro"))
+    mov_filter_note(movements_filtered, filtered)
+    copt1, copt2 = st.columns(2)
+    with copt1:
+        use_range = st.checkbox(t("tp_use_range"), value=False)
+    with copt2:
+        hide_we = st.checkbox(t("hide_weekend"), value=True)
+    if use_range:
+        all_days = agg_movements_by_day(tpa)
+        if all_days.empty:
+            trend = all_days
+        else:
+            dmin = all_days["day"].min().date()
+            dmax = all_days["day"].max().date()
+            picked = st.date_input(t("tp_range"), (dmin, dmax),
+                                   min_value=dmin, max_value=dmax)
+            if isinstance(picked, (tuple, list)) and len(picked) == 2:
+                lo, hi = picked
+                trend = all_days[
+                    (all_days["day"].dt.date >= lo)
+                    & (all_days["day"].dt.date <= hi)
+                ].copy()
+            else:
+                trend = all_days.copy()
+            trend = trend.sort_values("day")
+    else:
+        trend = agg_throughput_trend(tpa, days)
+    if hide_we:
+        trend = drop_weekend(trend, "day")
+    if trend.empty:
+        st.info(t("no_data_filters"))
+    else:
+        fig = px.bar(
+            trend, x="day", y="movements",
+            title=t("tp_chart").format(n=len(trend)),
+        )
+        fig.update_layout(
+            yaxis_title=t("picks_label"),
+            xaxis_title="Date" if _LANG == "en" else "Datum",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric(t("tp_avg"), f"{trend['movements'].mean():.0f}")
+        c2.metric(t("tp_max"), de_num(int(trend['movements'].max())))
+        c3.metric(t("tp_sum"),
+                  de_num(int(trend['movements'].sum())))
+
+        tbl = trend.copy()
+        tbl["day"] = tbl["day"].dt.strftime("%Y-%m-%d")
+        tbl = tbl.rename(columns={"day": "Datum", "movements": "Bewegungen"})
+        tbl = tbl.sort_values("Datum", ascending=False)
+        st.dataframe(tbl, use_container_width=True, hide_index=True)
+        _csv_download(tbl, "durchsatz")
+
+
+def render_top(tpa: pd.DataFrame, article_limit: int,
+               movements_filtered: bool, filtered: pd.DataFrame) -> None:
+    """Unter-Tab 'Top-Artikel': meistbewegte Artikel aus TPA."""
+    st.markdown(t("top_intro"))
+    mov_filter_note(movements_filtered, filtered)
+    top = agg_articles(tpa, article_limit)
+    if top.empty:
+        st.info(t("no_data_filters"))
+    else:
+        chart_df = top.head(min(article_limit, 25)).sort_values("bewegungen")
+        st.plotly_chart(
+            px.bar(
+                chart_df, x="bewegungen", y="artikel", orientation="h",
+                title=t("top_chart"),
+                labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
+            ),
+            use_container_width=True,
+        )
+        st.dataframe(top, use_container_width=True, hide_index=True)
+        _csv_download(top, "top_artikel")
+
+
+def render_article(tpa: pd.DataFrame, movements_filtered: bool,
+                   filtered: pd.DataFrame) -> None:
+    """Tab 'Artikel': Bewegungen und Quellplaetze eines Artikels."""
+    st.markdown(t("art_intro"))
+    mov_filter_note(movements_filtered, filtered)
+    opts = agg_articles(tpa, limit=500)
+    labels = (
+        (opts["artikel"] + " — " + opts["bezeichnung"]).tolist()
+        if not opts.empty else []
+    )
+    col_s, col_i = st.columns(2)
+    with col_s:
+        chosen = st.selectbox(t("art_select"), options=labels) if labels else None
+    with col_i:
+        manual = st.text_input(t("art_input"), value="").strip()
+
+    artikelnr = manual or (chosen.split(" — ")[0] if chosen else "")
+    if not artikelnr:
+        st.info(t("art_none"))
+    else:
+        slots, day_df = agg_article_detail(tpa, artikelnr)
+        total = int(slots["picks"].sum()) if not slots.empty else 0
+        if total == 0 and day_df.empty:
+            st.info(t("art_none"))
+        else:
+            m1, m2 = st.columns(2)
+            m1.metric(t("art_total"), de_num(total))
+            m2.metric(t("art_slotcount"),
+                      de_num(len(slots)))
+            if not day_df.empty:
+                st.markdown(f"**{t('art_trend')}**")
+                hide_we = st.checkbox(t("hide_weekend"), value=True,
+                                      key="art_hide_we")
+                day_plot = drop_weekend(day_df, "day") if hide_we else day_df
+                st.plotly_chart(
+                    px.line(day_plot, x="day", y="picks", markers=True,
+                            labels={"day": "Datum" if _LANG == "de" else "Date",
+                                    "picks": t("picks_label")}),
+                    use_container_width=True,
+                )
+            if not slots.empty:
+                st.markdown(f"**{t('art_by_slot')}**")
+                slot_tbl = slots.rename(columns={"platz": "PLATZ_ID",
+                                                 "picks": "Picks"})
+                st.dataframe(slot_tbl, use_container_width=True, hide_index=True)
+                _csv_download(slot_tbl, "artikel_plaetze")
+
+
+def render_3d(filtered: pd.DataFrame) -> None:
+    """Tab '3D-Modell': CAD-Viewer ODER Daten-Schema + ABC-je-Platz-Tabelle."""
+    import json as _json
+
+    # Umschalter: CAD-Modell (echte Optik, ~66% Deckung) ODER Schema aus
+    # den Daten (alle 22.429 Plaetze, kein Grau, klotzig).
+    view_opts = [t("d3_view_cad"), t("d3_view_schema")]
+    view_choice = st.radio(t("d3_view"), view_opts, horizontal=True)
+    schema_mode = view_choice == t("d3_view_schema")
+
+    st.markdown(t("d3_schema_intro") if schema_mode else t("d3_click_intro"))
+
+    # Lagerplatz-Suche direkt an der Karte: ID eingeben -> Ansicht fliegt hin.
+    search_platz = st.text_input(
+        t("search_platz"), value="", help=t("search_platz_help"),
+        key="d3_search",
+    ).strip()
+
+    slot_json = load_slot_3d_map()
+    labels = {
+        "hint": t("d3_panel_hint"),
+        "platz": t("d3_f_platz"),
+        "pos": t("d3_f_pos"),
+        "abc_m": t("d3_f_abc_m"),
+        "abc_c": t("d3_f_abc_c"),
+        "picks": t("d3_f_picks"),
+        "util": t("d3_f_util"),
+        "status": t("d3_f_status"),
+        "cap": t("d3_f_cap"),
+        "free": t("d3_f_free"),
+        "locked": t("d3_f_locked"),
+        "lastacc": t("d3_f_lastacc"),
+        "daysempty": t("d3_f_daysempty"),
+        "yes": t("d3_yes"),
+        "no": t("d3_no"),
+        "occupied": t("d3_occupied"),
+        "empty": t("d3_empty"),
+        "notdb": t("d3_not_in_db"),
+        "legend": t("d3_legend"),
+        "grey": t("d3_grey"),
+        "notfound": t("d3_notfound"),
+        "loading": "Lade Modell" if _LANG == "de" else "Loading model",
+    }
+    labels_json = _json.dumps(labels, ensure_ascii=False)
+    # Nur 9-stellige PLATZ_ID ins Modell durchreichen.
+    focus_id = search_platz if search_platz.isdigit() else ""
+
+    if schema_mode:
+        sc1, sc2 = st.columns([1, 1])
+        with sc1:
+            # Färben nach Auslastung (Default = 3D-Heatmap), Belegung, ABC
+            # oder neutral. Alle Modi nutzen dieselben DB-Daten je Box.
+            cm_opts = [t("d3_cm_util"), t("d3_cm_occ"), t("d3_cm_abc"),
+                       t("d3_cm_neutral")]
+            cm_choice = st.selectbox(t("d3_colormode"), cm_opts, index=0,
+                                     key="d3_cm_schema")
+            colormode = {
+                t("d3_cm_util"): "util", t("d3_cm_occ"): "occ",
+                t("d3_cm_abc"): "abc", t("d3_cm_neutral"): "neutral",
+            }[cm_choice]
+        with sc2:
+            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
+                                      key="d3_height_schema",
+                                      help=t("d3_height_help"))
+            aisle = st.slider(t("d3_aisle"), 1.0, 3.0, 1.0, step=0.1,
+                              key="d3_aisle_schema", help=t("d3_aisle_help"))
+        html = (
+            _SCHEMA_VIEWER_HTML
+            .replace("__HEIGHT__", str(viewer_height))
+            .replace("__AISLE__", str(aisle))
+            .replace("__DATA__", slot_json)
+            .replace("__LABELS__", labels_json)
+            .replace("__FOCUS__", focus_id)
+            .replace("__COLORMODE__", colormode)
+        )
+        components.html(html, height=viewer_height + 16)
+        st.caption(t("d3_schema_caption"))
+    else:
+        # CAD-Modell: SampleScene_clickable.glb (Meshes nach PLATZ_ID benannt),
+        # CORS-faehig ueber die API geliefert.
+        glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
+        ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
+        with ctrl1:
+            color_abc = st.checkbox(t("d3_color_abc"), value=True)
+        with ctrl2:
+            perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
+        with ctrl3:
+            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
+                                      help=t("d3_height_help"))
+        html = (
+            _THREE_VIEWER_HTML
+            .replace("__HEIGHT__", str(viewer_height))
+            .replace("__GLB__", glb_url)
+            .replace("__DATA__", slot_json)
+            .replace("__LABELS__", labels_json)
+            .replace("__ROTATE__", "false")
+            .replace("__ABCCOLOR__", "true" if color_abc else "false")
+            .replace("__HIDEGREY__", "true" if perf_mode else "false")
+            .replace("__FOCUS__", focus_id)
+        )
+        components.html(html, height=viewer_height + 16)
+        st.caption(t("d3_caption"))
+
+
 def main() -> None:
     """Baut die komplette Oberflaeche auf (Streamlit rendert top-down und fuehrt
     diese Funktion bei jeder Interaktion komplett neu aus).
@@ -1735,7 +2591,7 @@ def main() -> None:
     """
     # Sprachumschalter ganz oben in der Sidebar; setzt das globale _LANG, das
     # t() fuer alle folgenden Texte auswertet.
-    global _LANG
+    global _LANG, _FILTER_LABEL
     _LANG = "en" if st.sidebar.radio(
         TR["lang_label"]["de"], ["Deutsch", "English"], horizontal=True,
     ) == "English" else "de"
@@ -1752,10 +2608,10 @@ def main() -> None:
         with col_logo:
             st.image(str(logo), width=110)
         with col_title:
-            st.title("Schaeflein LagerView v1.138")
+            st.title("Schaeflein LagerView v1.4")
             st.caption(t("caption"))
     else:
-        st.title("📦 Schaeflein LagerView v1.138")
+        st.title("📦 Schaeflein LagerView v1.4")
         st.caption(t("caption"))
 
     render_formulas_popover()
@@ -1817,6 +2673,26 @@ def main() -> None:
         sperr_mode=sperr_mode,
     )
 
+    # Menschenlesbare Zusammenfassung der aktiven Filter -> Caption unter den KPIs
+    # und Kommentarzeile in jedem CSV-Download (Nachvollziehbarkeit).
+    _af: list[str] = []
+    if abc:
+        _af.append(f"{t('abc')}: {', '.join(abc)}")
+    if util_range != (0, 100):
+        _af.append(f"{t('util')}: {util_range[0]}–{util_range[1]}")
+    if only_occupied:
+        _af.append(t("only_occ"))
+    if regal_range != (0, regal_max):
+        _af.append(f"{t('rack')}: {regal_range[0]}–{regal_range[1]}")
+    if ebene_range != (0, ebene_max):
+        _af.append(f"{t('level')}: {ebene_range[0]}–{ebene_range[1]}")
+    if min_picks > 0:
+        _af.append(f"{t('min_picks')}: ≥ {min_picks}")
+    if sperr_mode != "Alle":
+        _af.append(f"{t('lock_status')}: {sperr_choice}")
+    _FILTER_LABEL = "; ".join(_af) if _af else t("filter_none")
+    st.caption(f"{t('active_filters')}: {_FILTER_LABEL}")
+
     # Bewegungsdaten (TPA) einmal roh laden und auf die gefilterten Plaetze
     # einschraenken (ueber Q_PLATZ -> PLATZ_ID). So wirken die Sidebar-Filter
     # jetzt LIVE auch in den bewegungsbasierten Tabs (Pick-Heatmap, Durchsatz,
@@ -1830,21 +2706,15 @@ def main() -> None:
     )
     tpa = filter_tpa(tpa_all, allowed_pids)
 
-    def _mov_filter_note() -> None:
-        """Hinweis in bewegungsbasierten Tabs, wenn die Platz-Filter greifen."""
-        if movements_filtered:
-            st.caption(t("mov_filtered").format(
-                n=f"{len(filtered):,}".replace(",", ".")))
-
     # --- KPI-Kacheln oben (beziehen sich auf die gefilterte Auswahl) ---
     total = len(filtered) or 1
     occupied = int(filtered["BELEGT"].sum())
     avg_util = filtered["UTILIZATION"].mean()
 
     c1, c2, c3 = st.columns(3)
-    c1.metric(t("m_slots"), f"{len(filtered):,}".replace(",", "."),
+    c1.metric(t("m_slots"), de_num(len(filtered)),
               help=t("m_slots_help"))
-    c2.metric(t("m_occupied"), f"{occupied:,}".replace(",", "."),
+    c2.metric(t("m_occupied"), de_num(occupied),
               f"{occupied/total*100:.1f}%", help=t("m_occupied_help"))
     c3.metric(t("m_avg_util"),
               f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—",
@@ -1854,19 +2724,20 @@ def main() -> None:
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
     # ACHTUNG: Die Anzeige-Reihenfolge der Reiter bestimmt allein diese Liste –
     # die `with tab_*`-Bloecke weiter unten duerfen in beliebiger Code-Reihen-
-    # folge stehen. Reihenfolge: Übersicht, 3D, ABC, Steuermassnahmen (Umlagern/
-    # Nachschub/Einlagern/Auslagern), Artikel, und ganz am Ende "Sonstiges".
+    # folge stehen. Reihenfolge: Übersicht, 3D, ABC, Steuermassnahmen (Um-/Auslagern
+    # zusammengefasst / Nachschub / Einlagern), Artikel, und ganz am Ende "Sonstiges".
     # "Sonstiges" buendelt Auslastungs-/Pick-Heatmap, Hochfrequenz-Plaetze, Free
     # Capacity, Durchsatz und Top-Artikel (siehe unten).
+    # Umlagern + Auslagern liegen jetzt in EINEM Reiter (beide arbeiten auf
+    # denselben Plaetzen mit gegenlaeufiger Logik).
     (tab_uebersicht, tab_3d, tab_abc, tab_umlagern, tab_nachschub,
-     tab_einlagern, tab_auslagern, tab_article, tab_sonstiges) = st.tabs([
+     tab_einlagern, tab_article, tab_sonstiges) = st.tabs([
         t("tab_halls"),
         t("tab_3d"),
         t("tab_abc"),
-        t("tab_relocate"),
+        t("tab_reloc_retr"),
         t("tab_replenish"),
         t("tab_putaway"),
-        t("tab_retrieve"),
         t("tab_article"),
         t("tab_misc"),
     ])
@@ -1883,707 +2754,51 @@ def main() -> None:
         ])
 
     with tab_uebersicht:
-        st.markdown(t("halls_intro"))
-        # Eine Halle: das gesamte (gefilterte) Lager als EIN Block zusammenfassen.
-        # Kein Regal->Halle-Split mehr; HALLE ist hier nur ein konstantes Label.
-        df_h = filtered.assign(HALLE="Lager BER03")
-        zones = (
-            df_h.groupby("HALLE")
-            .agg(
-                total_slots=("PLATZ_ID", "count"),
-                occupied=("BELEGT", "sum"),
-                avg_util=("UTILIZATION", "mean"),
-                picks=("ANZ_PICKS", "sum"),
-            )
-            .reset_index()
-        )
-        zones["frei"] = zones["total_slots"] - zones["occupied"]
-        zones["Belegung_%"] = (zones["occupied"] / zones["total_slots"] * 100).round(1)
-        zones["Ø_Auslastung_%"] = zones["avg_util"].round(1)
-        abc_pivot = (
-            df_h.pivot_table(
-                index="HALLE", columns="ABC_CALC", values="PLATZ_ID",
-                aggfunc="count", fill_value=0,
-            )
-            .reindex(columns=["A", "B", "C"], fill_value=0)
-            .reset_index()
-            .rename(columns={"A": "A-Plätze", "B": "B-Plätze", "C": "C-Plätze"})
-        )
-        zones = zones.merge(abc_pivot, on="HALLE", how="left")
-
-        fig = px.bar(
-            zones.melt(
-                id_vars="HALLE",
-                value_vars=["occupied", "frei"],
-                var_name="Status",
-                value_name="Plaetze",
-            ),
-            x="HALLE", y="Plaetze", color="Status", barmode="stack",
-            color_discrete_map={"occupied": "#ef6c00", "frei": "#bdbdbd"},
-            title=t("halls_chart"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.markdown(t("halls_kpis"))
-        show = zones[[
-            "HALLE", "total_slots", "occupied", "frei", "Belegung_%",
-            "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
-        ]].rename(columns={
-            "HALLE": "Lager", "total_slots": "Plätze", "occupied": "Belegt",
-            "frei": "Frei", "picks": "Picks gesamt",
-        })
-        st.dataframe(show, use_container_width=True, hide_index=True)
-        _csv_download(show, "lager_kennzahlen")
+        render_uebersicht(filtered)
 
     with sub_heat:
-        st.markdown(t("heat_intro"))
-        if filtered.empty:
-            st.info(t("no_data_filters"))
-        else:
-            pivot = filtered.pivot_table(
-                index="EBENE", columns="REGAL",
-                values="UTILIZATION", aggfunc="mean",
-            )
-            fig = px.imshow(
-                pivot,
-                color_continuous_scale="RdYlGn_r",
-                range_color=[0, 120],
-                aspect="auto",
-                labels=dict(x="Regal", y="Ebene", color="Auslastung %"),
-                title=t("heat_chart"),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            color_counts = (
-                filtered["UTILIZATION"].apply(heatmap_color)
-                .value_counts()
-                .reindex(["GREEN", "YELLOW", "RED", "GREY"]).fillna(0)
-            )
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("🟢 < 40 %", int(color_counts["GREEN"]))
-            col2.metric("🟡 40–79 %", int(color_counts["YELLOW"]))
-            col3.metric("🔴 ≥ 80 %", int(color_counts["RED"]))
-            col4.metric("⚪ unbekannt", int(color_counts["GREY"]))
-
-            st.markdown(t("heat_racks"))
-            rack_util = (
-                filtered.groupby(["REGAL"])
-                .agg(
-                    Plätze=("PLATZ_ID", "count"),
-                    Ø_Auslastung_=("UTILIZATION", "mean"),
-                    Überlastet=("UTILIZATION", lambda s: int((s > 100).sum())),
-                )
-                .reset_index()
-                .rename(columns={"REGAL": "Regal",
-                                 "Ø_Auslastung_": "Ø Auslastung %"})
-            )
-            rack_util["Ø Auslastung %"] = rack_util["Ø Auslastung %"].round(1)
-            rack_util = rack_util.sort_values("Ø Auslastung %", ascending=False)
-            st.dataframe(rack_util, use_container_width=True, hide_index=True)
-            _csv_download(rack_util, "regal_auslastung")
+        render_heatmap(filtered)
 
     with sub_pickheat:
-        st.markdown(t("pick_intro"))
-        _mov_filter_note()
-        ph = agg_pick_heatmap(tpa)
-        if ph.empty:
-            st.info(t("no_data_filters"))
-        else:
-            weekday_names = {
-                0: "So", 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa",
-            }
-            ph = ph[(ph["weekday"].between(0, 6)) & (ph["hour"].between(0, 23))]
-            pivot = (
-                ph.pivot_table(
-                    index="weekday", columns="hour", values="picks", aggfunc="sum"
-                )
-                .reindex(range(7))
-                .reindex(columns=range(24))
-            )
-            pivot.index = [weekday_names[i] for i in pivot.index]
-            fig = px.imshow(
-                pivot,
-                color_continuous_scale="YlOrRd",
-                aspect="auto",
-                labels=dict(x="Stunde", y="Wochentag", color="Picks"),
-                title=t("pick_chart"),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            busiest = ph.sort_values("picks", ascending=False).head(1)
-            if not busiest.empty:
-                row = busiest.iloc[0]
-                st.caption(
-                    t("pick_peak").format(
-                        wd=weekday_names[int(row["weekday"])],
-                        h=int(row["hour"]),
-                        p=f"{int(row['picks']):,}".replace(",", "."),
-                    )
-                )
-
-            c1, c2 = st.columns(2)
-            with c1:
-                per_wd = (
-                    ph.groupby("weekday")["picks"].sum().reindex(range(7), fill_value=0)
-                )
-                per_wd.index = [weekday_names[i] for i in per_wd.index]
-                st.plotly_chart(
-                    px.bar(per_wd, title=t("pick_by_wd"),
-                           labels=dict(value=t("picks_label"), index=t("wd_label"))),
-                    use_container_width=True,
-                )
-            with c2:
-                per_hour = (
-                    ph.groupby("hour")["picks"].sum().reindex(range(24), fill_value=0)
-                )
-                st.plotly_chart(
-                    px.bar(per_hour, title=t("pick_by_hour"),
-                           labels=dict(value=t("picks_label"), index=t("hour_label"))),
-                    use_container_width=True,
-                )
-            tbl = ph.copy()
-            tbl["weekday"] = tbl["weekday"].map(weekday_names)
-            tbl = tbl.rename(columns={"weekday": "Wochentag", "hour": "Stunde",
-                                      "picks": "Picks"})
-            _csv_download(tbl[["Wochentag", "Stunde", "Picks"]], "pick_heatmap")
+        render_pickheat(tpa, movements_filtered, filtered)
 
     with sub_bottle:
-        st.markdown(t("bottle_intro"))
-        high_freq = (
-            filtered.assign(
-                PICK_TOTAL=lambda d: d["ANZ_PICKS"] + d["PICK_COUNT_FAHR"]
-            )
-            .sort_values(["PICK_TOTAL", "UTILIZATION"], ascending=[False, False])
-            .head(50)[
-                ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                 "ANZ_PICKS", "PICK_TOTAL", "MAX_LHM", "IST_LHM", "UTILIZATION"]
-            ]
-        )
-        if high_freq.empty:
-            st.info(t("no_data_filters"))
-        else:
-            st.dataframe(high_freq, use_container_width=True, hide_index=True)
-            _csv_download(high_freq, "hochfrequenz_plaetze")
+        render_high_frequency_slots(filtered)
 
     with sub_free:
-        st.markdown(t("free_intro"))
-        free_all = filtered[filtered["FREE_CAPACITY"] > 0]
-        c1, c2, c3 = st.columns(3)
-        c1.metric(t("free_count"), f"{len(free_all):,}".replace(",", "."))
-        c2.metric(t("free_total"),
-                  f"{int(free_all['FREE_CAPACITY'].sum()):,}".replace(",", "."))
-        c3.metric(t("free_avg"),
-                  f"{free_all['FREE_CAPACITY'].mean():.1f}"
-                  if not free_all.empty else "—")
-
-        free = (
-            free_all.sort_values("FREE_CAPACITY", ascending=False)
-            .head(100)[
-                ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                 "MAX_LHM", "IST_LHM", "FREE_CAPACITY", "UTILIZATION"]
-            ]
-        )
-        st.dataframe(free, use_container_width=True, hide_index=True)
-        _csv_download(free, "free_capacity")
+        render_free(filtered)
 
     # ----- Steuermassnahmen (Umlagern/Nachschub/Einlagern/Auslagern) -----
     # Jeder dieser vier Tabs zeigt mehrere "Kategorien" (z. B. dringend/
     # ueberfaellig). Eine Kategorie = eine nach Regeln gefilterte Teilmenge von
-    # `filtered`. _massnahme_kategorie() rendert jede einheitlich: Titel,
-    # Anzahl-Kennzahl, Tabelle und CSV-Download. Die Regeln (welche Plaetze in
-    # welche Kategorie fallen) entsprechen der Logik der Flutter-App.
-    _MASSNAHME_COLS = [
-        "PLATZ_ID", "REGAL", "FACH", "EBENE",
-        "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM", "WERT",
-    ]
-
-    def _massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
-                             extra_cols: list[str] | None = None,
-                             vorschlag: str | None = None) -> None:
-        """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV).
-
-        `vorschlag`: optionaler Text, der als zusaetzliche Spalte "Vorschlag"
-        (konkrete Handlungsempfehlung) in jede Zeile geschrieben wird.
-        """
-        cols = _MASSNAHME_COLS + (extra_cols or [])
-        cols = [c for c in cols if c in df.columns]
-        st.markdown(f"**{titel}** — {beschreibung}")
-        st.metric(t("cat_slots"), f"{len(df):,}".replace(",", "."))
-        if df.empty:
-            st.info(t("cat_empty"))
-        else:
-            show = df[cols].copy()
-            if vorschlag:
-                show[t("col_vorschlag")] = vorschlag
-            st.dataframe(
-                show.head(200), use_container_width=True, hide_index=True
-            )
-            key = "".join(c if c.isalnum() else "_" for c in titel.lower())
-            _csv_download(show, f"massnahme_{key}")
-        st.divider()
-
+    # `filtered`. render_massnahme_kategorie() (oben) rendert jede einheitlich:
+    # Titel, Anzahl-Kennzahl, Tabelle und CSV-Download. Die Regeln (welche
+    # Plaetze in welche Kategorie fallen) entsprechen der Logik der Flutter-App.
     with tab_umlagern:
-        st.markdown(t("reloc_head"))
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            # A/B/C-Auswahl: blendet die Kategorien nach ihrer Ziel-Klasse ein.
-            # A -> "Premium ungenutzt" + "A weit oben", C -> "Heisse C-Plaetze".
-            reloc_abc = st.multiselect(
-                t("abc"), ["A", "B", "C"], default=["A", "B", "C"],
-                key="reloc_abc", help=t("reloc_abc_help"))
-        with c2:
-            hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10)
-        with c3:
-            high_level = st.slider(t("sl_highlevel"), 2, 6, 4)
-
-        # Regel 1: A-Platz (Premium) ohne Picks -> Premiumplatz verschwendet.
-        unused_a = filtered[
-            (filtered["ABC_KLASSE"] == "A")
-            & (filtered["ANZ_PICKS"] == 0)
-            & (~filtered["GESPERRT"])
-        ].sort_values(["REGAL", "EBENE", "FACH"])
-        # Regel 2: C-Platz mit vielen Picks -> falsch klassifiziert, hochstufen.
-        hot_c = filtered[
-            (filtered["ABC_KLASSE"] == "C")
-            & (filtered["ANZ_PICKS"] >= hot_c_threshold)
-        ].sort_values("ANZ_PICKS", ascending=False)
-        # Regel 3: aktiver A-Artikel weit oben -> ergonomisch nach unten holen.
-        high_level_a = filtered[
-            (filtered["ABC_KLASSE"] == "A")
-            & (filtered["EBENE"] >= high_level)
-            & (filtered["ANZ_PICKS"] > 0)
-        ].sort_values("ANZ_PICKS", ascending=False)
-
-        # Konkrete Zielplatz-Vorschlaege aus den freien (nicht gesperrten)
-        # Plaetzen der aktuellen Auswahl. Niedrige Ebenen (<=2) = gute Pick-
-        # plaetze -> Ziel fuer heisse C-Plaetze und A-Plaetze von oben; hohe
-        # Ebenen (>=3) = Reserve -> Ziel fuer ungenutzte Premiumplaetze.
-        free_pool = filtered[
-            (filtered["FREE_CAPACITY"] > 0) & (~filtered["GESPERRT"])
-        ]
-        free_low = free_pool[free_pool["EBENE"] <= 2] \
-            .sort_values("FREE_CAPACITY", ascending=False)
-        free_high = free_pool[free_pool["EBENE"] >= 3] \
-            .sort_values("FREE_CAPACITY", ascending=False)
-
-        def _add_ziel(src: pd.DataFrame, targets: pd.DataFrame) -> pd.DataFrame:
-            """Greedy 1:1 – jedem Quellplatz genau einen freien Zielplatz (nach
-            freier Kapazitaet) zuordnen; Quellplaetze selbst sind nie Ziel."""
-            tgt = targets[~targets["PLATZ_ID"].isin(src["PLATZ_ID"])]
-            labels = [
-                f"{r.PLATZ_ID} · R{int(r.REGAL)}/E{int(r.EBENE)} "
-                f"(frei {int(r.FREE_CAPACITY)})"
-                for r in tgt.itertuples(index=False)
-            ]
-            col = [labels[i] if i < len(labels) else t("ziel_none")
-                   for i in range(len(src))]
-            return src.assign(**{t("col_ziel"): col})
-
-        if "A" in reloc_abc:
-            _massnahme_kategorie(
-                t("reloc_unusedA_t"), t("reloc_unusedA_d"),
-                _add_ziel(unused_a, free_high),
-                extra_cols=[t("col_ziel")], vorschlag=t("reloc_unusedA_v"))
-        if "C" in reloc_abc:
-            _massnahme_kategorie(
-                t("reloc_hotC_t"), t("reloc_hotC_d"),
-                _add_ziel(hot_c, free_low),
-                extra_cols=[t("col_ziel")], vorschlag=t("reloc_hotC_v"))
-        if "A" in reloc_abc:
-            _massnahme_kategorie(
-                t("reloc_highA_t"), t("reloc_highA_d"),
-                _add_ziel(high_level_a, free_low),
-                extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
-        if not reloc_abc:
-            st.info(t("reloc_pick_abc"))
+        render_umlagern(filtered)
+        st.divider()
+        render_auslagern(filtered)
 
     with tab_nachschub:
-        st.markdown(t("replen_head"))
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            pick_level = st.slider(t("sl_picklevel"), 1, 6, 2)
-        with c2:
-            pick_threshold = st.slider(t("sl_pickthresh"), 10, 300, 50, step=10)
-        with c3:
-            overdue_days = st.slider(t("sl_overdue"), 3, 60, 14)
-
-        # Basis: leere Pickplaetze (IST_LHM=0) in der Pickzone (niedrige Ebene),
-        # nicht gesperrt. Daraus drei Dringlichkeitsstufen:
-        empty_pick = filtered[
-            (filtered["IST_LHM"].fillna(0) == 0)
-            & (filtered["EBENE"] <= pick_level)
-            & (~filtered["GESPERRT"])
-        ]
-        # dringend = leer + hohe Pickfrequenz
-        urgent = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold] \
-            .sort_values("ANZ_PICKS", ascending=False)
-        # ueberfaellig = dringend + schon zu lange leer (DAYS_EMPTY)
-        overdue = urgent[urgent["DAYS_EMPTY"] >= overdue_days] \
-            .sort_values("DAYS_EMPTY", ascending=False)
-
-        _massnahme_kategorie(
-            t("replen_urgent_t"), t("replen_urgent_d"), urgent,
-            extra_cols=["DAYS_EMPTY"])
-        _massnahme_kategorie(
-            t("replen_overdue_t"),
-            t("replen_overdue_d").format(n=overdue_days),
-            overdue, extra_cols=["DAYS_EMPTY"])
+        render_nachschub(filtered)
 
     with tab_einlagern:
-        st.markdown(t("put_head"))
-        fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2)
-        free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
-
-        # Schnelldreher-Plaetze: freie A-Plaetze auf niedriger Ebene -> kurze
-        # Wege. Schwelle ueber den Slider fast_level einstellbar.
-        fast_lane = free_slots[
-            (free_slots["ABC_KLASSE"] == "A")
-            & (free_slots["EBENE"] <= fast_level)
-            & (~free_slots["GESPERRT"])
-        ].sort_values("FREE_CAPACITY", ascending=False)
-
-        _massnahme_kategorie(
-            t("put_fast_t"), t("put_fast_d").format(n=fast_level),
-            fast_lane, extra_cols=["FREE_CAPACITY"])
-
-    with tab_auslagern:
-        st.markdown(t("retr_head"))
-        c1, c2 = st.columns(2)
-        with c1:
-            # Pickzone: nur niedrige Ebenen betrachten. 88% aller Plaetze haben
-            # 0 Picks (v.a. Reserve weit oben) -> ohne diese Grenze waeren die
-            # 0-Pick-Listen unbrauchbar gross. Standard: bis Ebene 2.
-            retr_zone = st.slider(t("sl_retrzone"), 1, 6, 2)
-        with c2:
-            observe_max = st.slider(t("sl_observe"), 1, 50, 5)
-        # belegt = physisch Ware vorhanden (IST_LHM>0, siehe BELEGT) in der
-        # Pickzone. KEIN ZUSTAND<150-Filter mehr (ZUSTAND ist hier nur 0/150 und
-        # kein Sperr-Indikator -> hat zuvor alle belegten Plaetze ausgeschlossen,
-        # darum war der Tab leer). Gesperrte ueber den Sidebar-Filter ausblenden.
-        belegt = filtered[
-            (filtered["BELEGT"])
-            & (filtered["EBENE"] <= retr_zone)
-        ]
-
-        # kritisch: belegter A-Platz mit 0 Picks -> Premiumplatz von Ladenhueter
-        # blockiert, vorrangig auslagern.
-        critical = belegt[
-            (belegt["ABC_KLASSE"] == "A") & (belegt["ANZ_PICKS"] == 0)
-        ].sort_values(["REGAL", "EBENE", "FACH"])
-        # abgestanden: belegt, 0 Picks, aber kein A-Platz.
-        stale = belegt[
-            (belegt["ABC_KLASSE"] != "A") & (belegt["ANZ_PICKS"] == 0)
-        ].sort_values(["REGAL", "EBENE", "FACH"])
-        # beobachten: laeuft, aber nur sehr selten (1..observe_max Picks).
-        observe = belegt[
-            (belegt["ANZ_PICKS"] > 0) & (belegt["ANZ_PICKS"] <= observe_max)
-        ].sort_values("ANZ_PICKS")
-
-        _massnahme_kategorie(
-            t("retr_crit_t"), t("retr_crit_d"), critical)
-        _massnahme_kategorie(
-            t("retr_stale_t"), t("retr_stale_d"), stale)
-        _massnahme_kategorie(
-            t("retr_observe_t"),
-            t("retr_observe_d").format(n=observe_max), observe)
+        render_einlagern(filtered)
 
     with tab_abc:
-        abc_mode = st.radio(
-            t("abc_mode"),
-            options=[t("abc_by_slots"), t("abc_by_articles")],
-            horizontal=True,
-        )
-        by_articles = abc_mode == t("abc_by_articles")
-
-        cc1, cc2 = st.columns(2)
-        with cc1:
-            a_thr = st.slider(t("abc_a_thresh"), 50, 95, 80, step=1)
-        with cc2:
-            b_thr = st.slider(t("abc_b_thresh"), a_thr + 1, 99, max(a_thr + 1, 95),
-                              step=1)
-
-        abc_color = {"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"}
-
-        if by_articles:
-            st.markdown(t("abc_intro_articles"))
-            _mov_filter_note()
-            base = agg_articles(tpa)
-            data = classify_abc(base, "bewegungen", a_thr, b_thr) \
-                if not base.empty else base
-            table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
-        else:
-            st.markdown(t("abc_intro"))
-            data = classify_abc(filtered, "ANZ_PICKS", a_thr, b_thr)
-            table_cols = ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                          "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC"]
-
-        if data.empty:
-            st.info(t("no_data_filters"))
-        else:
-            # Verteilung (Pie + Anzahl je Klasse)
-            counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
-            d1, d2 = st.columns([2, 1])
-            with d1:
-                st.plotly_chart(
-                    px.pie(names=counts.index, values=counts.values,
-                           color=counts.index, color_discrete_map=abc_color,
-                           title=t("abc_dist")),
-                    use_container_width=True,
-                )
-            with d2:
-                st.markdown(f"**{t('abc_count')}**")
-                for klasse in ["A", "B", "C"]:
-                    st.metric(klasse, f"{int(counts[klasse]):,}".replace(",", "."),
-                              help=fhelp("abc_calc"))
-
-            # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
-            if not by_articles:
-                # ABC-Anpassung: Abweichungen Stamm vs. berechnet + Empfehlung.
-                # Trick: A/B/C als Rang 3/2/1. Ist die berechnete Klasse hoeher
-                # als die hinterlegte (_c > _m), wird der Platz mehr bewegt als
-                # gedacht -> "Hochstufen"; umgekehrt -> "Herabstufen".
-                st.markdown(t("abc_adjust_head"))
-                st.markdown(t("abc_adjust_intro"))
-                rank = {"A": 3, "B": 2, "C": 1}
-                dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
-                dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]  # nur Abweichungen
-                if dev.empty:
-                    st.info(t("abc_no_dev"))
-                else:
-                    dev["_m"] = dev["ABC_KLASSE"].map(rank)
-                    dev["_c"] = dev["ABC"].map(rank)
-                    dev[t("abc_rec")] = dev.apply(
-                        lambda r: t("abc_promote") if r["_c"] > r["_m"]
-                        else t("abc_demote"), axis=1,
-                    )
-                    n_prom = int((dev["_c"] > dev["_m"]).sum())
-                    n_dem = int((dev["_c"] < dev["_m"]).sum())
-                    mcols = st.columns(2)
-                    mcols[0].metric(t("abc_promote"), f"{n_prom:,}".replace(",", "."))
-                    mcols[1].metric(t("abc_demote"), f"{n_dem:,}".replace(",", "."))
-                    dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
-                        ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                         "ANZ_PICKS", "ABC_KLASSE", "ABC", t("abc_rec")]
-                    ].rename(columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet"}).head(200)
-                    st.dataframe(dev_tbl, use_container_width=True, hide_index=True)
-                    _csv_download(dev_tbl, "abc_anpassung")
-
-            st.markdown(t("abc_byfreq"))
-            table = data[[c for c in table_cols if c in data.columns]].head(200)
-            st.dataframe(table, use_container_width=True, hide_index=True)
-            _csv_download(table, "abc_articles" if by_articles else "abc_slots")
+        render_abc(filtered, tpa, movements_filtered)
 
     with sub_trend:
-        st.markdown(t("tp_intro"))
-        _mov_filter_note()
-        use_range = st.checkbox(t("tp_use_range"), value=False)
-        if use_range:
-            all_days = agg_movements_by_day(tpa)
-            if all_days.empty:
-                trend = all_days
-            else:
-                dmin = all_days["day"].min().date()
-                dmax = all_days["day"].max().date()
-                picked = st.date_input(t("tp_range"), (dmin, dmax),
-                                       min_value=dmin, max_value=dmax)
-                if isinstance(picked, (tuple, list)) and len(picked) == 2:
-                    lo, hi = picked
-                    trend = all_days[
-                        (all_days["day"].dt.date >= lo)
-                        & (all_days["day"].dt.date <= hi)
-                    ].copy()
-                else:
-                    trend = all_days.copy()
-                trend = trend.sort_values("day")
-        else:
-            trend = agg_throughput_trend(tpa, days)
-        if trend.empty:
-            st.info(t("no_data_filters"))
-        else:
-            fig = px.line(
-                trend, x="day", y="movements", markers=True,
-                title=t("tp_chart").format(n=len(trend)),
-            )
-            fig.update_layout(
-                yaxis_title=t("picks_label"),
-                xaxis_title="Date" if _LANG == "en" else "Datum",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric(t("tp_avg"), f"{trend['movements'].mean():.0f}")
-            c2.metric(t("tp_max"), f"{int(trend['movements'].max()):,}".replace(",", "."))
-            c3.metric(t("tp_sum"),
-                      f"{int(trend['movements'].sum()):,}".replace(",", "."))
-
-            tbl = trend.copy()
-            tbl["day"] = tbl["day"].dt.strftime("%Y-%m-%d")
-            tbl = tbl.rename(columns={"day": "Datum", "movements": "Bewegungen"})
-            tbl = tbl.sort_values("Datum", ascending=False)
-            st.dataframe(tbl, use_container_width=True, hide_index=True)
-            _csv_download(tbl, "durchsatz")
+        render_trend(tpa, days, movements_filtered, filtered)
 
     with sub_top:
-        st.markdown(t("top_intro"))
-        _mov_filter_note()
-        top = agg_articles(tpa, article_limit)
-        if top.empty:
-            st.info(t("no_data_filters"))
-        else:
-            chart_df = top.head(min(article_limit, 25)).sort_values("bewegungen")
-            st.plotly_chart(
-                px.bar(
-                    chart_df, x="bewegungen", y="artikel", orientation="h",
-                    title=t("top_chart"),
-                    labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
-                ),
-                use_container_width=True,
-            )
-            st.dataframe(top, use_container_width=True, hide_index=True)
-            _csv_download(top, "top_artikel")
+        render_top(tpa, article_limit, movements_filtered, filtered)
 
     with tab_article:
-        st.markdown(t("art_intro"))
-        _mov_filter_note()
-        opts = agg_articles(tpa, limit=500)
-        labels = (
-            (opts["artikel"] + " — " + opts["bezeichnung"]).tolist()
-            if not opts.empty else []
-        )
-        col_s, col_i = st.columns(2)
-        with col_s:
-            chosen = st.selectbox(t("art_select"), options=labels) if labels else None
-        with col_i:
-            manual = st.text_input(t("art_input"), value="").strip()
-
-        artikelnr = manual or (chosen.split(" — ")[0] if chosen else "")
-        if not artikelnr:
-            st.info(t("art_none"))
-        else:
-            slots, day_df = agg_article_detail(tpa, artikelnr)
-            total = int(slots["picks"].sum()) if not slots.empty else 0
-            if total == 0 and day_df.empty:
-                st.info(t("art_none"))
-            else:
-                m1, m2 = st.columns(2)
-                m1.metric(t("art_total"), f"{total:,}".replace(",", "."))
-                m2.metric(t("art_slotcount"),
-                          f"{len(slots):,}".replace(",", "."))
-                if not day_df.empty:
-                    st.markdown(f"**{t('art_trend')}**")
-                    st.plotly_chart(
-                        px.line(day_df, x="day", y="picks", markers=True,
-                                labels={"day": "Datum" if _LANG == "de" else "Date",
-                                        "picks": t("picks_label")}),
-                        use_container_width=True,
-                    )
-                if not slots.empty:
-                    st.markdown(f"**{t('art_by_slot')}**")
-                    slot_tbl = slots.rename(columns={"platz": "PLATZ_ID",
-                                                     "picks": "Picks"})
-                    st.dataframe(slot_tbl, use_container_width=True, hide_index=True)
-                    _csv_download(slot_tbl, "artikel_plaetze")
+        render_article(tpa, movements_filtered, filtered)
 
     with tab_3d:
-        import json as _json
-
-        # Umschalter: CAD-Modell (echte Optik, ~66% Deckung) ODER Schema aus
-        # den Daten (alle 22.429 Plaetze, kein Grau, klotzig).
-        view_opts = [t("d3_view_cad"), t("d3_view_schema")]
-        view_choice = st.radio(t("d3_view"), view_opts, horizontal=True)
-        schema_mode = view_choice == t("d3_view_schema")
-
-        st.markdown(t("d3_schema_intro") if schema_mode else t("d3_click_intro"))
-
-        # Lagerplatz-Suche direkt an der Karte: ID eingeben -> Ansicht fliegt hin.
-        search_platz = st.text_input(
-            t("search_platz"), value="", help=t("search_platz_help"),
-            key="d3_search",
-        ).strip()
-
-        slot_json = load_slot_3d_map()
-        labels = {
-            "hint": t("d3_panel_hint"),
-            "platz": t("d3_f_platz"),
-            "pos": t("d3_f_pos"),
-            "abc_m": t("d3_f_abc_m"),
-            "abc_c": t("d3_f_abc_c"),
-            "picks": t("d3_f_picks"),
-            "util": t("d3_f_util"),
-            "status": t("d3_f_status"),
-            "cap": t("d3_f_cap"),
-            "free": t("d3_f_free"),
-            "locked": t("d3_f_locked"),
-            "lastacc": t("d3_f_lastacc"),
-            "daysempty": t("d3_f_daysempty"),
-            "yes": t("d3_yes"),
-            "no": t("d3_no"),
-            "occupied": t("d3_occupied"),
-            "empty": t("d3_empty"),
-            "notdb": t("d3_not_in_db"),
-            "legend": t("d3_legend"),
-            "grey": t("d3_grey"),
-            "notfound": t("d3_notfound"),
-            "loading": "Lade Modell" if _LANG == "de" else "Loading model",
-        }
-        labels_json = _json.dumps(labels, ensure_ascii=False)
-        # Nur 9-stellige PLATZ_ID ins Modell durchreichen.
-        focus_id = search_platz if search_platz.isdigit() else ""
-
-        if schema_mode:
-            sc1, sc2 = st.columns([1, 1])
-            with sc1:
-                # Färben nach Auslastung (Default = 3D-Heatmap), Belegung, ABC
-                # oder neutral. Alle Modi nutzen dieselben DB-Daten je Box.
-                cm_opts = [t("d3_cm_util"), t("d3_cm_occ"), t("d3_cm_abc"),
-                           t("d3_cm_neutral")]
-                cm_choice = st.selectbox(t("d3_colormode"), cm_opts, index=0,
-                                         key="d3_cm_schema")
-                colormode = {
-                    t("d3_cm_util"): "util", t("d3_cm_occ"): "occ",
-                    t("d3_cm_abc"): "abc", t("d3_cm_neutral"): "neutral",
-                }[cm_choice]
-            with sc2:
-                viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
-                                          key="d3_height_schema",
-                                          help=t("d3_height_help"))
-                aisle = st.slider(t("d3_aisle"), 1.0, 3.0, 1.0, step=0.1,
-                                  key="d3_aisle_schema", help=t("d3_aisle_help"))
-            html = (
-                _SCHEMA_VIEWER_HTML
-                .replace("__HEIGHT__", str(viewer_height))
-                .replace("__AISLE__", str(aisle))
-                .replace("__DATA__", slot_json)
-                .replace("__LABELS__", labels_json)
-                .replace("__FOCUS__", focus_id)
-                .replace("__COLORMODE__", colormode)
-            )
-            components.html(html, height=viewer_height + 16)
-            st.caption(t("d3_schema_caption"))
-        else:
-            # CAD-Modell: SampleScene_clickable.glb (Meshes nach PLATZ_ID benannt),
-            # CORS-faehig ueber die API geliefert.
-            glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
-            ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
-            with ctrl1:
-                color_abc = st.checkbox(t("d3_color_abc"), value=True)
-            with ctrl2:
-                perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
-            with ctrl3:
-                viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
-                                          help=t("d3_height_help"))
-            html = (
-                _THREE_VIEWER_HTML
-                .replace("__HEIGHT__", str(viewer_height))
-                .replace("__GLB__", glb_url)
-                .replace("__DATA__", slot_json)
-                .replace("__LABELS__", labels_json)
-                .replace("__ROTATE__", "false")
-                .replace("__ABCCOLOR__", "true" if color_abc else "false")
-                .replace("__HIDEGREY__", "true" if perf_mode else "false")
-                .replace("__FOCUS__", focus_id)
-            )
-            components.html(html, height=viewer_height + 16)
-            st.caption(t("d3_caption"))
+        render_3d(filtered)
 
 
 if __name__ == "__main__":
