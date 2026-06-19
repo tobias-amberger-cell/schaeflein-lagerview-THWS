@@ -24,13 +24,3 @@ services:
         value: /opt/render/project/src/data/model.glb
       - key: WAREHOUSE_MODEL_URL
         value: https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/model-v1/SampleScene_fixed.glb
-
-  - type: web
-    name: ssi-lagerview-web
-    env: docker
-    plan: free
-    rootDir: .
-    dockerfilePath: ./Dockerfile
-    envVars:
-      - key: API_BASE_URL
-        value: https://ssi-lagerview-api.onrender.com
