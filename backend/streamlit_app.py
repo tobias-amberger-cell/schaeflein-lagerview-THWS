@@ -929,26 +929,112 @@ TR: dict[str, dict[str, str]] = {
         "en": "A class high up & active – bring down.",
     },
     "replen_head": {
-        "de": "### ⬆️ Nachschub / Replenishment\nLeere Pickplätze (`IST_LHM = 0`), die nachgefüllt werden sollten.",
-        "en": "### ⬆️ Replenishment\nEmpty pick slots (`IST_LHM = 0`) that should be refilled.",
+        "de": "### ⬆️ Nachschub / Replenishment\n**Welche Pickplätze sind leer und sollten nachgefüllt werden?** "
+              "Gelistet werden **ganz leere** Plätze (`IST_LHM = 0`) in der **Pickzone** (niedrige Ebenen), "
+              "sortiert nach **Dringlichkeit**.",
+        "en": "### ⬆️ Replenishment\n**Which pick slots are empty and should be refilled?** "
+              "The lists show **completely empty** slots (`IST_LHM = 0`) in the **pick zone** (low levels), "
+              "ranked by **urgency**.",
+    },
+    "replen_principle": {
+        "de": "**Warum dieser Tab?** Ein leerer, aber häufig gepickter Platz bedeutet **Fehlmengen / Suchwege**: "
+              "Der Kommissionierer steht vor einem leeren Fach. Je öfter der Platz sonst gepickt wird und je länger "
+              "er schon leer ist, desto dringender der Nachschub. Die drei Listen sind eine **Eskalation**: "
+              "*Dringend* (leer + viele Picks) → *Überfällig* (dieselben, aber schon zu lange leer) → "
+              "*Mittlere Frequenz* (leer, aber seltener gepickt). Gesperrte Plätze sind bewusst ausgeschlossen.",
+        "en": "**Why this tab?** An empty but frequently picked slot means **shortages / search time**: "
+              "the picker faces an empty bin. The more often the slot is otherwise picked and the longer it has "
+              "been empty, the more urgent the replenishment. The three lists form an **escalation**: "
+              "*Urgent* (empty + many picks) → *Overdue* (the same, but empty too long) → "
+              "*Medium frequency* (empty, but picked less often). Locked slots are deliberately excluded.",
+    },
+    "replen_overview": {
+        "de": "#### 🔎 Überblick (aktuelle Filter & Regler)",
+        "en": "#### 🔎 Overview (current filters & sliders)",
+    },
+    "replen_kpi_total": {
+        "de": "Leere Pickplätze",
+        "en": "Empty pick slots",
+    },
+    "replen_glossary_t": {
+        "de": "ℹ️ Was bedeuten „leer“, „Pick“ und die Spalten?",
+        "en": "ℹ️ What do ‘empty’, ‘pick’ and the columns mean?",
+    },
+    "replen_glossary_b": {
+        "de": "- **Leer** = **ganz leer**: `IST_LHM = 0`, es steht **kein** Ladehilfsmittel (Palette/Behälter) am Platz. "
+              "*Teilweise* gefüllte Plätze (noch Restkapazität, aber Ware vorhanden) stehen **nicht** hier, sondern im "
+              "Tab **Einlagern / Free Capacity**.\n"
+              "- **Pick (Spalte „Picks (Häufigkeit)“)** = `ANZ_PICKS`, die im WMS hinterlegte **Zugriffshäufigkeit "
+              "dieses Platzes** (wie oft an diesem Ort entnommen wurde). Es ist ein **Platz-Zähler**, nicht der "
+              "aktuelle Bestand. *Hinweis: ob ein Zugriff genau 1 Orderzeile oder 1 Artikel zählt, ist im WMS-Stamm "
+              "definiert und sollte beim Betreiber bestätigt werden.*\n"
+              "- **ABC (Platz)** = im WMS hinterlegte **Güteklasse des Ortes** (A = wegoptimaler Premiumplatz). "
+              "Beschreibt den **Platz**, wird hier **nicht** aus Picks berechnet.\n"
+              "- **Soll-LHM** = `MAX_LHM` = auf wie viele Ladehilfsmittel der Platz **aufgefüllt** werden soll.\n"
+              "- **Tage leer** = `DAYS_EMPTY`, Tage seit dem Leer-Datum (`LEER_DATUM`).\n\n"
+              "Eine **Wert-Spalte** (`MAX_LHM × Picks`) gibt es hier bewusst **nicht** – die Dringlichkeit ergibt "
+              "sich allein aus **Pickhäufigkeit** und **Tage leer**.",
+        "en": "- **Empty** = **completely empty**: `IST_LHM = 0`, **no** load unit (pallet/bin) at the slot. "
+              "*Partially* filled slots (spare capacity but goods present) are **not** here but in the "
+              "**Put-away / Free Capacity** tab.\n"
+              "- **Pick (column ‘Picks (frequency)’)** = `ANZ_PICKS`, the **access frequency of this slot** stored "
+              "in the WMS (how often it was picked from this location). It is a **slot counter**, not the current "
+              "stock. *Note: whether one access counts as 1 order line or 1 article is defined in the WMS master and "
+              "should be confirmed with the operator.*\n"
+              "- **ABC (slot)** = the **quality class of the location** stored in the WMS (A = path-optimal premium "
+              "slot). Describes the **slot**, **not** computed from picks here.\n"
+              "- **Soll-LHM** = `MAX_LHM` = the number of load units the slot should be **refilled** to.\n"
+              "- **Days empty** = `DAYS_EMPTY`, days since the empty date (`LEER_DATUM`).\n\n"
+              "There is deliberately **no value column** (`MAX_LHM × picks`) here – urgency comes solely from "
+              "**pick frequency** and **days empty**.",
     },
     "sl_picklevel": {"de": "Max. Ebene (Pickzone)", "en": "Max. level (pick zone)"},
+    "sl_picklevel_h": {
+        "de": "Nur Plätze bis zu dieser Ebene gelten als Pickzone. Höher = Reserve, "
+              "die nicht zwingend ständig gefüllt sein muss.",
+        "en": "Only slots up to this level count as the pick zone. Higher = reserve "
+              "that need not always be stocked.",
+    },
     "sl_pickthresh": {"de": "Dringend ab Picks", "en": "Urgent from picks"},
+    "sl_pickthresh_h": {
+        "de": "Ab so vielen Picks (Zugriffshäufigkeit des Platzes) zählt ein leerer "
+              "Platz als „dringend“ – ein wichtiger Pickplatz steht leer.",
+        "en": "From this many picks (slot access frequency) an empty slot counts as "
+              "‘urgent’ – an important pick slot is empty.",
+    },
     "sl_overdue": {"de": "Überfällig ab Tagen", "en": "Overdue from days"},
+    "sl_overdue_h": {
+        "de": "Ab so vielen Tagen ohne Ware gilt ein dringender Platz zusätzlich als "
+              "„überfällig“ – der Nachschub wurde vermutlich vergessen.",
+        "en": "After this many days without goods an urgent slot also counts as "
+              "‘overdue’ – the replenishment was probably forgotten.",
+    },
     "replen_urgent_t": {"de": "Dringend leer", "en": "Urgently empty"},
     "replen_urgent_d": {
-        "de": "Aktiver Pickplatz leer – dringend nachfüllen.",
-        "en": "Active pick slot empty – replenish urgently.",
+        "de": "Leer + hohe Pickhäufigkeit – wichtiger Pickplatz, dringend nachfüllen.",
+        "en": "Empty + high pick frequency – important pick slot, replenish urgently.",
+    },
+    "replen_urgent_v": {
+        "de": "Sofort nachfüllen (häufiger Pickplatz leer)",
+        "en": "Refill now (frequent pick slot empty)",
     },
     "replen_overdue_t": {"de": "Überfällig", "en": "Overdue"},
     "replen_overdue_d": {
-        "de": "Bereits ≥ {n} Tage leer – Replenishment vergessen?",
-        "en": "Empty for ≥ {n} days – replenishment forgotten?",
+        "de": "Dringende Plätze, die bereits ≥ {n} Tage leer sind – Nachschub vergessen?",
+        "en": "Urgent slots already empty for ≥ {n} days – replenishment forgotten?",
+    },
+    "replen_overdue_v": {
+        "de": "Priorisiert nachfüllen + Ursache prüfen",
+        "en": "Refill with priority + check root cause",
     },
     "replen_medium_t": {"de": "Mittlere Frequenz", "en": "Medium frequency"},
     "replen_medium_d": {
-        "de": "Pickplatz leer mit mittlerer Pickfrequenz.",
-        "en": "Pick slot empty with medium pick frequency.",
+        "de": "Leer mit mittlerer Pickhäufigkeit – einplanen, aber weniger dringend.",
+        "en": "Empty with medium pick frequency – schedule, but less urgent.",
+    },
+    "replen_medium_v": {
+        "de": "Bei nächster Tour mitfüllen",
+        "en": "Refill on next round",
     },
     "put_head": {
         "de": "### 📥 Einlagern / Putaway\n**Wohin mit eingehender Ware?** Die Listen zeigen **freie Plätze** "
@@ -969,16 +1055,30 @@ TR: dict[str, dict[str, str]] = {
         "en": "ℹ️ What do the columns mean?",
     },
     "put_glossary_b": {
-        "de": "- **ABC-Klasse** = im WMS hinterlegte **Stamm-Güteklasse des Platzes** (A = wegoptimaler Premium-Ort). "
-              "Wird hier **nicht** aus Picks berechnet, sondern beschreibt den **Ort**.\n"
-              "- **MAX_LHM** = maximale Anzahl Ladehilfsmittel (Paletten/Behälter) je Platz – kann > 1 sein.\n"
-              "- **IST_LHM** = aktuell stehende Ladehilfsmittel.\n"
-              "- **Freie Kapazität** = `MAX_LHM − IST_LHM`. > 0 heißt: hier passt noch Ware rein (ggf. auch nur teilweise frei).",
-        "en": "- **ABC class** = the **master quality class of the slot** stored in the WMS (A = path-optimal premium location). "
-              "Here it is **not** computed from picks – it describes the **location**.\n"
-              "- **MAX_LHM** = max number of load units (pallets/bins) per slot – can be > 1.\n"
-              "- **IST_LHM** = load units currently present.\n"
-              "- **Free capacity** = `MAX_LHM − IST_LHM`. > 0 means goods still fit (possibly only partially free).",
+        "de": "- **ABC (Platz)** = im WMS hinterlegte **Güteklasse des Ortes** (A = wegoptimaler Premiumplatz). "
+              "Beschreibt den **Platz**, wird hier **nicht** aus Picks berechnet.\n"
+              "- **Kapazität (max. LHM)** = `MAX_LHM` = maximale Anzahl Ladehilfsmittel (Paletten/Behälter), die der "
+              "Platz fasst – kann > 1 sein.\n"
+              "- **Belegt (Ist-LHM)** = `IST_LHM` = wie viele Ladehilfsmittel aktuell schon dort stehen.\n"
+              "- **Frei (LHM)** = `MAX_LHM − IST_LHM` = wie viele LHM noch reinpassen. Hier zählt **frei = teilweise "
+              "ODER ganz frei** (alles mit Restkapazität > 0). **Ganz leere** Plätze (`IST_LHM = 0`) findest du im Tab "
+              "**Nachschub**.\n"
+              "- **Auslastung %** = `Ist-LHM / Kapazität × 100`. 0 % = ganz leer, 100 % = voll; ein freier Platz liegt < 100 %.",
+        "en": "- **ABC (slot)** = the **quality class of the location** stored in the WMS (A = path-optimal premium slot). "
+              "Describes the **slot**, **not** computed from picks here.\n"
+              "- **Capacity (max. LHM)** = `MAX_LHM` = max number of load units (pallets/bins) the slot holds – can be > 1.\n"
+              "- **Occupied (Ist-LHM)** = `IST_LHM` = how many load units are already there.\n"
+              "- **Free (LHM)** = `MAX_LHM − IST_LHM` = how many more units fit. Here **free = partially OR fully free** "
+              "(anything with spare capacity > 0). **Completely empty** slots (`IST_LHM = 0`) are in the **Replenishment** tab.\n"
+              "- **Utilization %** = `Ist-LHM / capacity × 100`. 0 % = empty, 100 % = full; a free slot is < 100 %.",
+    },
+    "put_rowhint": {
+        "de": "Jede Zeile = 1 **freier** Lagerplatz (Kandidat für eingehende Ware), sortiert nach freier Kapazität.",
+        "en": "Each row = 1 **free** slot (candidate for incoming goods), sorted by free capacity.",
+    },
+    "put_blocked_rowhint": {
+        "de": "Jede Zeile = 1 **gesperrter** Platz – nur zur Information, hier wird **nicht** eingelagert.",
+        "en": "Each row = 1 **locked** slot – for information only, do **not** put away here.",
     },
     "sl_fastlevel": {"de": "Fast-Lane bis Ebene", "en": "Fast lane up to level"},
     "sl_fastlevel_h": {
@@ -994,8 +1094,10 @@ TR: dict[str, dict[str, str]] = {
     },
     "put_fast_t": {"de": "Schnelldreher-Plätze", "en": "Fast-mover slots"},
     "put_fast_d": {
-        "de": "Freie A-Plätze bis Ebene {n} – ideal für Schnelldreher.",
-        "en": "Free A slots up to level {n} – ideal for fast movers.",
+        "de": "Freie **A-Plätze bis Ebene {n}**: wegoptimal und auf Greifhöhe → kürzeste Wege. Hier gehören "
+              "**Schnelldreher** hin, weil sie am häufigsten gepickt werden – kurze Wege sparen hier am meisten Zeit.",
+        "en": "Free **A slots up to level {n}**: path-optimal and at reach height → shortest paths. **Fast movers** "
+              "belong here because they are picked most often – short paths save the most time here.",
     },
     "put_fast_v": {
         "de": "Schnelldreher hier einlagern (kurze Wege)",
@@ -1003,8 +1105,10 @@ TR: dict[str, dict[str, str]] = {
     },
     "put_reserve_t": {"de": "Reserve (hohe Ebenen)", "en": "Reserve (high levels)"},
     "put_reserve_d": {
-        "de": "Freie Plätze ab Ebene {n} – für Langsamdreher/Reserve.",
-        "en": "Free slots from level {n} – for slow movers/reserve.",
+        "de": "Freie **Nicht-A-Plätze ab Ebene {n}** (weiter oben/hinten): längere Wege, aber für **Langsamdreher / "
+              "Reserve** völlig ok – so bleiben die knappen A-Plätze für die Schnelldreher frei.",
+        "en": "Free **non-A slots from level {n}** (higher/further back): longer paths, but fine for **slow movers / "
+              "reserve** – this keeps the scarce A slots free for fast movers.",
     },
     "put_reserve_v": {
         "de": "Langsamdreher / Reserve hier einlagern",
@@ -1012,8 +1116,10 @@ TR: dict[str, dict[str, str]] = {
     },
     "put_blocked_t": {"de": "Gesperrt – nicht bestücken", "en": "Locked – do not stock"},
     "put_blocked_d": {
-        "de": "Gesperrte Plätze (Sperrkennzeichen gesetzt) – nicht einlagern.",
-        "en": "Locked slots (lock flag set) – do not put away.",
+        "de": "Plätze mit gesetztem **Sperrkennzeichen** (z. B. Inventur, Defekt, reserviert) – hier darf **nichts** "
+              "eingelagert werden. Bewusst als eigene Liste, damit sie nicht versehentlich bestückt werden.",
+        "en": "Slots with a **lock flag** set (e.g. stocktake, defect, reserved) – **nothing** may be stored here. "
+              "Kept as a separate list so they are not stocked by mistake.",
     },
     "put_blocked_v": {
         "de": "Nicht einlagern – Sperre prüfen",
@@ -1909,20 +2015,81 @@ _MASSNAHME_COLS = [
 # verwirrend. Relevant ist nur Ort, Platz-Guete (ABC) und freie Kapazitaet.
 _PUTAWAY_COLS = [
     "PLATZ_ID", "REGAL", "FACH", "EBENE",
-    "ABC_KLASSE", "MAX_LHM", "IST_LHM", "FREE_CAPACITY",
+    "ABC_KLASSE", "MAX_LHM", "IST_LHM", "FREE_CAPACITY", "UTILIZATION",
 ]
+
+# Sprechende Spaltenkoepfe fuer die Einlagern-Tabellen (technisch -> Klartext).
+# Kapazitaet/Belegt/Frei machen MAX_LHM/IST_LHM/FREE_CAPACITY ohne Vorwissen klar.
+_PUTAWAY_RENAME = {
+    "PLATZ_ID": "Platz",
+    "REGAL": "Regal",
+    "FACH": "Fach",
+    "EBENE": "Ebene",
+    "ABC_KLASSE": "ABC (Platz)",
+    "MAX_LHM": "Kapazität (max. LHM)",
+    "IST_LHM": "Belegt (Ist-LHM)",
+    "FREE_CAPACITY": "Frei (LHM)",
+    "UTILIZATION": "Auslastung %",
+}
+
+# Schlanke Spalten fuer den Nachschub-Tab: jeder Platz ist hier per Definition
+# GANZ leer (IST_LHM = 0), darum sind IST_LHM (immer 0) und WERT (= MAX_LHM x
+# Picks) keine Entscheidungshilfe. Relevant ist: Ort, Platz-Guete (ABC),
+# Pickhaeufigkeit (Dringlichkeit) und wie voll der Platz sein SOLL (MAX_LHM).
+_REPLEN_COLS = [
+    "PLATZ_ID", "REGAL", "FACH", "EBENE",
+    "ABC_KLASSE", "ANZ_PICKS", "MAX_LHM",
+]
+
+# Sprechende Spaltenkoepfe fuer die Nachschub-Tabellen (technisch -> Klartext).
+_REPLEN_RENAME = {
+    "PLATZ_ID": "Platz",
+    "REGAL": "Regal",
+    "FACH": "Fach",
+    "EBENE": "Ebene",
+    "ABC_KLASSE": "ABC (Platz)",
+    "ANZ_PICKS": "Picks (Häufigkeit)",
+    "MAX_LHM": "Soll-LHM",
+    "DAYS_EMPTY": "Tage leer",
+}
+
+# Hilfetexte je (umbenannter) Spalte – als ℹ️ am Tabellenkopf (col_help).
+_REPLEN_HELP = {
+    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im WMS.",
+    "Regal": "Regalnummer im Lager.",
+    "Fach": "Fach innerhalb des Regals.",
+    "Ebene": "Höhe/Ebene des Platzes – niedrig = Pickzone (kurze Greifwege).",
+    "ABC (Platz)": "Im WMS hinterlegte Güteklasse des ORTES (A = wegoptimaler "
+                   "Premiumplatz). Beschreibt den Platz, nicht den Artikel; "
+                   "wird hier nicht aus Picks berechnet.",
+    "Picks (Häufigkeit)": "ANZ_PICKS – wie oft an diesem Platz gepickt wird "
+                          "(WMS-Zugriffszähler). Treiber der Dringlichkeit.",
+    "Soll-LHM": "MAX_LHM – auf so viele Ladehilfsmittel (Paletten/Behälter) "
+                "sollte der Platz aufgefüllt werden.",
+    "Tage leer": "Tage seit dem Leer-Datum (LEER_DATUM) – wie lange der Platz "
+                 "schon ohne Ware ist.",
+}
 
 
 def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                                extra_cols: list[str] | None = None,
                                vorschlag: str | None = None,
-                               cols: list[str] | None = None) -> None:
+                               cols: list[str] | None = None,
+                               rename: dict[str, str] | None = None,
+                               rowhint: str | None = None,
+                               col_help: dict[str, str] | None = None) -> None:
     """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV).
 
     `vorschlag`: optionaler Text, der als zusaetzliche Spalte "Vorschlag"
     (konkrete Handlungsempfehlung) in jede Zeile geschrieben wird.
     `cols`: ersetzt die Standard-Spalten (_MASSNAHME_COLS) durch eine
     tab-spezifische Liste (z. B. Einlagern ohne sinnlose Pick-/Wert-Spalten).
+    `rename`: optionale Zuordnung technischer Spaltennamen -> sprechende
+    Anzeige-Namen (z. B. ANZ_PICKS -> "Picks"); wirkt auf Tabelle UND CSV.
+    `rowhint`: ueberschreibt den Standard-Zeilenhinweis (z. B. Einlagern zeigt
+    FREIE Plaetze, nicht belegte) – sonst gilt massn_rowhint.
+    `col_help`: Anzeige-Spaltenname -> Hilfetext; gibt jeder Spaltenueberschrift
+    ein ℹ️ zum Hovern (beantwortet "was bedeutet diese Spalte?" direkt am Kopf).
 
     Anzeige ist auf 200 Zeilen begrenzt (Performance), der CSV-Download enthaelt
     jedoch ALLE Treffer.
@@ -1932,15 +2099,28 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
     cols = [c for c in cols if c in df.columns]
     st.markdown(f"**{titel}** — {beschreibung}")
     st.metric(t("cat_slots"), de_num(len(df)))
-    st.caption(t("massn_rowhint"))
+    st.caption(rowhint or t("massn_rowhint"))
     if df.empty:
         st.info(t("cat_empty"))
     else:
         show = df[cols].copy()
+        # Auslastung lesbar runden (sonst 33.33333…); nur wenn die Spalte
+        # ueberhaupt mitgefuehrt wird (aktuell nur Einlagern).
+        if "UTILIZATION" in show.columns:
+            show["UTILIZATION"] = show["UTILIZATION"].round(1)
+        if rename:
+            show = show.rename(columns=rename)
         if vorschlag:
             show[t("col_vorschlag")] = vorschlag
+        col_cfg = None
+        if col_help:
+            col_cfg = {
+                c: st.column_config.Column(help=h)
+                for c, h in col_help.items() if c in show.columns
+            }
         st.dataframe(
-            show.head(200), use_container_width=True, hide_index=True
+            show.head(200), use_container_width=True, hide_index=True,
+            column_config=col_cfg,
         )
         key = "".join(c if c.isalnum() else "_" for c in titel.lower())
         _csv_download(show, f"massnahme_{key}")
@@ -2248,13 +2428,21 @@ def render_umlagern(filtered: pd.DataFrame) -> None:
 def render_nachschub(filtered: pd.DataFrame) -> None:
     """Tab 'Nachschub': leere Pickplaetze nach Dringlichkeit."""
     st.markdown(t("replen_head"))
+    # WARUM dieser Tab existiert + Eskalations-Logik der drei Listen.
+    st.caption(t("replen_principle"))
+    # Kurz-Glossar: beantwortet "was heisst leer / was zaehlt als Pick / Spalten".
+    with st.expander(t("replen_glossary_t")):
+        st.markdown(t("replen_glossary_b"))
     c1, c2, c3 = st.columns(3)
     with c1:
-        pick_level = st.slider(t("sl_picklevel"), 1, 6, 2)
+        pick_level = st.slider(t("sl_picklevel"), 1, 6, 2,
+                               help=t("sl_picklevel_h"))
     with c2:
-        pick_threshold = st.slider(t("sl_pickthresh"), 10, 300, 50, step=10)
+        pick_threshold = st.slider(t("sl_pickthresh"), 10, 300, 50, step=10,
+                                   help=t("sl_pickthresh_h"))
     with c3:
-        overdue_days = st.slider(t("sl_overdue"), 3, 60, 14)
+        overdue_days = st.slider(t("sl_overdue"), 3, 60, 14,
+                                 help=t("sl_overdue_h"))
 
     # Basis: leere Pickplaetze (IST_LHM=0) in der Pickzone (niedrige Ebene),
     # nicht gesperrt. Daraus drei Dringlichkeitsstufen:
@@ -2275,16 +2463,32 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
         & (empty_pick["ANZ_PICKS"] < pick_threshold)
     ].sort_values("ANZ_PICKS", ascending=False)
 
+    # Überblick zuerst: wie viele leere Pickplaetze insgesamt und je Stufe?
+    # (Ueberfaellig ist eine Teilmenge von Dringend – siehe Prinzip-Text.)
+    st.markdown(t("replen_overview"))
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric(t("replen_kpi_total"), de_num(len(empty_pick)))
+    k2.metric(t("replen_urgent_t"), de_num(len(urgent)))
+    k3.metric(t("replen_overdue_t"), de_num(len(overdue)))
+    k4.metric(t("replen_medium_t"), de_num(len(medium)))
+    st.divider()
+
     render_massnahme_kategorie(
         t("replen_urgent_t"), t("replen_urgent_d"), urgent,
-        extra_cols=["DAYS_EMPTY"])
+        cols=_REPLEN_COLS, extra_cols=["DAYS_EMPTY"],
+        rename=_REPLEN_RENAME, vorschlag=t("replen_urgent_v"),
+        col_help=_REPLEN_HELP)
     render_massnahme_kategorie(
         t("replen_overdue_t"),
         t("replen_overdue_d").format(n=overdue_days),
-        overdue, extra_cols=["DAYS_EMPTY"])
+        overdue, cols=_REPLEN_COLS, extra_cols=["DAYS_EMPTY"],
+        rename=_REPLEN_RENAME, vorschlag=t("replen_overdue_v"),
+        col_help=_REPLEN_HELP)
     render_massnahme_kategorie(
         t("replen_medium_t"), t("replen_medium_d"), medium,
-        extra_cols=["DAYS_EMPTY"])
+        cols=_REPLEN_COLS, extra_cols=["DAYS_EMPTY"],
+        rename=_REPLEN_RENAME, vorschlag=t("replen_medium_v"),
+        col_help=_REPLEN_HELP)
 
 
 def render_einlagern(filtered: pd.DataFrame) -> None:
@@ -2328,13 +2532,16 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
 
     render_massnahme_kategorie(
         t("put_fast_t"), t("put_fast_d").format(n=fast_level),
-        fast_lane, cols=_PUTAWAY_COLS, vorschlag=t("put_fast_v"))
+        fast_lane, cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
+        rowhint=t("put_rowhint"), vorschlag=t("put_fast_v"))
     render_massnahme_kategorie(
         t("put_reserve_t"), t("put_reserve_d").format(n=reserve_level),
-        reserve, cols=_PUTAWAY_COLS, vorschlag=t("put_reserve_v"))
+        reserve, cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
+        rowhint=t("put_rowhint"), vorschlag=t("put_reserve_v"))
     render_massnahme_kategorie(
         t("put_blocked_t"), t("put_blocked_d"), blocked,
-        cols=_PUTAWAY_COLS, vorschlag=t("put_blocked_v"))
+        cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
+        rowhint=t("put_blocked_rowhint"), vorschlag=t("put_blocked_v"))
 
 
 def render_auslagern(filtered: pd.DataFrame) -> None:
