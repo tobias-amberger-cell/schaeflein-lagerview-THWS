@@ -1548,6 +1548,115 @@ def heatmap_color(util: float) -> str:
     return "GREEN"
 
 
+# Zentrale, einzige Quelle aller in der App verwendeten Formeln/Definitionen.
+# Speist sowohl die komplette Formel-Referenz (render_formulas_popover) als auch
+# die i-Icon-Tooltips je Kennzahl (fhelp). Aenderungen NUR hier pflegen.
+FORMULAS: list[dict] = [
+    {
+        "key": "auslastung",
+        "title": {"de": "Auslastung (%)", "en": "Utilization (%)"},
+        "latex": r"\text{Auslastung}\,[\%] = \frac{\mathrm{IST\_LHM}}{\mathrm{MAX\_LHM}} \times 100",
+        "plain": {"de": "IST_LHM / MAX_LHM × 100",
+                  "en": "IST_LHM / MAX_LHM × 100"},
+        "note": {"de": "0 = leer, 100 = voll, ≥ 200 % = Stammdaten-Artefakt (MAX_LHM zu klein).",
+                 "en": "0 = empty, 100 = full, ≥ 200 % = master-data artefact (MAX_LHM too low)."},
+    },
+    {
+        "key": "avg_util",
+        "title": {"de": "Ø Auslastung", "en": "Avg. utilization"},
+        "latex": r"\varnothing\,\text{Auslastung} = \frac{1}{n}\sum_{i=1}^{n} \frac{\mathrm{IST\_LHM}_i}{\mathrm{MAX\_LHM}_i} \times 100",
+        "plain": {"de": "Mittelwert von IST_LHM / MAX_LHM × 100 über die Auswahl",
+                  "en": "Mean of IST_LHM / MAX_LHM × 100 over the selection"},
+    },
+    {
+        "key": "frei",
+        "title": {"de": "Freie Kapazität (LHM)", "en": "Free capacity (LHM)"},
+        "latex": r"\mathrm{FREE\_CAPACITY} = \mathrm{MAX\_LHM} - \mathrm{IST\_LHM}",
+        "plain": {"de": "MAX_LHM − IST_LHM", "en": "MAX_LHM − IST_LHM"},
+    },
+    {
+        "key": "belegt",
+        "title": {"de": "Belegt", "en": "Occupied"},
+        "latex": r"\mathrm{BELEGT} = (\mathrm{IST\_LHM} > 0)",
+        "plain": {"de": "IST_LHM > 0", "en": "IST_LHM > 0"},
+    },
+    {
+        "key": "gesperrt",
+        "title": {"de": "Gesperrt", "en": "Locked"},
+        "latex": r"\mathrm{GESPERRT} = \big(\mathrm{SPERR\_KNZ} \notin \{\varnothing, 0\}\big)",
+        "plain": {"de": "SPERR_KNZ gesetzt (≠ leer/0)", "en": "SPERR_KNZ set (≠ empty/0)"},
+    },
+    {
+        "key": "tage_leer",
+        "title": {"de": "Tage leer", "en": "Days empty"},
+        "latex": r"\mathrm{DAYS\_EMPTY} = \text{heute} - \mathrm{LEER\_DATUM}",
+        "plain": {"de": "heute − LEER_DATUM (Tage)", "en": "today − LEER_DATUM (days)"},
+    },
+    {
+        "key": "abc_calc",
+        "title": {"de": "ABC berechnet (ABC_CALC)", "en": "ABC calculated (ABC_CALC)"},
+        "latex": r"\text{kum. Pick-Anteil} \le 80\% \Rightarrow A,\quad \le 95\% \Rightarrow B,\quad \text{sonst } C",
+        "plain": {"de": "Sortiert nach Picks; kum. Anteil ≤ 80 %→A, ≤ 95 %→B, sonst C",
+                  "en": "Sorted by picks; cum. share ≤ 80 %→A, ≤ 95 %→B, else C"},
+        "note": {"de": "Plätze/Artikel nach ANZ_PICKS absteigend, kumulativer Anteil.",
+                 "en": "Slots/items by ANZ_PICKS desc., cumulative share."},
+    },
+    {
+        "key": "pick_total",
+        "title": {"de": "Pick-Total", "en": "Pick total"},
+        "latex": r"\mathrm{PICK\_TOTAL} = \mathrm{ANZ\_PICKS} + \mathrm{Q\_PLATZ\text{-}Count}",
+        "plain": {"de": "ANZ_PICKS + Q_PLATZ-Count (Fahrpos)",
+                  "en": "ANZ_PICKS + Q_PLATZ count (Fahrpos)"},
+    },
+    {
+        "key": "wert",
+        "title": {"de": "Wert je Platz", "en": "Slot value"},
+        "latex": r"\mathrm{WERT} = \mathrm{MAX\_LHM} \times \mathrm{ANZ\_PICKS}",
+        "plain": {"de": "MAX_LHM × ANZ_PICKS", "en": "MAX_LHM × ANZ_PICKS"},
+    },
+    {
+        "key": "ampel",
+        "title": {"de": "Heatmap-Ampel", "en": "Heatmap colour"},
+        "latex": r"\text{grün} < 40\,\% \le \text{gelb} < 80\,\% \le \text{rot}",
+        "plain": {"de": "grün < 40 %, gelb 40–79 %, rot ≥ 80 %",
+                  "en": "green < 40 %, yellow 40–79 %, red ≥ 80 %"},
+    },
+    {
+        "key": "ebene_max",
+        "title": {"de": "Ebene-Regler Obergrenze", "en": "Level slider upper bound"},
+        "latex": r"\max\{\,e : \#\{\text{Plätze mit EBENE}=e\} \ge 20\,\}",
+        "plain": {"de": "höchste Ebene mit ≥ 20 Plätzen",
+                  "en": "highest level with ≥ 20 slots"},
+        "note": {"de": "Verhindert, dass Einzel-Ausreißer (EBENE 14–24) die Skala aufblähen.",
+                 "en": "Prevents single outliers (EBENE 14–24) from inflating the scale."},
+    },
+]
+
+_FORMULA_BY_KEY = {f["key"]: f for f in FORMULAS}
+
+
+def fhelp(key: str) -> str:
+    """i-Icon-Tooltip-Text (Formel) je Kennzahl – aus der zentralen FORMULAS-Quelle."""
+    f = _FORMULA_BY_KEY.get(key)
+    if not f:
+        return ""
+    return f"**{f['title'][_LANG]}**\n\n`{f['plain'][_LANG]}`"
+
+
+def render_formulas_popover() -> None:
+    """ℹ️-Button mit ALLEN exakten Formeln (LaTeX) – komplette Referenz."""
+    label = "ℹ️ Formeln" if _LANG == "de" else "ℹ️ Formulas"
+    with st.popover(label):
+        st.markdown("**Formeln & Definitionen**" if _LANG == "de"
+                    else "**Formulas & definitions**")
+        for f in FORMULAS:
+            st.markdown(f"**{f['title'][_LANG]}**")
+            st.latex(f["latex"])
+            note = f.get("note")
+            if note:
+                st.caption(note[_LANG])
+
+
 def _logo_path() -> Path | None:
     """Sucht das Schaeflein-Logo unabhaengig vom Arbeitsverzeichnis."""
     candidates = [
@@ -1769,6 +1878,7 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
                     filtered: pd.DataFrame) -> None:
     """Unter-Tab 'Pick-Heatmap': Picks je Wochentag/Stunde aus TPA."""
     st.markdown(t("pick_intro"))
+    st.caption(t("pick_note"))
     mov_filter_note(movements_filtered, filtered)
     ph = agg_pick_heatmap(tpa)
     if ph.empty:
@@ -2096,7 +2206,8 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         with d2:
             st.markdown(f"**{t('abc_count')}**")
             for klasse in ["A", "B", "C"]:
-                st.metric(klasse, de_num(int(counts[klasse])))
+                st.metric(klasse, de_num(int(counts[klasse])),
+                          help=fhelp("abc_calc"))
 
         # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
         if not by_articles:
@@ -2393,6 +2504,8 @@ def main() -> None:
         st.title("📦 Schaeflein LagerView v1.4")
         st.caption(t("caption"))
 
+    render_formulas_popover()
+
     try:
         platz = load_platz_full()
     except Exception as exc:
@@ -2475,7 +2588,7 @@ def main() -> None:
               f"{occupied/total*100:.1f}%", help=t("m_occupied_help"))
     c3.metric(t("m_avg_util"),
               f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—",
-              help=t("m_avg_util_help"))
+              help=fhelp("avg_util"))
 
     # --- Register/Tabs ---------------------------------------------------
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
