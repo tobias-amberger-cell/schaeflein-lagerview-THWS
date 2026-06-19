@@ -994,9 +994,11 @@ TR: dict[str, dict[str, str]] = {
     },
     "abc_intro": {
         "de": "**ABC-Analyse** — kumulative Verteilung von `ANZ_PICKS`. "
-              "A = Top 80 % Picks, B = nächste 15 %, C = Rest.",
+              "A = Plätze bis {a} % aller Picks, B = bis {b} %, C = Rest "
+              "(passt sich den Reglern oben an).",
         "en": "**ABC analysis** — cumulative distribution of `ANZ_PICKS`. "
-              "A = top 80% of picks, B = next 15%, C = rest.",
+              "A = slots up to {a}% of all picks, B = up to {b}%, C = rest "
+              "(follows the sliders above).",
     },
     "abc_chart": {"de": "ABC-Verteilung (berechnet)", "en": "ABC distribution (calculated)"},
     "abc_cross_intro": {
@@ -1014,12 +1016,14 @@ TR: dict[str, dict[str, str]] = {
     "abc_a_thresh": {"de": "A bis % aller Picks", "en": "A up to % of all picks"},
     "abc_b_thresh": {"de": "B bis % aller Picks", "en": "B up to % of all picks"},
     "abc_thresh_note": {
-        "de": "A/B/C nach **kumuliertem Pick-Anteil** (Pareto): Plätze/Artikel "
-              "nach Picks sortieren, A = die wenigen, die zusammen die ersten "
-              "X % aller Picks ausmachen, B = bis Y %, Rest = C. Standard 80 / 95 %.",
-        "en": "A/B/C by **cumulative pick share** (Pareto): sort slots/items by "
-              "picks, A = the few accounting for the first X % of all picks, "
-              "B = up to Y %, rest = C. Default 80 / 95 %.",
+        "de": "A/B/C nach **kumuliertem Pick-Anteil** (Pareto): nach Picks "
+              "sortieren, A = die wenigen, die zusammen die ersten **{a} %** aller "
+              "Picks ausmachen, B = bis **{b} %**, Rest = C. Verschiebst du die "
+              "Regler, ändert sich die Einteilung sofort (Standard 80 / 95 %).",
+        "en": "A/B/C by **cumulative pick share** (Pareto): sort by picks, "
+              "A = the few accounting for the first **{a}%** of all picks, "
+              "B = up to **{b}%**, rest = C. Moving the sliders re-classifies "
+              "instantly (default 80 / 95 %).",
     },
     "abc_dist_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
     "abc_dist_note": {
@@ -1050,9 +1054,11 @@ TR: dict[str, dict[str, str]] = {
     "abc_py": {"de": "kumulativer Anteil %", "en": "cumulative share %"},
     "abc_intro_articles": {
         "de": "**ABC nach Artikeln** — Artikel nach Bewegungen (TPA). "
-              "A = Top-Artikel bis zur A-Schwelle, dann B, Rest C.",
+              "A = Top-Artikel bis {a} % aller Bewegungen, B = bis {b} %, Rest C "
+              "(passt sich den Reglern oben an).",
         "en": "**ABC by articles** — articles by movements (TPA). "
-              "A = top articles up to the A threshold, then B, rest C.",
+              "A = top articles up to {a}% of all movements, B = up to {b}%, "
+              "rest C (follows the sliders above).",
     },
     "abc_dist": {"de": "ABC-Verteilung", "en": "ABC distribution"},
     "abc_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
@@ -1061,10 +1067,18 @@ TR: dict[str, dict[str, str]] = {
         "en": "**🏷️ ABC adjustment — recommendations**",
     },
     "abc_adjust_intro": {
-        "de": "Plätze, deren Stamm-ABC nicht zur berechneten Klasse passt. "
-              "„Hochstufen“ = wird stärker bewegt als hinterlegt, „Herabstufen“ = umgekehrt.",
-        "en": "Slots whose master ABC differs from the calculated class. "
-              "“Promote” = busier than recorded, “Demote” = the opposite.",
+        "de": "Hier stehen nur Plätze, deren **Stamm-ABC** nicht zur **berechneten** "
+              "Klasse passt. So entsteht die Empfehlung: jede Klasse bekommt einen "
+              "Rang (A = 3, B = 2, C = 1). Ist die *berechnete* Klasse höher als der "
+              "Stamm (z. B. Stamm C, berechnet A) → der Platz wird stärker bewegt als "
+              "hinterlegt → **⬆️ Hochstufen**. Ist sie niedriger (z. B. Stamm A, "
+              "berechnet C) → kaum noch bewegt → **⬇️ Herabstufen**.",
+        "en": "Only slots whose **master ABC** differs from the **calculated** class "
+              "are listed. How the recommendation is derived: each class gets a rank "
+              "(A = 3, B = 2, C = 1). If the *calculated* class is higher than the "
+              "master (e.g. master C, calculated A) → busier than recorded → "
+              "**⬆️ Promote**. If it is lower (e.g. master A, calculated C) → barely "
+              "moved → **⬇️ Demote**.",
     },
     "abc_promote": {"de": "⬆️ Hochstufen", "en": "⬆️ Promote"},
     "abc_demote": {"de": "⬇️ Herabstufen", "en": "⬇️ Demote"},
@@ -2296,7 +2310,6 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     )
     by_articles = abc_mode == t("abc_by_articles")
 
-    st.caption(t("abc_thresh_note"))
     cc1, cc2 = st.columns(2)
     with cc1:
         a_thr = st.slider(t("abc_a_thresh"), 50, 95, 80, step=1,
@@ -2304,18 +2317,20 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     with cc2:
         b_thr = st.slider(t("abc_b_thresh"), a_thr + 1, 99, max(a_thr + 1, 95),
                           step=1, help=fhelp("abc_calc"))
+    # Erklaerung MIT den aktuellen Reglerwerten (aktualisiert sich live).
+    st.caption(t("abc_thresh_note").format(a=a_thr, b=b_thr))
 
     abc_color = {"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"}
 
     if by_articles:
-        st.markdown(t("abc_intro_articles"))
+        st.markdown(t("abc_intro_articles").format(a=a_thr, b=b_thr))
         mov_filter_note(movements_filtered, filtered)
         base = agg_articles(tpa)
         data = classify_abc(base, "bewegungen", a_thr, b_thr) \
             if not base.empty else base
         table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
     else:
-        st.markdown(t("abc_intro"))
+        st.markdown(t("abc_intro").format(a=a_thr, b=b_thr))
         data = classify_abc(filtered, "ANZ_PICKS", a_thr, b_thr)
         table_cols = ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                       "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC"]
