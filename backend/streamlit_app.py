@@ -951,25 +951,73 @@ TR: dict[str, dict[str, str]] = {
         "en": "Pick slot empty with medium pick frequency.",
     },
     "put_head": {
-        "de": "### 📥 Einlagern / Putaway\nWohin eingehende Ware gestellt werden sollte (freie Kapazität).",
-        "en": "### 📥 Put-away\nWhere incoming goods should be stored (free capacity).",
+        "de": "### 📥 Einlagern / Putaway\n**Wohin mit eingehender Ware?** Die Listen zeigen **freie Plätze** "
+              "(`freie Kapazität > 0`), sortiert nach Eignung – Schnelldreher nach vorne/unten, Reserve nach hinten/oben.",
+        "en": "### 📥 Put-away\n**Where to store incoming goods?** The lists show **free slots** "
+              "(`free capacity > 0`), ranked by suitability – fast movers to the front/low, reserve to the back/high.",
+    },
+    "put_principle": {
+        "de": "**Warum dieser Tab?** Jeder Pick kostet Weg. Schnelldreher gehören deshalb auf wegoptimale "
+              "**A-Plätze auf niedriger Ebene** (kurze Greifwege, kein Hochhub); Langsamdreher dürfen weiter oben/hinten "
+              "als Reserve stehen. So sinkt die mittlere Wegzeit pro Pick. Gesperrte Plätze werden bewusst ausgeschlossen.",
+        "en": "**Why this tab?** Every pick costs travel. Fast movers therefore belong in path-optimal "
+              "**A slots on low levels** (short reach, no lifting); slow movers may sit higher/further back as reserve. "
+              "This lowers the average travel time per pick. Locked slots are deliberately excluded.",
+    },
+    "put_glossary_t": {
+        "de": "ℹ️ Was bedeuten die Spalten?",
+        "en": "ℹ️ What do the columns mean?",
+    },
+    "put_glossary_b": {
+        "de": "- **ABC-Klasse** = im WMS hinterlegte **Stamm-Güteklasse des Platzes** (A = wegoptimaler Premium-Ort). "
+              "Wird hier **nicht** aus Picks berechnet, sondern beschreibt den **Ort**.\n"
+              "- **MAX_LHM** = maximale Anzahl Ladehilfsmittel (Paletten/Behälter) je Platz – kann > 1 sein.\n"
+              "- **IST_LHM** = aktuell stehende Ladehilfsmittel.\n"
+              "- **Freie Kapazität** = `MAX_LHM − IST_LHM`. > 0 heißt: hier passt noch Ware rein (ggf. auch nur teilweise frei).",
+        "en": "- **ABC class** = the **master quality class of the slot** stored in the WMS (A = path-optimal premium location). "
+              "Here it is **not** computed from picks – it describes the **location**.\n"
+              "- **MAX_LHM** = max number of load units (pallets/bins) per slot – can be > 1.\n"
+              "- **IST_LHM** = load units currently present.\n"
+              "- **Free capacity** = `MAX_LHM − IST_LHM`. > 0 means goods still fit (possibly only partially free).",
     },
     "sl_fastlevel": {"de": "Fast-Lane bis Ebene", "en": "Fast lane up to level"},
+    "sl_fastlevel_h": {
+        "de": "Bis zu dieser Ebene gilt ein freier A-Platz als „Fast-Lane“ (kurze Wege). "
+              "Höher = mehr Plätze, aber längere Greifwege.",
+        "en": "Up to this level a free A slot counts as ‘fast lane’ (short paths). "
+              "Higher = more slots but longer reach.",
+    },
     "sl_reservelevel": {"de": "Reserve-Ebene ab", "en": "Reserve level from"},
+    "sl_reservelevel_h": {
+        "de": "Ab dieser Ebene gelten freie Nicht-A-Plätze als Reserve für Langsamdreher.",
+        "en": "From this level free non-A slots count as reserve for slow movers.",
+    },
     "put_fast_t": {"de": "Schnelldreher-Plätze", "en": "Fast-mover slots"},
     "put_fast_d": {
         "de": "Freie A-Plätze bis Ebene {n} – ideal für Schnelldreher.",
         "en": "Free A slots up to level {n} – ideal for fast movers.",
+    },
+    "put_fast_v": {
+        "de": "Schnelldreher hier einlagern (kurze Wege)",
+        "en": "Store fast movers here (short paths)",
     },
     "put_reserve_t": {"de": "Reserve (hohe Ebenen)", "en": "Reserve (high levels)"},
     "put_reserve_d": {
         "de": "Freie Plätze ab Ebene {n} – für Langsamdreher/Reserve.",
         "en": "Free slots from level {n} – for slow movers/reserve.",
     },
+    "put_reserve_v": {
+        "de": "Langsamdreher / Reserve hier einlagern",
+        "en": "Store slow movers / reserve here",
+    },
     "put_blocked_t": {"de": "Gesperrt – nicht bestücken", "en": "Locked – do not stock"},
     "put_blocked_d": {
         "de": "Gesperrte Plätze (Sperrkennzeichen gesetzt) – nicht einlagern.",
         "en": "Locked slots (lock flag set) – do not put away.",
+    },
+    "put_blocked_v": {
+        "de": "Nicht einlagern – Sperre prüfen",
+        "en": "Do not store – check lock",
     },
     "retr_head": {
         "de": "### 📤 Auslagern / Retrieval\nLangsamdreher/Ladenhüter, die gute Plätze blockieren und ausgelagert werden sollten.",
@@ -1856,19 +1904,31 @@ _MASSNAHME_COLS = [
     "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM", "WERT",
 ]
 
+# Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
+# Ist-Ware, darum sind ANZ_PICKS/WERT (= MAX_LHM x ANZ_PICKS) hier ~0 und nur
+# verwirrend. Relevant ist nur Ort, Platz-Guete (ABC) und freie Kapazitaet.
+_PUTAWAY_COLS = [
+    "PLATZ_ID", "REGAL", "FACH", "EBENE",
+    "ABC_KLASSE", "MAX_LHM", "IST_LHM", "FREE_CAPACITY",
+]
+
 
 def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                                extra_cols: list[str] | None = None,
-                               vorschlag: str | None = None) -> None:
+                               vorschlag: str | None = None,
+                               cols: list[str] | None = None) -> None:
     """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV).
 
     `vorschlag`: optionaler Text, der als zusaetzliche Spalte "Vorschlag"
     (konkrete Handlungsempfehlung) in jede Zeile geschrieben wird.
+    `cols`: ersetzt die Standard-Spalten (_MASSNAHME_COLS) durch eine
+    tab-spezifische Liste (z. B. Einlagern ohne sinnlose Pick-/Wert-Spalten).
 
     Anzeige ist auf 200 Zeilen begrenzt (Performance), der CSV-Download enthaelt
     jedoch ALLE Treffer.
     """
-    cols = _MASSNAHME_COLS + (extra_cols or [])
+    base = cols if cols is not None else _MASSNAHME_COLS
+    cols = base + (extra_cols or [])
     cols = [c for c in cols if c in df.columns]
     st.markdown(f"**{titel}** — {beschreibung}")
     st.metric(t("cat_slots"), de_num(len(df)))
@@ -2230,11 +2290,19 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
 def render_einlagern(filtered: pd.DataFrame) -> None:
     """Tab 'Einlagern': wohin eingehende Ware (freie A-Plaetze + Reserve)."""
     st.markdown(t("put_head"))
+    # WARUM dieser Tab existiert + das Einlager-Prinzip (kurze Wege fuer
+    # Schnelldreher) – beantwortet die "Sinn"-Frage direkt im Tab.
+    st.caption(t("put_principle"))
+    # Kurz-Glossar: was bedeuten ABC-Klasse / MAX_LHM / freie Kapazitaet?
+    with st.expander(t("put_glossary_t")):
+        st.markdown(t("put_glossary_b"))
     c1, c2 = st.columns(2)
     with c1:
-        fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2)
+        fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2,
+                               help=t("sl_fastlevel_h"))
     with c2:
-        reserve_level = st.slider(t("sl_reservelevel"), 1, 6, 3)
+        reserve_level = st.slider(t("sl_reservelevel"), 1, 6, 3,
+                                  help=t("sl_reservelevel_h"))
     free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
 
     # Schnelldreher-Plaetze: freie A-Plaetze auf niedriger Ebene -> kurze
@@ -2260,13 +2328,13 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
 
     render_massnahme_kategorie(
         t("put_fast_t"), t("put_fast_d").format(n=fast_level),
-        fast_lane, extra_cols=["FREE_CAPACITY"])
+        fast_lane, cols=_PUTAWAY_COLS, vorschlag=t("put_fast_v"))
     render_massnahme_kategorie(
         t("put_reserve_t"), t("put_reserve_d").format(n=reserve_level),
-        reserve, extra_cols=["FREE_CAPACITY"])
+        reserve, cols=_PUTAWAY_COLS, vorschlag=t("put_reserve_v"))
     render_massnahme_kategorie(
         t("put_blocked_t"), t("put_blocked_d"), blocked,
-        extra_cols=["FREE_CAPACITY"])
+        cols=_PUTAWAY_COLS, vorschlag=t("put_blocked_v"))
 
 
 def render_auslagern(filtered: pd.DataFrame) -> None:
