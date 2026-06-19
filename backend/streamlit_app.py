@@ -1011,8 +1011,36 @@ TR: dict[str, dict[str, str]] = {
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
     "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
-    "abc_a_thresh": {"de": "A bis kumul. %", "en": "A up to cum. %"},
-    "abc_b_thresh": {"de": "B bis kumul. %", "en": "B up to cum. %"},
+    "abc_a_thresh": {"de": "A bis % aller Picks", "en": "A up to % of all picks"},
+    "abc_b_thresh": {"de": "B bis % aller Picks", "en": "B up to % of all picks"},
+    "abc_thresh_note": {
+        "de": "A/B/C nach **kumuliertem Pick-Anteil** (Pareto): Plätze/Artikel "
+              "nach Picks sortieren, A = die wenigen, die zusammen die ersten "
+              "X % aller Picks ausmachen, B = bis Y %, Rest = C. Standard 80 / 95 %.",
+        "en": "A/B/C by **cumulative pick share** (Pareto): sort slots/items by "
+              "picks, A = the few accounting for the first X % of all picks, "
+              "B = up to Y %, rest = C. Default 80 / 95 %.",
+    },
+    "abc_dist_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
+    "abc_dist_note": {
+        "de": "Tortendiagramm = **Anzahl** Plätze/Artikel je Klasse. Die Tabelle "
+              "daneben zeigt den **Pick-Anteil** je Klasse – so wird der Pareto-"
+              "Effekt sichtbar: wenige A-Einträge tragen den Großteil der Picks.",
+        "en": "Pie = **count** of slots/items per class. The table next to it shows "
+              "the **pick share** per class – making the Pareto effect visible: a "
+              "few A entries carry most of the picks.",
+    },
+    "abc_col_count": {"de": "Anzahl", "en": "Count"},
+    "abc_col_share": {"de": "Anteil %", "en": "Share %"},
+    "abc_stamm_note": {
+        "de": "**Stamm** = die im WMS hinterlegte `ABC_KLASSE`. **Berechnet** = aus "
+              "dem kumulierten Pick-Anteil (`kumul. Pick-%`). Weichen beide ab, ist "
+              "der Platz ein Kandidat für eine ABC-Anpassung.",
+        "en": "**Master** = the `ABC_KLASSE` stored in the WMS. **Calculated** = from "
+              "the cumulative pick share (`cum. pick %`). If they differ, the slot is "
+              "a candidate for an ABC adjustment.",
+    },
+    "abc_cumcol": {"de": "kumul. Pick-%", "en": "cum. pick %"},
     "abc_pareto": {
         "de": "Pareto-Kurve — kumulativer Anteil der Bewegungen",
         "en": "Pareto curve — cumulative share of movements",
@@ -2268,12 +2296,14 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     )
     by_articles = abc_mode == t("abc_by_articles")
 
+    st.caption(t("abc_thresh_note"))
     cc1, cc2 = st.columns(2)
     with cc1:
-        a_thr = st.slider(t("abc_a_thresh"), 50, 95, 80, step=1)
+        a_thr = st.slider(t("abc_a_thresh"), 50, 95, 80, step=1,
+                          help=fhelp("abc_calc"))
     with cc2:
         b_thr = st.slider(t("abc_b_thresh"), a_thr + 1, 99, max(a_thr + 1, 95),
-                          step=1)
+                          step=1, help=fhelp("abc_calc"))
 
     abc_color = {"A": "#c62828", "B": "#f9a825", "C": "#2e7d32"}
 
@@ -2293,21 +2323,33 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     if data.empty:
         st.info(t("no_data_filters"))
     else:
-        # Verteilung (Pie + Anzahl je Klasse)
+        # Wertespalte je Sicht (Artikel = Bewegungen, Plaetze = ANZ_PICKS).
+        val_col = "bewegungen" if by_articles else "ANZ_PICKS"
+        val_label = t("picks_label")
+        # Verteilung: Pie = ANZAHL je Klasse; Tabelle daneben = Pick-Anteil je
+        # Klasse -> macht den Pareto-Effekt sichtbar (wenige A = Grossteil Picks).
+        st.caption(t("abc_dist_note"))
         counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
+        picks_sum = (data.groupby("ABC")[val_col].sum()
+                     .reindex(["A", "B", "C"]).fillna(0))
+        total_picks = picks_sum.sum() or 1
+        summary = pd.DataFrame({
+            t("abc_col_count"): counts.astype(int).values,
+            val_label: picks_sum.astype(int).values,
+            t("abc_col_share"): (picks_sum / total_picks * 100).round(1).values,
+        }, index=["A", "B", "C"])
+        summary.index.name = t("abc")
         d1, d2 = st.columns([2, 1])
         with d1:
             st.plotly_chart(
                 px.pie(names=counts.index, values=counts.values,
                        color=counts.index, color_discrete_map=abc_color,
-                       title=t("abc_dist")),
+                       title=t("abc_dist_count")),
                 use_container_width=True,
             )
         with d2:
             st.markdown(f"**{t('abc_count')}**")
-            for klasse in ["A", "B", "C"]:
-                st.metric(klasse, de_num(int(counts[klasse])),
-                          help=fhelp("abc_calc"))
+            st.dataframe(summary, use_container_width=True)
 
         # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
         if not by_articles:
@@ -2317,6 +2359,7 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
             # gedacht -> "Hochstufen"; umgekehrt -> "Herabstufen".
             st.markdown(t("abc_adjust_head"))
             st.markdown(t("abc_adjust_intro"))
+            st.caption(t("abc_stamm_note"))
             rank = {"A": 3, "B": 2, "C": 1}
             dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
             dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]  # nur Abweichungen
@@ -2336,8 +2379,9 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                 mcols[1].metric(t("abc_demote"), de_num(n_dem))
                 dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
                     ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                     "ANZ_PICKS", "ABC_KLASSE", "ABC", t("abc_rec")]
-                ].rename(columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet"})
+                     "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC", t("abc_rec")]
+                ].rename(columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet",
+                                  "CUM_%": t("abc_cumcol")})
                 st.dataframe(dev_tbl.head(200), use_container_width=True,
                              hide_index=True)
                 _csv_download(dev_tbl, "abc_anpassung")
