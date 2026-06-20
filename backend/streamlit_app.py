@@ -1168,28 +1168,26 @@ TR: dict[str, dict[str, str]] = {
               "Kategorie** ein Platz fällt. Die Filterregel **ist** die Empfehlung. Alle Kriterien stehen als "
               "Spalte in der Tabelle, der Vorschlag ist also nachprüfbar:\n\n"
               "1. **Schnelldreher-Plätze** → *„Schnelldreher hier einlagern“*\n"
-              "   Platz ist **frei** (`Frei > 0`) **und** ABC (Platz) = **A** **und** Ebene **≤ {fast}** **und** "
-              "nicht gesperrt. Sortiert nach **Frei** absteigend (größte Lücke zuerst).\n"
+              "   Platz ist **frei** (`Frei > 0`) **und** ABC (Platz) = **A** **und** Ebene **≤** dem Regler "
+              "„Fast-Lane bis Ebene“ **und** nicht gesperrt. Sortiert nach **Frei** absteigend (größte Lücke zuerst).\n"
               "2. **Reserve** → *„Langsamdreher/Reserve hier einlagern“*\n"
-              "   Platz ist **frei** **und** ABC (Platz) **≠ A** **und** Ebene **≥ {reserve}** **und** nicht "
-              "gesperrt. Sortiert nach **Frei** absteigend.\n"
+              "   Platz ist **frei** **und** ABC (Platz) **≠ A** **und** Ebene **≥** dem Regler „Reserve-Ebene ab“ "
+              "**und** nicht gesperrt. Sortiert nach **Frei** absteigend.\n"
               "3. **Gesperrt** → *„Nicht einlagern“*\n"
-              "   **Sperrkennzeichen gesetzt** (unabhängig von frei/belegt) – darf nicht bestückt werden.\n\n"
-              "Die beiden Ebenen-Schwellen (**{fast}** / **{reserve}**) stellst du oben mit den Reglern ein; "
-              "die Listen aktualisieren sich sofort.",
+              "   Platz wäre frei, ist aber **gesperrt** (Sperrkennzeichen gesetzt) – darf nicht bestückt werden.\n\n"
+              "Die beiden Ebenen-Schwellen stellst du **unten mit den Reglern** ein; die Listen aktualisieren sich sofort.",
         "en": "The **suggestion** is not a case-by-case score – it follows directly from **which category** a slot "
               "falls into. The filter rule **is** the recommendation, and every criterion is shown as a column, so "
               "it is verifiable:\n\n"
               "1. **Fast-mover slots** → *“Store fast movers here”*\n"
-              "   Slot is **free** (`Free > 0`) **and** ABC (slot) = **A** **and** level **≤ {fast}** **and** not "
-              "locked. Sorted by **Free** descending (largest gap first).\n"
+              "   Slot is **free** (`Free > 0`) **and** ABC (slot) = **A** **and** level **≤** the “Fast lane up to "
+              "level” slider **and** not locked. Sorted by **Free** descending (largest gap first).\n"
               "2. **Reserve** → *“Store slow movers/reserve here”*\n"
-              "   Slot is **free** **and** ABC (slot) **≠ A** **and** level **≥ {reserve}** **and** not locked. "
-              "Sorted by **Free** descending.\n"
+              "   Slot is **free** **and** ABC (slot) **≠ A** **and** level **≥** the “Reserve level from” slider "
+              "**and** not locked. Sorted by **Free** descending.\n"
               "3. **Locked** → *“Do not put away”*\n"
-              "   **Lock flag set** (regardless of free/occupied) – must not be stocked.\n\n"
-              "The two level thresholds (**{fast}** / **{reserve}**) are set with the sliders above; the lists "
-              "update instantly.",
+              "   Slot would be free but is **locked** (lock flag set) – must not be stocked.\n\n"
+              "The two level thresholds are set **with the sliders below**; the lists update instantly.",
     },
     "put_fast_t": {"de": "Schnelldreher-Plätze", "en": "Fast-mover slots"},
     "put_fast_d": {
@@ -2750,7 +2748,12 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
         st.markdown(t("put_twocrit"))
         st.markdown(t("put_cols_head"))
         st.markdown(t("put_glossary_b"))
-    # 2) SCHIEBEREGLER
+    # 2) WIE ENTSTEHT DER VORSCHLAG? Die Kategorie-Filterregel IST die Empfehlung.
+    #    Steht VOR den Reglern -> Text generisch (verweist auf die Regler unten),
+    #    keine Live-Reglerwerte (die gibt es hier noch nicht).
+    with st.expander(t("put_logic_t")):
+        st.markdown(t("put_logic_b"))
+    # 3) SCHIEBEREGLER
     c1, c2 = st.columns(2)
     with c1:
         fast_level = st.slider(t("sl_fastlevel"), 1, 6, 2,
@@ -2758,10 +2761,6 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
     with c2:
         reserve_level = st.slider(t("sl_reservelevel"), 1, 6, 3,
                                   help=t("sl_reservelevel_h"))
-    # 3) WIE ENTSTEHT DER VORSCHLAG? Die Kategorie-Filterregel IST die Empfehlung;
-    #    die Regelwerte folgen live den Reglern oben.
-    with st.expander(t("put_logic_t")):
-        st.markdown(t("put_logic_b").format(fast=fast_level, reserve=reserve_level))
 
     # Freie Plaetze = Restkapazitaet > 0. Nutzbar = nicht gesperrt.
     free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
