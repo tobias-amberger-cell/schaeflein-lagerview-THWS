@@ -818,6 +818,59 @@ TR: dict[str, dict[str, str]] = {
         "en": "**Warehouse overview** — occupancy, utilization and ABC "
               "distribution for the whole warehouse BER03 (single hall).",
     },
+    "halls_info_t": {
+        "de": "ℹ️ Was bedeutet das? — zentrale Begriffe (gelten für ALLE Tabs)",
+        "en": "ℹ️ What does this mean? — central terms (apply to ALL tabs)",
+    },
+    "halls_info_b": {
+        "de": "Diese Übersicht fasst das **ganze (gefilterte) Lager** zusammen. Die wichtigsten Begriffe – sie "
+              "gelten in **allen Tabs** gleich:\n\n"
+              "- **Belegt** = an einem Platz steht **mind. ein** Ladehilfsmittel (`Ist-LHM > 0`) – zählt **auch bei "
+              "teilweiser** Belegung, nicht erst wenn voll.\n"
+              "- **Frei / leer** = es passt noch etwas rein (`freie Kapazität > 0`). **Ganz leer** = gar kein LHM "
+              "(`Ist-LHM = 0`).\n"
+              "- **Auslastung** = `Ist-LHM / Kapazität × 100`. 0 % = leer, 100 % = voll. (Ø Auslastung = Mittel über "
+              "alle Plätze.)\n"
+              "- **Kapazität (MAX_LHM)** = wie viele Ladehilfsmittel (Paletten/Behälter) ein Platz fasst – **kann > "
+              "1 sein**.\n"
+              "- **Pick / Bewegung** = ein Datensatz in den TPA-Daten = **eine Auftragsposition** (eine Entnahme). "
+              "*Ob das genau einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert.*\n"
+              "- **ABC eines Platzes** – zwei Bedeutungen:\n"
+              "    - **Stamm-ABC** = die im Lagersystem hinterlegte **Güteklasse des Ortes** (A = wegoptimaler "
+              "Premiumplatz). Beschreibt den **Platz**.\n"
+              "    - **Berechnete ABC** = aus dem **kumulierten Pick-Anteil** ermittelt (viel gepickt → A). "
+              "Beschreibt die **tatsächliche Nutzung** (Details im ABC-Tab).\n"
+              "- **ABC eines Artikels (SKU)** = nach **Bewegungen** (kumulierter Anteil): meistbewegte Artikel bis "
+              "~80 % → A, bis ~95 % → B, Rest → C.\n\n"
+              "**Spalten dieser Tabelle:** *Plätze* = Anzahl Stellplätze · *Belegt/Frei* = wie viele davon · "
+              "*Belegung %* = Belegt/Plätze · *Ø Auslastung %* = mittlere Füllung · *Picks gesamt* = alle Zugriffe · "
+              "*A/B/C-Plätze* = Verteilung nach **berechneter** ABC.\n\n"
+              "*Alle Tabellen lassen sich als CSV herunterladen – inkl. der aktuell gesetzten Filter (als "
+              "Kommentarzeile) und mit **allen** Treffern, nicht nur den angezeigten.*",
+        "en": "This overview summarizes the **whole (filtered) warehouse**. The key terms – they apply the same in "
+              "**all tabs**:\n\n"
+              "- **Occupied** = a slot holds **at least one** load unit (`Ist-LHM > 0`) – counts **even when "
+              "partially** filled, not only when full.\n"
+              "- **Free / empty** = something still fits (`free capacity > 0`). **Completely empty** = no load unit "
+              "(`Ist-LHM = 0`).\n"
+              "- **Utilization** = `Ist-LHM / capacity × 100`. 0 % = empty, 100 % = full. (Avg. = mean over all "
+              "slots.)\n"
+              "- **Capacity (MAX_LHM)** = how many load units (pallets/bins) a slot holds – **can be > 1**.\n"
+              "- **Pick / movement** = one record in the TPA data = **one order line** (a pick). *Whether this "
+              "equals exactly one order row or one article is defined in the warehouse system (WMS).*\n"
+              "- **ABC of a slot** – two meanings:\n"
+              "    - **Master ABC** = the **quality class of the location** stored in the warehouse system (A = "
+              "path-optimal premium slot). Describes the **slot**.\n"
+              "    - **Calculated ABC** = derived from the **cumulative pick share** (much picked → A). Describes "
+              "the **actual usage** (details in the ABC tab).\n"
+              "- **ABC of an article (SKU)** = by **movements** (cumulative share): most-moved articles up to ~80 % "
+              "→ A, up to ~95 % → B, rest → C.\n\n"
+              "**Columns of this table:** *Slots* = number of slots · *Occupied/Free* = how many · *Occupancy %* = "
+              "occupied/slots · *Avg. utilization %* = mean fill · *Total picks* = all accesses · *A/B/C slots* = "
+              "distribution by **calculated** ABC.\n\n"
+              "*All tables can be downloaded as CSV – including the currently set filters (as a comment line) and "
+              "with **all** matches, not just the displayed ones.*",
+    },
     "halls_kpis": {"de": "**Kennzahlen Lager gesamt**", "en": "**Metrics (whole warehouse)**"},
     "halls_chart": {
         "de": "Belegung Lager gesamt (gefiltert)",
@@ -2549,6 +2602,10 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
 def render_uebersicht(filtered: pd.DataFrame) -> None:
     """Tab 'Übersicht': Belegung/Auslastung/ABC fuer das gesamte Lager."""
     st.markdown(t("halls_intro"))
+    # Zentrale Legende: beantwortet die generellen Begriffe (belegt/leer/
+    # Auslastung/Pick/ABC) EINMAL fuer alle Tabs (Lehrer-Feedback).
+    with st.expander(t("halls_info_t")):
+        st.markdown(t("halls_info_b"))
     # Eine Halle: das gesamte (gefilterte) Lager als EIN Block zusammenfassen.
     # Kein Regal->Halle-Split mehr; HALLE ist hier nur ein konstantes Label.
     df_h = filtered.assign(HALLE="Lager BER03")
@@ -2595,9 +2652,25 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
         "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
     ]].rename(columns={
         "HALLE": "Lager", "total_slots": "Plätze", "occupied": "Belegt",
-        "frei": "Frei", "picks": "Picks gesamt",
+        "frei": "Frei", "Belegung_%": "Belegung %",
+        "Ø_Auslastung_%": "Ø Auslastung %", "picks": "Picks gesamt",
     })
-    st.dataframe(show, use_container_width=True, hide_index=True)
+    halls_help = {
+        "Plätze": "Anzahl Stellplätze im (gefilterten) Lager.",
+        "Belegt": "Plätze mit mindestens einem Ladehilfsmittel (Ist-LHM > 0).",
+        "Frei": "Plätze mit freier Kapazität (es passt noch etwas rein).",
+        "Belegung %": "Belegt / Plätze × 100.",
+        "Ø Auslastung %": "Mittlere Auslastung (Ist-LHM / Kapazität × 100) über "
+                          "alle Plätze.",
+        "Picks gesamt": "Summe aller Zugriffe (ANZ_PICKS) im gefilterten Lager.",
+        "A-Plätze": "Plätze mit berechneter Klasse A (viel gepickt).",
+        "B-Plätze": "Plätze mit berechneter Klasse B.",
+        "C-Plätze": "Plätze mit berechneter Klasse C (wenig/nicht gepickt).",
+    }
+    col_cfg = {c: st.column_config.Column(help=h)
+               for c, h in halls_help.items() if c in show.columns}
+    st.dataframe(show, use_container_width=True, hide_index=True,
+                 column_config=col_cfg)
     _csv_download(show, "lager_kennzahlen")
 
 
