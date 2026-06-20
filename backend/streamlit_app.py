@@ -793,7 +793,6 @@ TR: dict[str, dict[str, str]] = {
     # Tab-Titel
     "tab_halls": {"de": "Übersicht", "en": "Overview"},
     "tab_misc": {"de": "Sonstiges", "en": "Other"},
-    "tab_util": {"de": "Auslastungs-Heatmap", "en": "Utilization heatmap"},
     "tab_pick": {"de": "Pick-Heatmap", "en": "Pick heatmap"},
     "tab_bottle": {"de": "Hochfrequenz-Plätze", "en": "High-frequency slots"},
     "tab_free": {"de": "Free Capacity", "en": "Free capacity"},
@@ -824,23 +823,10 @@ TR: dict[str, dict[str, str]] = {
         "de": "Belegung Lager gesamt (gefiltert)",
         "en": "Occupancy whole warehouse (filtered)",
     },
-    "heat_chart": {
-        "de": "Auslastung je Regal/Ebene (IST/MAX × 100)",
-        "en": "Utilization per rack/level (actual/max × 100)",
-    },
     "pick_chart": {
         "de": "Pick-Aktivität je Wochentag/Stunde",
         "en": "Pick activity per weekday/hour",
     },
-    "heat_intro": {
-        "de": "**Auslastungs-Heatmap** — durchschnittliche Auslastung "
-              "(`IST_LHM / MAX_LHM × 100`) je Regal und Ebene. Rot = voll, "
-              "grün = viel Luft. Darunter die am stärksten ausgelasteten Regale.",
-        "en": "**Utilization heatmap** — average utilization "
-              "(`IST_LHM / MAX_LHM × 100`) per rack and level. Red = full, "
-              "green = lots of space. Below: the most-utilized racks.",
-    },
-    "heat_racks": {"de": "**Regale nach Ø Auslastung**", "en": "**Racks by avg. utilization**"},
     "pick_intro": {
         "de": "**Pick-Heatmap** — Bewegungen je Wochentag und Stunde (aus den "
               "TPA-Daten). Zeigt, wann am meisten gepickt wird.",
@@ -1991,17 +1977,6 @@ def load_slot_3d_map() -> str:
     return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
 
 
-def heatmap_color(util: float) -> str:
-    """Aus warehouse_heatmap.py."""
-    if pd.isna(util):
-        return "GREY"
-    if util >= 80:
-        return "RED"
-    if util >= 40:
-        return "YELLOW"
-    return "GREEN"
-
-
 # Zentrale, einzige Quelle aller in der App verwendeten Formeln/Definitionen.
 # Speist sowohl die komplette Formel-Referenz (render_formulas_popover) als auch
 # die i-Icon-Tooltips je Kennzahl (fhelp). Aenderungen NUR hier pflegen.
@@ -2421,55 +2396,6 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
     })
     st.dataframe(show, use_container_width=True, hide_index=True)
     _csv_download(show, "lager_kennzahlen")
-
-
-def render_heatmap(filtered: pd.DataFrame) -> None:
-    """Unter-Tab 'Auslastungs-Heatmap': Ø Auslastung je Regal/Ebene."""
-    st.markdown(t("heat_intro"))
-    if filtered.empty:
-        st.info(t("no_data_filters"))
-    else:
-        pivot = filtered.pivot_table(
-            index="EBENE", columns="REGAL",
-            values="UTILIZATION", aggfunc="mean",
-        )
-        fig = px.imshow(
-            pivot,
-            color_continuous_scale="RdYlGn_r",
-            range_color=[0, 120],
-            aspect="auto",
-            labels=dict(x="Regal", y="Ebene", color="Auslastung %"),
-            title=t("heat_chart"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        color_counts = (
-            filtered["UTILIZATION"].apply(heatmap_color)
-            .value_counts()
-            .reindex(["GREEN", "YELLOW", "RED", "GREY"]).fillna(0)
-        )
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("🟢 < 40 %", int(color_counts["GREEN"]))
-        col2.metric("🟡 40–79 %", int(color_counts["YELLOW"]))
-        col3.metric("🔴 ≥ 80 %", int(color_counts["RED"]))
-        col4.metric("⚪ unbekannt", int(color_counts["GREY"]))
-
-        st.markdown(t("heat_racks"))
-        rack_util = (
-            filtered.groupby(["REGAL"])
-            .agg(
-                Plätze=("PLATZ_ID", "count"),
-                Ø_Auslastung_=("UTILIZATION", "mean"),
-                Überlastet=("UTILIZATION", lambda s: int((s > 100).sum())),
-            )
-            .reset_index()
-            .rename(columns={"REGAL": "Regal",
-                             "Ø_Auslastung_": "Ø Auslastung %"})
-        )
-        rack_util["Ø Auslastung %"] = rack_util["Ø Auslastung %"].round(1)
-        rack_util = rack_util.sort_values("Ø Auslastung %", ascending=False)
-        st.dataframe(rack_util, use_container_width=True, hide_index=True)
-        _csv_download(rack_util, "regal_auslastung")
 
 
 def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
@@ -3457,17 +3383,14 @@ def main() -> None:
     # erzeugt; ihre Inhalte folgen weiter unten als `with sub_*` und landen
     # dadurch verschachtelt unter "Sonstiges".
     with tab_sonstiges:
-        (sub_heat, sub_bottle, sub_free, sub_trend, sub_top,
+        (sub_bottle, sub_free, sub_trend, sub_top,
          sub_pickheat) = st.tabs([
-            t("tab_util"), t("tab_bottle"), t("tab_free"),
+            t("tab_bottle"), t("tab_free"),
             t("tab_tp"), t("tab_top"), t("tab_pick"),
         ])
 
     with tab_uebersicht:
         render_uebersicht(filtered)
-
-    with sub_heat:
-        render_heatmap(filtered)
 
     with sub_pickheat:
         render_pickheat(tpa, movements_filtered, filtered)
