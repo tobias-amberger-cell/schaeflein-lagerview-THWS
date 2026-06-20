@@ -1018,9 +1018,7 @@ TR: dict[str, dict[str, str]] = {
               "3. **A weit oben** – **A**-Platz mit Picks, aber **Ebene ≥ Regler** → ergonomisch ungünstig "
               "(Hochhub). → nach unten holen.\n\n"
               "**Zielplatz-Vorschlag** = ein konkreter freier Platz, der passt (niedrige Ebene für heiße/hohe A, "
-              "Reserve oben für ungenutzte A); 1:1 nach freier Kapazität zugeordnet.\n\n"
-              "**Spalte „Wert (Bedeutung)“** = `Kapazität × Picks` (MAX_LHM × ANZ_PICKS): grobes Maß, wie viel an "
-              "einem Platz „los“ ist.",
+              "Reserve oben für ungenutzte A); 1:1 nach freier Kapazität zugeordnet.",
         "en": "**Relocation** = move an article from a **worse to a better slot** – **without** new goods coming "
               "in. Goal: free up premium slots (A, low level) for fast movers.\n\n"
               "**How the lists are built (filter rules, every criterion is a column):**\n"
@@ -1031,9 +1029,7 @@ TR: dict[str, dict[str, str]] = {
               "3. **A high up** – **A** slot with picks but **level ≥ slider** → ergonomically poor (lifting). → "
               "bring down.\n\n"
               "**Suggested target slot** = a concrete free slot that fits (low level for hot/high A, reserve up for "
-              "unused A); matched 1:1 by free capacity.\n\n"
-              "**Column “Value”** = `capacity × picks` (MAX_LHM × ANZ_PICKS): a rough measure of how much is going "
-              "on at a slot.",
+              "unused A); matched 1:1 by free capacity.",
     },
     "reloc_abc_help": {
         "de": "Welche Klassen anzeigen: A blendet „Premium ungenutzt“ + „A weit "
@@ -1395,8 +1391,8 @@ TR: dict[str, dict[str, str]] = {
               "2. **Abgestanden** – belegt, **0 Picks**, aber **kein** A-Platz → bewegt sich nicht, Auslagern "
               "prüfen.\n"
               "3. **Beobachten** – belegt, aber **sehr selten** gepickt (1 bis Regler-Wert) → im Auge behalten.\n\n"
-              "**Was heißt „belegt“?** `Ist-LHM > 0` (mind. ein Ladehilfsmittel steht drauf). **Was heißt „Wert“?** "
-              "`Kapazität × Picks` – bei **0 Picks ist der Wert 0**, genau das Signal für „blockiert ohne Nutzen“.",
+              "**Was heißt „belegt“?** `Ist-LHM > 0` (mind. ein Ladehilfsmittel steht drauf). Das **Signal "
+              "„blockiert ohne Nutzen“** ist hier: belegt **und 0 Picks** – der Platz trägt Ware, bewegt sie aber nie.",
         "en": "**Retrieval** = remove goods that **block a good slot but barely move** from the pick zone (to "
               "reserve/high-bay or out). This frees good slots for movers.\n\n"
               "Only **occupied** slots (`Occupied > 0`) in the **pick zone** (up to the set level) are "
@@ -1406,9 +1402,8 @@ TR: dict[str, dict[str, str]] = {
               "first.\n"
               "2. **Stale** – occupied, **0 picks**, but **not** an A slot → not moving, consider retrieval.\n"
               "3. **Observe** – occupied but **very rarely** picked (1 to slider value) → keep an eye on it.\n\n"
-              "**What does “occupied” mean?** `Ist-LHM > 0` (at least one load unit present). **What does “value” "
-              "mean?** `capacity × picks` – with **0 picks the value is 0**, exactly the signal for “blocked "
-              "without use”.",
+              "**What does “occupied” mean?** `Ist-LHM > 0` (at least one load unit present). The **“blocked without "
+              "use” signal** here is: occupied **and 0 picks** – the slot holds goods but never moves them.",
     },
     "sl_retrzone": {"de": "Pickzone bis Ebene", "en": "Pick zone up to level"},
     "sl_observe": {"de": "„Beobachten“ bis Picks", "en": "‘Observe’ up to picks"},
@@ -1909,10 +1904,6 @@ def load_platz_full() -> pd.DataFrame:
         np.nan,
     )
     platz["FREE_CAPACITY"] = (platz["MAX_LHM"].fillna(0) - platz["IST_LHM"].fillna(0))
-    # WERT = Platzkapazitaet (MAX_LHM) x Picks. Ersatz fuer "Gewicht x Picks"
-    # (GEWICHT liegt in den Daten nur als 0 vor) -> grober Bedeutungswert je
-    # Platz fuer die Massnahmen-Tabellen.
-    platz["WERT"] = platz["MAX_LHM"].fillna(0) * platz["ANZ_PICKS"]
     # Belegt = physisch Ware vorhanden (IST_LHM > 0). ZUSTAND ist hier KEIN
     # verlaesslicher Indikator (nur Werte 0/150; nur ~19% der 150er haben
     # IST_LHM>0). Konsistent mit UTILIZATION/FREE_CAPACITY, die ebenfalls auf
@@ -2233,12 +2224,6 @@ FORMULAS: list[dict] = [
                   "en": "ANZ_PICKS + Q_PLATZ count (Fahrpos)"},
     },
     {
-        "key": "wert",
-        "title": {"de": "Wert je Platz", "en": "Slot value"},
-        "latex": r"\mathrm{WERT} = \mathrm{MAX\_LHM} \times \mathrm{ANZ\_PICKS}",
-        "plain": {"de": "MAX_LHM × ANZ_PICKS", "en": "MAX_LHM × ANZ_PICKS"},
-    },
-    {
         "key": "ampel",
         "title": {"de": "Heatmap-Ampel", "en": "Heatmap colour"},
         "latex": r"\text{grün} < 40\,\% \le \text{gelb} < 80\,\% \le \text{rot}",
@@ -2373,17 +2358,16 @@ def mov_filter_note(movements_filtered: bool, filtered: pd.DataFrame) -> None:
 # zeigt; tab-spezifische Zusatzspalten kommen ueber `extra_cols` dazu.
 _MASSNAHME_COLS = [
     "PLATZ_ID", "REGAL", "FACH", "EBENE",
-    "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM", "WERT",
+    "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM",
 ]
 
 # Default-Umbenennung + Tooltips fuer die Standard-Massnahmenspalten
 # (greift automatisch bei Umlagern/Auslagern, die keine eigene rename/col_help
-# uebergeben). Macht v.a. WERT/ABC verstaendlich (Lehrer-Feedback "was heisst WERT").
+# uebergeben). Macht v.a. ABC/Kapazitaet ohne Vorwissen verstaendlich.
 _MASSNAHME_RENAME = {
     "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
     "ANZ_PICKS": "Picks", "ABC_KLASSE": "ABC (Platz)",
     "MAX_LHM": "Kapazität (max. LHM)", "IST_LHM": "Belegt (Ist-LHM)",
-    "WERT": "Wert (Bedeutung)",
 }
 _MASSNAHME_HELP = {
     "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im Lagersystem.",
@@ -2397,18 +2381,14 @@ _MASSNAHME_HELP = {
     "Kapazität (max. LHM)": "MAX_LHM – wie viele Ladehilfsmittel der Platz "
                             "maximal fasst (kann > 1 sein).",
     "Belegt (Ist-LHM)": "IST_LHM – wie viele Ladehilfsmittel aktuell dort stehen.",
-    "Wert (Bedeutung)": "WERT = Kapazität × Picks (MAX_LHM × ANZ_PICKS). Grobes "
-                        "Maß für die „Wichtigkeit“ eines Platzes: viel Kapazität "
-                        "UND oft gepickt = hoher Wert. Bei 0 Picks ist der Wert 0 "
-                        "(Ersatz für „Gewicht × Picks“; Gewicht fehlt in den Daten).",
     "Vorschlag": "Abgeleitete Handlungsempfehlung für diese Zeile.",
     "Zielplatz-Vorschlag": "Konkreter freier Zielplatz (1:1 nach freier "
                            "Kapazität), wohin der Inhalt umgelagert werden kann.",
 }
 
 # Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
-# Ist-Ware, darum sind ANZ_PICKS/WERT (= MAX_LHM x ANZ_PICKS) hier ~0 und nur
-# verwirrend. Relevant ist nur Ort, Platz-Guete (ABC) und freie Kapazitaet.
+# Ist-Ware, darum ist ANZ_PICKS hier ~0 und nur verwirrend. Relevant ist nur
+# Ort, Platz-Guete (ABC) und freie Kapazitaet.
 _PUTAWAY_COLS = [
     "PLATZ_ID", "REGAL", "FACH", "EBENE",
     "ABC_KLASSE", "MAX_LHM", "IST_LHM", "FREE_CAPACITY", "UTILIZATION",
@@ -2466,9 +2446,9 @@ _PUTAWAY_BLOCKED_RENAME = {
 }
 
 # Schlanke Spalten fuer den Nachschub-Tab: jeder Platz ist hier per Definition
-# GANZ leer (IST_LHM = 0), darum sind IST_LHM (immer 0) und WERT (= MAX_LHM x
-# Picks) keine Entscheidungshilfe. Relevant ist: Ort, Platz-Guete (ABC),
-# Pickhaeufigkeit (Dringlichkeit) und wie voll der Platz sein SOLL (MAX_LHM).
+# GANZ leer (IST_LHM = 0), darum ist IST_LHM (immer 0) keine Entscheidungshilfe.
+# Relevant ist: Ort, Platz-Guete (ABC), Pickhaeufigkeit (Dringlichkeit) und wie
+# voll der Platz sein SOLL (MAX_LHM).
 _REPLEN_COLS = [
     "PLATZ_ID", "REGAL", "FACH", "EBENE",
     "ABC_KLASSE", "ANZ_PICKS", "MAX_LHM",
@@ -2524,7 +2504,7 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
     `vorschlag`: optionaler Text, der als zusaetzliche Spalte "Vorschlag"
     (konkrete Handlungsempfehlung) in jede Zeile geschrieben wird.
     `cols`: ersetzt die Standard-Spalten (_MASSNAHME_COLS) durch eine
-    tab-spezifische Liste (z. B. Einlagern ohne sinnlose Pick-/Wert-Spalten).
+    tab-spezifische Liste (z. B. Einlagern ohne sinnlose Pick-Spalten).
     `rename`: optionale Zuordnung technischer Spaltennamen -> sprechende
     Anzeige-Namen (z. B. ANZ_PICKS -> "Picks"); wirkt auf Tabelle UND CSV.
     `rowhint`: ueberschreibt den Standard-Zeilenhinweis (z. B. Einlagern zeigt
@@ -2539,7 +2519,7 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
     cols = base + (extra_cols or [])
     cols = [c for c in cols if c in df.columns]
     # Default-Klartextspalten + Tooltips, wenn der Aufrufer nichts uebergibt
-    # (Umlagern/Auslagern nutzen die Standardspalten -> WERT/ABC werden lesbar).
+    # (Umlagern/Auslagern nutzen die Standardspalten -> ABC/Kapazitaet lesbar).
     if rename is None:
         rename = _MASSNAHME_RENAME
     if col_help is None:
