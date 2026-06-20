@@ -1523,6 +1523,34 @@ TR: dict[str, dict[str, str]] = {
         "de": "**Artikel-Detail** — Bewegungen und Quellplätze eines Artikels.",
         "en": "**Article detail** — movements and source slots of an article.",
     },
+    "art_info_t": {
+        "de": "ℹ️ Was bedeutet das? (Artikel-Detail + „Picks je Quellplatz“)",
+        "en": "ℹ️ What does this mean? (article detail + “picks per source slot”)",
+    },
+    "art_info_b": {
+        "de": "Wähle oben einen **Artikel** (aus der Liste oder Nummer eingeben). Dann siehst du, **wie oft und wo** "
+              "er bewegt wurde.\n\n"
+              "**Kennzahlen:** **Bewegungen gesamt** = alle Picks dieses Artikels im Zeitraum · **Quellplätze** = von "
+              "wie vielen verschiedenen Plätzen er entnommen wurde.\n\n"
+              "**Was heißt „Picks je Quellplatz“?** Ein **Quellplatz** (`Q_PLATZ`) ist der Lagerplatz, *aus dem* "
+              "entnommen wird. Die Tabelle zeigt **je Platz**, wie oft dieser Artikel von dort gepickt wurde – so "
+              "siehst du, ob er über viele Plätze verstreut ist oder von wenigen kommt.\n\n"
+              "**Was ist ein Pick / eine Bewegung?** = ein Datensatz in den TPA-Daten = eine Auftragsposition (eine "
+              "Entnahme) – wie im Durchsatz-Tab.\n\n"
+              "**Bewegungen über Zeit** = Picks dieses Artikels je Tag (**ein Balken = ein Tag**); Wochenende "
+              "ausblendbar.",
+        "en": "Pick an **article** above (from the list or by number). You then see **how often and where** it was "
+              "moved.\n\n"
+              "**KPIs:** **Total movements** = all picks of this article in the period · **Source slots** = from how "
+              "many different slots it was retrieved.\n\n"
+              "**What does “picks per source slot” mean?** A **source slot** (`Q_PLATZ`) is the slot goods are "
+              "*picked from*. The table shows **per slot** how often this article was picked there – so you see "
+              "whether it is spread over many slots or comes from a few.\n\n"
+              "**What is a pick / a movement?** = one record in the TPA data = one order line (a pick) – like the "
+              "Throughput tab.\n\n"
+              "**Movements over time** = picks of this article per day (**one bar = one day**); weekend can be "
+              "hidden.",
+    },
     "art_select": {"de": "Artikel (Top nach Bewegungen)", "en": "Article (top by movements)"},
     "art_input": {"de": "… oder ARTIKELNR direkt eingeben", "en": "… or enter article no. directly"},
     "art_total": {"de": "Bewegungen gesamt", "en": "Total movements"},
@@ -3301,6 +3329,8 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                    filtered: pd.DataFrame) -> None:
     """Tab 'Artikel': Bewegungen und Quellplaetze eines Artikels."""
     st.markdown(t("art_intro"))
+    with st.expander(t("art_info_t")):
+        st.markdown(t("art_info_b"))
     mov_filter_note(movements_filtered, filtered)
     opts = agg_articles(tpa, limit=500)
     labels = (
@@ -3331,17 +3361,27 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                 hide_we = st.checkbox(t("hide_weekend"), value=True,
                                       key="art_hide_we")
                 day_plot = drop_weekend(day_df, "day") if hide_we else day_df
+                # Balken (konsistent mit Durchsatz-Tab) statt Linie.
                 st.plotly_chart(
-                    px.line(day_plot, x="day", y="picks", markers=True,
-                            labels={"day": "Datum" if _LANG == "de" else "Date",
-                                    "picks": t("picks_label")}),
+                    px.bar(day_plot, x="day", y="picks",
+                           labels={"day": "Datum" if _LANG == "de" else "Date",
+                                   "picks": t("picks_label")}),
                     use_container_width=True,
                 )
             if not slots.empty:
                 st.markdown(f"**{t('art_by_slot')}**")
-                slot_tbl = slots.rename(columns={"platz": "PLATZ_ID",
-                                                 "picks": "Picks"})
-                st.dataframe(slot_tbl, use_container_width=True, hide_index=True)
+                slot_tbl = slots.rename(columns={"platz": "Quellplatz",
+                                                 "picks": "Picks (von hier)"})
+                slot_help = {
+                    "Quellplatz": "Lagerplatz (Q_PLATZ), aus dem dieser Artikel "
+                                  "entnommen wurde.",
+                    "Picks (von hier)": "Wie oft der Artikel im Zeitraum von "
+                                        "genau diesem Platz gepickt wurde.",
+                }
+                col_cfg = {c: st.column_config.Column(help=h)
+                           for c, h in slot_help.items() if c in slot_tbl.columns}
+                st.dataframe(slot_tbl, use_container_width=True,
+                             hide_index=True, column_config=col_cfg)
                 _csv_download(slot_tbl, "artikel_plaetze")
 
 
