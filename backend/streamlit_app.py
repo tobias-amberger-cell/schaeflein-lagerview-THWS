@@ -1097,9 +1097,29 @@ TR: dict[str, dict[str, str]] = {
         "de": "ℹ️ Was bedeutet das? (Sinn des Tabs + Spalten erklärt)",
         "en": "ℹ️ What does this mean? (purpose of the tab + columns)",
     },
+    "put_twocrit": {
+        "de": "**Warum zwei Kriterien (ABC = A *und* niedrige Ebene)?** Das sind zwei **getrennte Wegkosten:**\n"
+              "- **ABC = A** = wegoptimaler **Ort** (horizontale Nähe zum I-Punkt/Wareneingang, im WMS gepflegt) → kurzer Fahrweg.\n"
+              "- **Niedrige Ebene** = Greifhöhe ohne Hochhub → kein Zeitverlust durch Heben/Stapler.\n"
+              "Erst beides zusammen macht einen Platz wirklich schnell.",
+        "en": "**Why two criteria (ABC = A *and* low level)?** These are two **separate travel costs:**\n"
+              "- **ABC = A** = path-optimal **location** (horizontal proximity to the I-point/goods-in, maintained in the WMS) → short drive.\n"
+              "- **Low level** = reach height without lifting → no time lost to a forklift.\n"
+              "Only both together make a slot truly fast.",
+    },
     "put_cols_head": {
         "de": "**Spalten in den Tabellen:**",
         "en": "**Columns in the tables:**",
+    },
+    "put_overview": {
+        "de": "#### 📊 Überblick: freie Plätze",
+        "en": "#### 📊 Overview: free slots",
+    },
+    "put_kpi_free": {"de": "Freie Plätze (nutzbar)", "en": "Free slots (usable)"},
+    "put_kpi_blocked": {"de": "Frei, aber gesperrt", "en": "Free but locked"},
+    "put_kpi_capacity": {
+        "de": "Freie Gesamt-Kapazität: **{n} LHM** (so viele Ladehilfsmittel passen über alle nutzbaren freien Plätze noch rein).",
+        "en": "Total free capacity: **{n} LHM** (load units that still fit across all usable free slots).",
     },
     "put_glossary_b": {
         "de": "- **ABC (Platz)** = im WMS hinterlegte **Güteklasse des Ortes** (A = wegoptimaler Premiumplatz). "
@@ -1124,8 +1144,8 @@ TR: dict[str, dict[str, str]] = {
         "en": "Each row = 1 **free** slot (candidate for incoming goods), sorted by free capacity.",
     },
     "put_blocked_rowhint": {
-        "de": "Jede Zeile = 1 **gesperrter** Platz – nur zur Information, hier wird **nicht** eingelagert.",
-        "en": "Each row = 1 **locked** slot – for information only, do **not** put away here.",
+        "de": "Jede Zeile = 1 Platz, der **frei wäre, aber gesperrt ist** – käme als Ziel infrage, darf aber **nicht** bestückt werden.",
+        "en": "Each row = 1 slot that **would be free but is locked** – a possible target, but must **not** be stocked.",
     },
     "sl_fastlevel": {"de": "Fast-Lane bis Ebene", "en": "Fast lane up to level"},
     "sl_fastlevel_h": {
@@ -1179,8 +1199,8 @@ TR: dict[str, dict[str, str]] = {
               "belong here because they are picked most often – short paths save the most time here.",
     },
     "put_fast_v": {
-        "de": "Schnelldreher hier einlagern (kurze Wege)",
-        "en": "Store fast movers here (short paths)",
+        "de": "Hier bis zu {x} LHM einlagern (Schnelldreher, kurze Wege)",
+        "en": "Store up to {x} LHM here (fast mover, short paths)",
     },
     "put_reserve_t": {"de": "Reserve (hohe Ebenen)", "en": "Reserve (high levels)"},
     "put_reserve_d": {
@@ -1190,15 +1210,17 @@ TR: dict[str, dict[str, str]] = {
               "reserve** – this keeps the scarce A slots free for fast movers.",
     },
     "put_reserve_v": {
-        "de": "Langsamdreher / Reserve hier einlagern",
-        "en": "Store slow movers / reserve here",
+        "de": "Hier bis zu {x} LHM einlagern (Langsamdreher / Reserve)",
+        "en": "Store up to {x} LHM here (slow mover / reserve)",
     },
     "put_blocked_t": {"de": "Gesperrt – nicht bestücken", "en": "Locked – do not stock"},
     "put_blocked_d": {
-        "de": "Plätze mit gesetztem **Sperrkennzeichen** (z. B. Inventur, Defekt, reserviert) – hier darf **nichts** "
-              "eingelagert werden. Bewusst als eigene Liste, damit sie nicht versehentlich bestückt werden.",
-        "en": "Slots with a **lock flag** set (e.g. stocktake, defect, reserved) – **nothing** may be stored here. "
-              "Kept as a separate list so they are not stocked by mistake.",
+        "de": "Plätze, die **freie Kapazität haben, aber gesperrt sind** (Sperrkennzeichen, z. B. Inventur/Defekt/"
+              "reserviert) – sie *kämen als Ziel infrage*, dürfen aber **nicht** bestückt werden. Voll belegte "
+              "Sperrplätze sind hier bewusst ausgeblendet (kein Einlager-Ziel).",
+        "en": "Slots that **have free capacity but are locked** (lock flag, e.g. stocktake/defect/reserved) – they "
+              "*would be candidates* but must **not** be stocked. Fully occupied locked slots are deliberately hidden "
+              "(not a put-away target).",
     },
     "put_blocked_v": {
         "de": "Nicht einlagern – Sperre prüfen",
