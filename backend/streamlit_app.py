@@ -1575,6 +1575,30 @@ TR: dict[str, dict[str, str]] = {
               "Count adjustable via the sidebar slider.",
     },
     "top_chart": {"de": "Meistbewegte Artikel", "en": "Most-moved items"},
+    "top_info_t": {
+        "de": "ℹ️ Was bedeutet das? (Top-Artikel + „eine Bewegung“)",
+        "en": "ℹ️ What does this mean? (top items + “one movement”)",
+    },
+    "top_info_b": {
+        "de": "Dieser Tab zeigt die **meistbewegten Artikel** – sortiert nach **Bewegungen** (absteigend); Anzahl "
+              "über den Sidebar-Regler einstellbar. So siehst du die echten **Dreher** im Sortiment.\n\n"
+              "**Was zählt als eine Bewegung?** Eine Bewegung = **ein Datensatz in den TPA-Daten** = **eine "
+              "Auftragsposition** (eine Entnahme / ein Pick) – identisch zum Durchsatz-Tab. *Ob eine Position genau "
+              "einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert.*\n\n"
+              "**Spalten:** **Artikel-Nr** = die Artikelnummer · **Bezeichnung** = Klartext-Name · **Bewegungen** = "
+              "wie oft der Artikel im Zeitraum bewegt wurde.\n\n"
+              "*Hinweis:* Mit aktivem Sidebar-Platzfilter zählen nur Bewegungen, die von den ausgewählten Plätzen "
+              "ausgehen.",
+        "en": "This tab shows the **most-moved articles** – sorted by **movements** (descending); count adjustable "
+              "via the sidebar slider. This reveals the real **movers** in the assortment.\n\n"
+              "**What counts as one movement?** One movement = **one record in the TPA data** = **one order line** "
+              "(a pick) – same as the Throughput tab. *Whether one line equals exactly one order row or one article "
+              "is defined in the warehouse system (WMS).*\n\n"
+              "**Columns:** **Article no.** = the article number · **Description** = plain name · **Movements** = how "
+              "often the article was moved in the period.\n\n"
+              "*Note:* With an active sidebar slot filter, only movements originating from the selected slots are "
+              "counted.",
+    },
     "no_data_filters": {
         "de": "Keine Daten mit aktuellen Filtern.",
         "en": "No data with current filters.",
@@ -3231,10 +3255,26 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
         _csv_download(tbl, "durchsatz")
 
 
+# Top-Artikel-Tabelle: technische -> sprechende Spalten + Tooltips.
+_TOP_RENAME = {
+    "artikel": "Artikel-Nr", "bezeichnung": "Bezeichnung",
+    "bewegungen": "Bewegungen",
+}
+_TOP_HELP = {
+    "Artikel-Nr": "Artikelnummer (ARTIKELNR) aus den TPA-Daten.",
+    "Bezeichnung": "Klartext-Name des Artikels.",
+    "Bewegungen": "Anzahl TPA-Datensätze (Auftragspositionen) für diesen "
+                  "Artikel im Zeitraum – wie oft er bewegt/gepickt wurde. "
+                  "Mehr = wichtigerer Dreher.",
+}
+
+
 def render_top(tpa: pd.DataFrame, article_limit: int,
                movements_filtered: bool, filtered: pd.DataFrame) -> None:
     """Unter-Tab 'Top-Artikel': meistbewegte Artikel aus TPA."""
     st.markdown(t("top_intro"))
+    with st.expander(t("top_info_t")):
+        st.markdown(t("top_info_b"))
     mov_filter_note(movements_filtered, filtered)
     top = agg_articles(tpa, article_limit)
     if top.empty:
@@ -3249,8 +3289,12 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
             ),
             use_container_width=True,
         )
-        st.dataframe(top, use_container_width=True, hide_index=True)
-        _csv_download(top, "top_artikel")
+        show = top.rename(columns=_TOP_RENAME)
+        col_cfg = {c: st.column_config.Column(help=h)
+                   for c, h in _TOP_HELP.items() if c in show.columns}
+        st.dataframe(show, use_container_width=True, hide_index=True,
+                     column_config=col_cfg)
+        _csv_download(show, "top_artikel")
 
 
 def render_article(tpa: pd.DataFrame, movements_filtered: bool,
