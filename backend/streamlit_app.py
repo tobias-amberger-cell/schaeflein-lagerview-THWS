@@ -1264,15 +1264,15 @@ TR: dict[str, dict[str, str]] = {
               "columns = `ABC_CALC` from picks. Off-diagonal values are "
               "candidates for an ABC adjustment.",
     },
-    "abc_byfreq": {"de": "**Plätze nach Pickfrequenz**", "en": "**Slots by pick frequency**"},
+    "abc_byfreq": {"de": "**📋 Tabelle 2: Alle Einträge nach Pickhäufigkeit**",
+                   "en": "**📋 Table 2: All entries by pick frequency**"},
     "abc_byfreq_note": {
-        "de": "Alle Einträge, sortiert nach Picks (häufigste oben). **kumul. Pick-%** "
-              "= wie viel Prozent aller Picks bis zu dieser Zeile zusammenkommen; "
-              "daraus ergibt sich die Klasse. **Stamm** = WMS-Klasse, **Berechnet** = "
-              "aus den Picks.",
-        "en": "All entries sorted by picks (most-picked on top). **cum. pick %** = how "
-              "much of all picks accumulate down to this row; the class follows from "
-              "it. **Master** = WMS class, **Calculated** = from the picks.",
+        "de": "Die **komplette** Liste, sortiert nach Picks (häufigste oben). "
+              "**Stamm** = WMS-Klasse · **Berechnet** = aus den Picks · "
+              "**kumul. Pick-%** = Anteil aller Picks bis zu dieser Zeile.",
+        "en": "The **full** list, sorted by picks (most-picked on top). "
+              "**Master** = WMS class · **Calculated** = from picks · "
+              "**cum. pick %** = share of all picks down to this row.",
     },
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
@@ -1362,22 +1362,16 @@ TR: dict[str, dict[str, str]] = {
     "abc_dist": {"de": "ABC-Verteilung", "en": "ABC distribution"},
     "abc_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
     "abc_adjust_head": {
-        "de": "**🏷️ ABC-Anpassung — Empfehlungen**",
-        "en": "**🏷️ ABC adjustment — recommendations**",
+        "de": "**🏷️ Tabelle 1: Wo passt die WMS-Klasse nicht? (Empfehlungen)**",
+        "en": "**🏷️ Table 1: Where doesn't the WMS class fit? (recommendations)**",
     },
     "abc_adjust_intro": {
-        "de": "Hier stehen nur Plätze, deren **Stamm-ABC** nicht zur **berechneten** "
-              "Klasse passt. So entsteht die Empfehlung: jede Klasse bekommt einen "
-              "Rang (A = 3, B = 2, C = 1). Ist die *berechnete* Klasse höher als der "
-              "Stamm (z. B. Stamm C, berechnet A) → der Platz wird stärker bewegt als "
-              "hinterlegt → **⬆️ Hochstufen**. Ist sie niedriger (z. B. Stamm A, "
-              "berechnet C) → kaum noch bewegt → **⬇️ Herabstufen**.",
-        "en": "Only slots whose **master ABC** differs from the **calculated** class "
-              "are listed. How the recommendation is derived: each class gets a rank "
-              "(A = 3, B = 2, C = 1). If the *calculated* class is higher than the "
-              "master (e.g. master C, calculated A) → busier than recorded → "
-              "**⬆️ Promote**. If it is lower (e.g. master A, calculated C) → barely "
-              "moved → **⬇️ Demote**.",
+        "de": "**Nur** Plätze, deren **Stamm** (WMS-Klasse) nicht zur **Berechnet**-"
+              "Klasse (aus der Pickhäufigkeit) passt. **⬆️ Hochstufen** = wird öfter "
+              "gepickt als hinterlegt; **⬇️ Herabstufen** = seltener.",
+        "en": "**Only** slots whose **master** (WMS class) doesn't match the "
+              "**calculated** class (from pick frequency). **⬆️ Promote** = picked "
+              "more often than recorded; **⬇️ Demote** = less often.",
     },
     "abc_promote": {"de": "⬆️ Hochstufen", "en": "⬆️ Promote"},
     "abc_demote": {"de": "⬇️ Herabstufen", "en": "⬇️ Demote"},
@@ -2888,103 +2882,106 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
     else:
         st.markdown(t("abc_intro").format(a=a_thr, b=b_thr))
-        data = classify_abc(filtered, "ANZ_PICKS", a_thr, b_thr)
+        # Klassifikation IMMER ueber das GANZE Lager (mit den Reglern) -> jeder
+        # Platz hat EINE Klasse, konsistent in beiden Tabellen unten und mit
+        # 3D/Uebersicht. Der Sidebar-Filter beschraenkt nur die ANGEZEIGTEN
+        # Zeilen, NICHT die Klassifikation.
+        full = classify_abc(load_platz_full(), "ANZ_PICKS", a_thr, b_thr)
+        _sel = set(filtered["PLATZ_ID"].astype(str))
+        data = full[full["PLATZ_ID"].astype(str).isin(_sel)]
         table_cols = ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                       "ANZ_PICKS", "CUM_%", "ABC_KLASSE", "ABC"]
 
     if data.empty:
         st.info(t("no_data_filters"))
-    else:
-        # Wertespalte je Sicht (Artikel = Bewegungen, Plaetze = ANZ_PICKS).
-        val_col = "bewegungen" if by_articles else "ANZ_PICKS"
-        val_label = (("Bewegungen" if _LANG == "de" else "Movements")
-                     if by_articles else t("picks_label"))
-        ent_label = (("Artikel" if _LANG == "de" else "Articles") if by_articles
-                     else ("Plätze" if _LANG == "de" else "Slots"))
-        # Verteilung: Balkendiagramm Anteil PLAETZE vs. Anteil PICKS je Klasse
-        # (klassischer ABC-Chart -> zeigt den Pareto-Effekt direkt). Tabelle
-        # daneben = exakte Zahlen (Anzahl, Picks, Anteil).
-        st.caption(t("abc_dist_note"))
-        counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
-        picks_sum = (data.groupby("ABC")[val_col].sum()
-                     .reindex(["A", "B", "C"]).fillna(0))
-        total_picks = picks_sum.sum() or 1
-        total_count = counts.sum() or 1
-        share = (picks_sum / total_picks * 100).round(1)
-        count_share = (counts / total_count * 100).round(1)
-        summary = pd.DataFrame({
-            t("abc_col_count"): counts.astype(int).values,
-            val_label: picks_sum.astype(int).values,
-            t("abc_col_share"): share.values,
-        }, index=["A", "B", "C"])
-        summary.index.name = t("abc")
-        lbl_c, lbl_p = f"% {ent_label}", f"% {val_label}"
-        bar_df = pd.DataFrame({
-            t("abc"): ["A", "B", "C", "A", "B", "C"],
-            "Kennzahl": [lbl_c] * 3 + [lbl_p] * 3,
-            "Prozent": list(count_share.values) + list(share.values),
-        })
-        d1, d2 = st.columns([2, 1])
-        with d1:
-            st.plotly_chart(
-                px.bar(bar_df, x=t("abc"), y="Prozent", color="Kennzahl",
-                       barmode="group", title=t("abc_bar_title"),
-                       color_discrete_map={lbl_c: "#90a4ae", lbl_p: "#1565c0"}),
-                use_container_width=True,
+        return
+
+    # Klartext-Spaltennamen fuer beide Tabellen unten.
+    colmap = {
+        "PLATZ_ID": t("d3_f_platz"), "REGAL": t("rack"), "FACH": t("fach_label"),
+        "EBENE": t("level"), "ANZ_PICKS": t("picks_label"),
+        "CUM_%": t("abc_cumcol"), "ABC_KLASSE": "Stamm", "ABC": "Berechnet",
+        "artikel": "Artikel", "bezeichnung": "Bezeichnung",
+        "bewegungen": "Bewegungen",
+    }
+
+    # Wertespalte je Sicht (Artikel = Bewegungen, Plaetze = ANZ_PICKS).
+    val_col = "bewegungen" if by_articles else "ANZ_PICKS"
+    val_label = (("Bewegungen" if _LANG == "de" else "Movements")
+                 if by_articles else t("picks_label"))
+    ent_label = (("Artikel" if _LANG == "de" else "Articles") if by_articles
+                 else ("Plätze" if _LANG == "de" else "Slots"))
+    # Verteilung: Balkendiagramm Anteil PLAETZE vs. Anteil PICKS je Klasse.
+    st.caption(t("abc_dist_note"))
+    counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
+    picks_sum = (data.groupby("ABC")[val_col].sum()
+                 .reindex(["A", "B", "C"]).fillna(0))
+    total_picks = picks_sum.sum() or 1
+    total_count = counts.sum() or 1
+    share = (picks_sum / total_picks * 100).round(1)
+    count_share = (counts / total_count * 100).round(1)
+    summary = pd.DataFrame({
+        t("abc_col_count"): counts.astype(int).values,
+        val_label: picks_sum.astype(int).values,
+        t("abc_col_share"): share.values,
+    }, index=["A", "B", "C"])
+    summary.index.name = t("abc")
+    lbl_c, lbl_p = f"% {ent_label}", f"% {val_label}"
+    bar_df = pd.DataFrame({
+        t("abc"): ["A", "B", "C", "A", "B", "C"],
+        "Kennzahl": [lbl_c] * 3 + [lbl_p] * 3,
+        "Prozent": list(count_share.values) + list(share.values),
+    })
+    d1, d2 = st.columns([2, 1])
+    with d1:
+        st.plotly_chart(
+            px.bar(bar_df, x=t("abc"), y="Prozent", color="Kennzahl",
+                   barmode="group", title=t("abc_bar_title"),
+                   color_discrete_map={lbl_c: "#90a4ae", lbl_p: "#1565c0"}),
+            use_container_width=True,
+        )
+    with d2:
+        st.markdown(f"**{t('abc_count')}**")
+        st.dataframe(summary, use_container_width=True)
+    if not by_articles:
+        st.caption(t("abc_c_note"))
+
+    # --- Tabelle 1: nur Abweichungen Stamm vs. Berechnet + Empfehlung -------
+    # (nur Platz-Sicht; Artikel haben kein Stamm-ABC). Gleiche Klasse wie unten.
+    if not by_articles:
+        st.markdown(t("abc_adjust_head"))
+        st.caption(t("abc_adjust_intro"))
+        rank = {"A": 3, "B": 2, "C": 1}
+        dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
+        dev = dev[dev["ABC_KLASSE"] != dev["ABC"]]  # nur Abweichungen
+        if dev.empty:
+            st.info(t("abc_no_dev"))
+        else:
+            dev["_m"] = dev["ABC_KLASSE"].map(rank)
+            dev["_c"] = dev["ABC"].map(rank)
+            dev[t("abc_rec")] = dev.apply(
+                lambda r: t("abc_promote") if r["_c"] > r["_m"]
+                else t("abc_demote"), axis=1,
             )
-        with d2:
-            st.markdown(f"**{t('abc_count')}**")
-            st.dataframe(summary, use_container_width=True)
-        if not by_articles:
-            st.caption(t("abc_c_note"))
+            n_prom = int((dev["_c"] > dev["_m"]).sum())
+            n_dem = int((dev["_c"] < dev["_m"]).sum())
+            mcols = st.columns(2)
+            mcols[0].metric(t("abc_promote"), de_num(n_prom))
+            mcols[1].metric(t("abc_demote"), de_num(n_dem))
+            dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
+                ["PLATZ_ID", "REGAL", "FACH", "EBENE", "ANZ_PICKS",
+                 "CUM_%", "ABC_KLASSE", "ABC", t("abc_rec")]
+            ].rename(columns=colmap)
+            st.dataframe(dev_tbl.head(200), use_container_width=True,
+                         hide_index=True)
+            _csv_download(dev_tbl, "abc_anpassung")
 
-        # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
-        if not by_articles:
-            # ABC-Anpassung: Abweichungen Stamm vs. berechnet + Empfehlung.
-            # Trick: A/B/C als Rang 3/2/1. Ist die berechnete Klasse hoeher
-            # als die hinterlegte (_c > _m), wird der Platz mehr bewegt als
-            # gedacht -> "Hochstufen"; umgekehrt -> "Herabstufen".
-            st.markdown(t("abc_adjust_head"))
-            st.markdown(t("abc_adjust_intro"))
-            st.caption(t("abc_stamm_note"))
-            rank = {"A": 3, "B": 2, "C": 1}
-            # Empfehlung IMMER gegen die GLOBALE Klasse (ABC_CALC, ganzes Lager,
-            # Standard 80/95 -- wie in 3D/Uebersicht). Filter wirkt nur auf die
-            # Anzeige (data ist gefiltert), nicht auf die Klassifikation.
-            dev = data[data["ABC_KLASSE"].isin(["A", "B", "C"])].copy()
-            dev = dev[dev["ABC_KLASSE"] != dev["ABC_CALC"]]  # nur Abweichungen
-            if dev.empty:
-                st.info(t("abc_no_dev"))
-            else:
-                dev["_m"] = dev["ABC_KLASSE"].map(rank)
-                dev["_c"] = dev["ABC_CALC"].map(rank)
-                dev[t("abc_rec")] = dev.apply(
-                    lambda r: t("abc_promote") if r["_c"] > r["_m"]
-                    else t("abc_demote"), axis=1,
-                )
-                n_prom = int((dev["_c"] > dev["_m"]).sum())
-                n_dem = int((dev["_c"] < dev["_m"]).sum())
-                mcols = st.columns(2)
-                mcols[0].metric(t("abc_promote"), de_num(n_prom))
-                mcols[1].metric(t("abc_demote"), de_num(n_dem))
-                dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
-                    ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-                     "ANZ_PICKS", "CUMULATIVE_%", "ABC_KLASSE", "ABC_CALC",
-                     t("abc_rec")]
-                ].rename(columns={"ABC_KLASSE": "Stamm",
-                                  "ABC_CALC": t("abc_berech_global"),
-                                  "CUMULATIVE_%": t("abc_cum_global")})
-                st.dataframe(dev_tbl.head(200), use_container_width=True,
-                             hide_index=True)
-                _csv_download(dev_tbl, "abc_anpassung")
-
-        st.markdown(t("abc_byfreq"))
-        st.caption(t("abc_byfreq_note"))
-        table = data[[c for c in table_cols if c in data.columns]].rename(
-            columns={"ABC_KLASSE": "Stamm", "ABC": t("abc_berech_sel"),
-                     "CUM_%": t("abc_cum_sel")})
-        st.dataframe(table.head(200), use_container_width=True, hide_index=True)
-        _csv_download(table, "abc_articles" if by_articles else "abc_slots")
+    # --- Tabelle 2: ALLE Eintraege, sortiert nach Pickhaeufigkeit ----------
+    st.markdown(t("abc_byfreq"))
+    st.caption(t("abc_byfreq_note"))
+    table = data[[c for c in table_cols if c in data.columns]].rename(columns=colmap)
+    st.dataframe(table.head(200), use_container_width=True, hide_index=True)
+    _csv_download(table, "abc_articles" if by_articles else "abc_slots")
 
 
 def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
