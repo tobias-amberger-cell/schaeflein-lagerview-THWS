@@ -1277,6 +1277,31 @@ TR: dict[str, dict[str, str]] = {
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
     "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
+    "abc_purpose": {
+        "de": "**Wozu ABC?** Sortiert nach Wichtigkeit: **A** = Renner (häufig "
+              "gepickt) → gehören in gut erreichbare Plätze; **C** = Langsamdreher "
+              "→ ab in die Reserve. Ziel: kurze Wege für die wichtigen Artikel.",
+        "en": "**Why ABC?** Sorted by importance: **A** = fast movers (picked often) "
+              "→ belong in easy-reach slots; **C** = slow movers → into reserve. "
+              "Goal: short travel for the important items.",
+    },
+    "abc_mode_note": {
+        "de": "**Nach Artikeln** = klassische ABC (welche *Produkte* sind wichtig). "
+              "**Nach Lagerplätzen** = welche *Plätze* werden am häufigsten angefahren.",
+        "en": "**By articles** = classic ABC (which *products* matter). "
+              "**By storage slots** = which *slots* are visited most often.",
+    },
+    "abc_c_note": {
+        "de": "Hinweis: **C** enthält alle nie/selten gepickten Plätze (inkl. leerer "
+              "Reserve) – deshalb ist der C-Anteil bei „nach Lagerplätzen“ so groß.",
+        "en": "Note: **C** contains all never/rarely picked slots (incl. empty "
+              "reserve) – that's why the C share is so large for ‘by storage slots’.",
+    },
+    "abc_berech_global": {"de": "Berechnet (Lager gesamt)",
+                          "en": "Calculated (whole warehouse)"},
+    "abc_berech_sel": {"de": "Berechnet (Auswahl)", "en": "Calculated (selection)"},
+    "abc_cum_global": {"de": "kumul. Pick-% (gesamt)", "en": "cum. pick % (whole)"},
+    "abc_cum_sel": {"de": "kumul. Pick-% (Auswahl)", "en": "cum. pick % (selection)"},
     "abc_a_thresh": {"de": "A bis % aller Picks", "en": "A up to % of all picks"},
     "abc_b_thresh": {"de": "B bis % aller Picks", "en": "B up to % of all picks"},
     "abc_thresh_note": {
@@ -2835,12 +2860,14 @@ def render_auslagern(filtered: pd.DataFrame) -> None:
 def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                movements_filtered: bool) -> None:
     """Tab 'ABC-Analyse': Verteilung, Stamm-vs-berechnet, Anpassungs-Tipps."""
+    st.markdown(t("abc_purpose"))
     abc_mode = st.radio(
         t("abc_mode"),
         options=[t("abc_by_slots"), t("abc_by_articles")],
         horizontal=True,
     )
     by_articles = abc_mode == t("abc_by_articles")
+    st.caption(t("abc_mode_note"))
 
     cc1, cc2 = st.columns(2)
     with cc1:
@@ -2908,6 +2935,8 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         with d2:
             st.markdown(f"**{t('abc_count')}**")
             st.dataframe(summary, use_container_width=True)
+        if not by_articles:
+            st.caption(t("abc_c_note"))
 
         # Stamm vs. berechnet — nur bei Platz-Sicht (Artikel haben kein Stamm-ABC)
         if not by_articles:
@@ -2942,8 +2971,9 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                     ["PLATZ_ID", "REGAL", "FACH", "EBENE",
                      "ANZ_PICKS", "CUMULATIVE_%", "ABC_KLASSE", "ABC_CALC",
                      t("abc_rec")]
-                ].rename(columns={"ABC_KLASSE": "Stamm", "ABC_CALC": "Berechnet",
-                                  "CUMULATIVE_%": t("abc_cumcol")})
+                ].rename(columns={"ABC_KLASSE": "Stamm",
+                                  "ABC_CALC": t("abc_berech_global"),
+                                  "CUMULATIVE_%": t("abc_cum_global")})
                 st.dataframe(dev_tbl.head(200), use_container_width=True,
                              hide_index=True)
                 _csv_download(dev_tbl, "abc_anpassung")
@@ -2951,8 +2981,8 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         st.markdown(t("abc_byfreq"))
         st.caption(t("abc_byfreq_note"))
         table = data[[c for c in table_cols if c in data.columns]].rename(
-            columns={"ABC_KLASSE": "Stamm", "ABC": "Berechnet",
-                     "CUM_%": t("abc_cumcol")})
+            columns={"ABC_KLASSE": "Stamm", "ABC": t("abc_berech_sel"),
+                     "CUM_%": t("abc_cum_sel")})
         st.dataframe(table.head(200), use_container_width=True, hide_index=True)
         _csv_download(table, "abc_articles" if by_articles else "abc_slots")
 
