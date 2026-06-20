@@ -950,6 +950,38 @@ TR: dict[str, dict[str, str]] = {
         "de": "### 🔄 Umlagern\nDatenbasierte Umlager-Vorschläge.",
         "en": "### 🔄 Relocate\nData-driven relocation suggestions (same logic as the app).",
     },
+    "reloc_info_t": {
+        "de": "ℹ️ Was bedeutet Umlagern? (Regeln + Spalten)",
+        "en": "ℹ️ What is relocation? (rules + columns)",
+    },
+    "reloc_info_b": {
+        "de": "**Umlagern** = einen Artikel von einem **schlechten auf einen besseren Platz** bringen – **ohne** "
+              "dass neue Ware reinkommt. Ziel: Premium-Plätze (A, niedrige Ebene) für Schnelldreher frei machen.\n\n"
+              "**So entstehen die Listen (Filter-Regeln, alle Kriterien stehen als Spalte):**\n"
+              "1. **Premium ungenutzt** – Platz ist **A**, hat aber **0 Picks** → wertvoller Platz steht brach. "
+              "→ Inhalt auf einen Reserve-Platz (höhere Ebene) umlagern.\n"
+              "2. **Heiße C-Plätze** – Platz ist **C**, hat aber **≥ Regler-Schwelle Picks** → falsch eingestuft / "
+              "am falschen Ort. → auf einen guten Pickplatz (niedrige Ebene) holen.\n"
+              "3. **A weit oben** – **A**-Platz mit Picks, aber **Ebene ≥ Regler** → ergonomisch ungünstig "
+              "(Hochhub). → nach unten holen.\n\n"
+              "**Zielplatz-Vorschlag** = ein konkreter freier Platz, der passt (niedrige Ebene für heiße/hohe A, "
+              "Reserve oben für ungenutzte A); 1:1 nach freier Kapazität zugeordnet.\n\n"
+              "**Spalte „Wert (Bedeutung)“** = `Kapazität × Picks` (MAX_LHM × ANZ_PICKS): grobes Maß, wie viel an "
+              "einem Platz „los“ ist.",
+        "en": "**Relocation** = move an article from a **worse to a better slot** – **without** new goods coming "
+              "in. Goal: free up premium slots (A, low level) for fast movers.\n\n"
+              "**How the lists are built (filter rules, every criterion is a column):**\n"
+              "1. **Premium unused** – slot is **A** but has **0 picks** → a valuable slot lies idle. → move its "
+              "content to a reserve slot (higher level).\n"
+              "2. **Hot C slots** – slot is **C** but has **≥ slider threshold picks** → misclassified / wrong "
+              "place. → bring to a good pick slot (low level).\n"
+              "3. **A high up** – **A** slot with picks but **level ≥ slider** → ergonomically poor (lifting). → "
+              "bring down.\n\n"
+              "**Suggested target slot** = a concrete free slot that fits (low level for hot/high A, reserve up for "
+              "unused A); matched 1:1 by free capacity.\n\n"
+              "**Column “Value”** = `capacity × picks` (MAX_LHM × ANZ_PICKS): a rough measure of how much is going "
+              "on at a slot.",
+    },
     "reloc_abc_help": {
         "de": "Welche Klassen anzeigen: A blendet „Premium ungenutzt“ + „A weit "
               "oben“ ein, C die „Heißen C-Plätze“.",
@@ -1294,6 +1326,36 @@ TR: dict[str, dict[str, str]] = {
     "retr_head": {
         "de": "### 📤 Auslagern / Retrieval\nLangsamdreher/Ladenhüter, die gute Plätze blockieren und ausgelagert werden sollten.",
         "en": "### 📤 Retrieval\nSlow movers/dead stock blocking good slots that should be retrieved.",
+    },
+    "retr_info_t": {
+        "de": "ℹ️ Was bedeutet Auslagern? (Regeln + Spalten)",
+        "en": "ℹ️ What is retrieval? (rules + columns)",
+    },
+    "retr_info_b": {
+        "de": "**Auslagern** = Ware, die einen **guten Platz blockiert, sich aber kaum/nicht bewegt**, aus der "
+              "Pickzone entfernen (ins Reserve-/Hochlager oder raus). So werden gute Plätze für Dreher frei.\n\n"
+              "Betrachtet werden nur **belegte** Plätze (`Belegt > 0`) in der **Pickzone** (bis zur eingestellten "
+              "Ebene).\n\n"
+              "**Die drei Listen:**\n"
+              "1. **Kritisch** – **A**-Platz belegt, aber **0 Picks** → Premium-Platz von einem Ladenhüter "
+              "blockiert. Vorrangig auslagern.\n"
+              "2. **Abgestanden** – belegt, **0 Picks**, aber **kein** A-Platz → bewegt sich nicht, Auslagern "
+              "prüfen.\n"
+              "3. **Beobachten** – belegt, aber **sehr selten** gepickt (1 bis Regler-Wert) → im Auge behalten.\n\n"
+              "**Was heißt „belegt“?** `Ist-LHM > 0` (mind. ein Ladehilfsmittel steht drauf). **Was heißt „Wert“?** "
+              "`Kapazität × Picks` – bei **0 Picks ist der Wert 0**, genau das Signal für „blockiert ohne Nutzen“.",
+        "en": "**Retrieval** = remove goods that **block a good slot but barely move** from the pick zone (to "
+              "reserve/high-bay or out). This frees good slots for movers.\n\n"
+              "Only **occupied** slots (`Occupied > 0`) in the **pick zone** (up to the set level) are "
+              "considered.\n\n"
+              "**The three lists:**\n"
+              "1. **Critical** – **A** slot occupied but **0 picks** → premium slot blocked by dead stock. Retrieve "
+              "first.\n"
+              "2. **Stale** – occupied, **0 picks**, but **not** an A slot → not moving, consider retrieval.\n"
+              "3. **Observe** – occupied but **very rarely** picked (1 to slider value) → keep an eye on it.\n\n"
+              "**What does “occupied” mean?** `Ist-LHM > 0` (at least one load unit present). **What does “value” "
+              "mean?** `capacity × picks` – with **0 picks the value is 0**, exactly the signal for “blocked "
+              "without use”.",
     },
     "sl_retrzone": {"de": "Pickzone bis Ebene", "en": "Pick zone up to level"},
     "sl_observe": {"de": "„Beobachten“ bis Picks", "en": "‘Observe’ up to picks"},
@@ -2234,6 +2296,36 @@ _MASSNAHME_COLS = [
     "ANZ_PICKS", "ABC_KLASSE", "MAX_LHM", "IST_LHM", "WERT",
 ]
 
+# Default-Umbenennung + Tooltips fuer die Standard-Massnahmenspalten
+# (greift automatisch bei Umlagern/Auslagern, die keine eigene rename/col_help
+# uebergeben). Macht v.a. WERT/ABC verstaendlich (Lehrer-Feedback "was heisst WERT").
+_MASSNAHME_RENAME = {
+    "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
+    "ANZ_PICKS": "Picks", "ABC_KLASSE": "ABC (Platz)",
+    "MAX_LHM": "Kapazität (max. LHM)", "IST_LHM": "Belegt (Ist-LHM)",
+    "WERT": "Wert (Bedeutung)",
+}
+_MASSNAHME_HELP = {
+    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im Lagersystem.",
+    "Regal": "Regalnummer im Lager.",
+    "Fach": "Fach innerhalb des Regals.",
+    "Ebene": "Höhe/Ebene des Platzes – niedrig = Pickzone (kurze Greifwege).",
+    "Picks": "ANZ_PICKS – wie oft an diesem Platz gepickt wird "
+             "(Zugriffshäufigkeit im Lagersystem).",
+    "ABC (Platz)": "Güteklasse des ORTES aus dem Lagersystem (A = wegoptimaler "
+                   "Premiumplatz). Beschreibt den Platz, nicht den Artikel.",
+    "Kapazität (max. LHM)": "MAX_LHM – wie viele Ladehilfsmittel der Platz "
+                            "maximal fasst (kann > 1 sein).",
+    "Belegt (Ist-LHM)": "IST_LHM – wie viele Ladehilfsmittel aktuell dort stehen.",
+    "Wert (Bedeutung)": "WERT = Kapazität × Picks (MAX_LHM × ANZ_PICKS). Grobes "
+                        "Maß für die „Wichtigkeit“ eines Platzes: viel Kapazität "
+                        "UND oft gepickt = hoher Wert. Bei 0 Picks ist der Wert 0 "
+                        "(Ersatz für „Gewicht × Picks“; Gewicht fehlt in den Daten).",
+    "Vorschlag": "Abgeleitete Handlungsempfehlung für diese Zeile.",
+    "Zielplatz-Vorschlag": "Konkreter freier Zielplatz (1:1 nach freier "
+                           "Kapazität), wohin der Inhalt umgelagert werden kann.",
+}
+
 # Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
 # Ist-Ware, darum sind ANZ_PICKS/WERT (= MAX_LHM x ANZ_PICKS) hier ~0 und nur
 # verwirrend. Relevant ist nur Ort, Platz-Guete (ABC) und freie Kapazitaet.
@@ -2366,6 +2458,12 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
     base = cols if cols is not None else _MASSNAHME_COLS
     cols = base + (extra_cols or [])
     cols = [c for c in cols if c in df.columns]
+    # Default-Klartextspalten + Tooltips, wenn der Aufrufer nichts uebergibt
+    # (Umlagern/Auslagern nutzen die Standardspalten -> WERT/ABC werden lesbar).
+    if rename is None:
+        rename = _MASSNAHME_RENAME
+    if col_help is None:
+        col_help = _MASSNAHME_HELP
     st.markdown(f"**{titel}** — {beschreibung}")
     st.metric(t("cat_slots"), de_num(len(df)))
     st.caption(rowhint or t("massn_rowhint"))
@@ -2612,6 +2710,8 @@ def render_free(filtered: pd.DataFrame) -> None:
 def render_umlagern(filtered: pd.DataFrame) -> None:
     """Tab 'Umlagern': datenbasierte Umlager-Vorschlaege (3 Regeln)."""
     st.markdown(t("reloc_head"))
+    with st.expander(t("reloc_info_t")):
+        st.markdown(t("reloc_info_b"))
     c1, c2, c3 = st.columns(3)
     with c1:
         # A/B/C-Auswahl: blendet die Kategorien nach ihrer Ziel-Klasse ein.
@@ -2889,6 +2989,8 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
 def render_auslagern(filtered: pd.DataFrame) -> None:
     """Tab 'Auslagern': Langsamdreher/Ladenhueter in der Pickzone."""
     st.markdown(t("retr_head"))
+    with st.expander(t("retr_info_t")):
+        st.markdown(t("retr_info_b"))
     c1, c2 = st.columns(2)
     with c1:
         # Pickzone: nur niedrige Ebenen betrachten. 88% aller Plaetze haben
