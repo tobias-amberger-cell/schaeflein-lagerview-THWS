@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: ssi-lagerview-api
+    env: python
+    plan: free
+    rootDir: .
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # Auf Free gibt es keine Persistent Disk. DB NICHT nach /tmp (oft tmpfs =
+      # RAM -> 303 MB sprengen das 512-MB-Limit -> OOM/502), sondern ins
+      # plattenbasierte, ephemere Projektverzeichnis laden.
+      - key: WAREHOUSE_DB_PATH
+        value: /opt/render/project/src/data/warehouse.db
+      # GitHub-Release-Asset: Release mit Tag "db-v1" anlegen und warehouse.db hochladen.
+      - key: WAREHOUSE_DB_URL
+        value: https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/db-v1/warehouse.db
+      # 3D-Modell: GitHub-Release sendet kein CORS -> API laedt die GLB einmal
+      # und liefert sie via /model.glb mit CORS-Headern aus.
+      - key: WAREHOUSE_MODEL_PATH
+        value: /opt/render/project/src/data/model.glb
+      - key: WAREHOUSE_MODEL_URL
+        value: https://github.com/tobias-amberger-cell/schaeflein-lagerview-THWS/releases/download/model-v1/SampleScene_fixed.glb
