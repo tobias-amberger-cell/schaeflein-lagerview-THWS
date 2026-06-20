@@ -1268,11 +1268,15 @@ TR: dict[str, dict[str, str]] = {
                    "en": "**📋 Table 2: All entries by pick frequency**"},
     "abc_byfreq_note": {
         "de": "Die **komplette** Liste, sortiert nach Picks (häufigste oben). "
-              "**Stamm** = WMS-Klasse · **Berechnet** = aus den Picks · "
-              "**kumul. Pick-%** = Anteil aller Picks bis zu dieser Zeile.",
+              "**Stamm** = im Lagersystem hinterlegte Klasse · **Berechnet** = aus "
+              "den Picks · **kumul. Pick-%** = Anteil aller Picks bis zu dieser Zeile.",
         "en": "The **full** list, sorted by picks (most-picked on top). "
-              "**Master** = WMS class · **Calculated** = from picks · "
-              "**cum. pick %** = share of all picks down to this row.",
+              "**Master** = class stored in the warehouse system · **Calculated** = "
+              "from picks · **cum. pick %** = share of all picks down to this row.",
+    },
+    "abc_explain_head": {
+        "de": "ℹ️ Was bedeutet das? (Wozu ABC, Modi, Klassen)",
+        "en": "ℹ️ What does this mean? (purpose, modes, classes)",
     },
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
@@ -1330,13 +1334,13 @@ TR: dict[str, dict[str, str]] = {
     "abc_col_count": {"de": "Anzahl", "en": "Count"},
     "abc_col_share": {"de": "Anteil %", "en": "Share %"},
     "abc_stamm_note": {
-        "de": "**Stamm** = die im WMS hinterlegte `ABC_KLASSE`. **Berechnet** = die "
+        "de": "**Stamm** = die im Lagersystem hinterlegte `ABC_KLASSE`. **Berechnet** = die "
               "**globale** Klasse aus dem kumulierten Pick-Anteil im **ganzen Lager** "
               "(Standard 80 / 95 %, wie in der 3D-Ansicht) – unabhängig von Filter & "
               "Reglern. Der Filter beschränkt nur, welche Zeilen angezeigt werden. "
               "Weichen Stamm und Berechnet ab, ist der Platz ein Kandidat für eine "
               "ABC-Anpassung.",
-        "en": "**Master** = the `ABC_KLASSE` stored in the WMS. **Calculated** = the "
+        "en": "**Master** = the `ABC_KLASSE` stored in the warehouse system. **Calculated** = the "
               "**global** class from the cumulative pick share across the **whole "
               "warehouse** (default 80 / 95 %, like the 3D view) – independent of "
               "filters & sliders. The filter only limits which rows are shown. If "
@@ -1362,16 +1366,18 @@ TR: dict[str, dict[str, str]] = {
     "abc_dist": {"de": "ABC-Verteilung", "en": "ABC distribution"},
     "abc_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
     "abc_adjust_head": {
-        "de": "**🏷️ Tabelle 1: Wo passt die WMS-Klasse nicht? (Empfehlungen)**",
-        "en": "**🏷️ Table 1: Where doesn't the WMS class fit? (recommendations)**",
+        "de": "**🏷️ Tabelle 1: Wo passt die hinterlegte Klasse nicht? (Empfehlungen)**",
+        "en": "**🏷️ Table 1: Where doesn't the stored class fit? (recommendations)**",
     },
     "abc_adjust_intro": {
-        "de": "**Nur** Plätze, deren **Stamm** (WMS-Klasse) nicht zur **Berechnet**-"
-              "Klasse (aus der Pickhäufigkeit) passt. **⬆️ Hochstufen** = wird öfter "
-              "gepickt als hinterlegt; **⬇️ Herabstufen** = seltener.",
-        "en": "**Only** slots whose **master** (WMS class) doesn't match the "
-              "**calculated** class (from pick frequency). **⬆️ Promote** = picked "
-              "more often than recorded; **⬇️ Demote** = less often.",
+        "de": "**Nur** Plätze, deren **Stamm** (im Lagersystem hinterlegte Klasse) "
+              "nicht zur **Berechnet**-Klasse (aus der Pickhäufigkeit) passt. "
+              "**⬆️ Hochstufen** = wird öfter gepickt als hinterlegt; "
+              "**⬇️ Herabstufen** = seltener.",
+        "en": "**Only** slots whose **master** (class stored in the warehouse system) "
+              "doesn't match the **calculated** class (from pick frequency). "
+              "**⬆️ Promote** = picked more often than recorded; **⬇️ Demote** = "
+              "less often.",
     },
     "abc_promote": {"de": "⬆️ Hochstufen", "en": "⬆️ Promote"},
     "abc_demote": {"de": "⬇️ Herabstufen", "en": "⬇️ Demote"},
@@ -2854,14 +2860,12 @@ def render_auslagern(filtered: pd.DataFrame) -> None:
 def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                movements_filtered: bool) -> None:
     """Tab 'ABC-Analyse': Verteilung, Stamm-vs-berechnet, Anpassungs-Tipps."""
-    st.markdown(t("abc_purpose"))
     abc_mode = st.radio(
         t("abc_mode"),
         options=[t("abc_by_slots"), t("abc_by_articles")],
         horizontal=True,
     )
     by_articles = abc_mode == t("abc_by_articles")
-    st.caption(t("abc_mode_note"))
 
     cc1, cc2 = st.columns(2)
     with cc1:
@@ -2870,18 +2874,26 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     with cc2:
         b_thr = st.slider(t("abc_b_thresh"), a_thr + 1, 99, max(a_thr + 1, 95),
                           step=1, help=fhelp("abc_calc"))
-    # Erklaerung MIT den aktuellen Reglerwerten (aktualisiert sich live).
-    st.caption(t("abc_thresh_note").format(a=a_thr, b=b_thr))
+
+    # Alle Erklaerungen gebuendelt in EINEM eingeklappten Block (wie in den
+    # anderen Tabs) -> oben keine Textwand. Reagiert auf Modus + Reglerwerte.
+    with st.expander(t("abc_explain_head")):
+        st.markdown(t("abc_purpose"))
+        st.markdown(t("abc_mode_note"))
+        st.markdown(t("abc_thresh_note").format(a=a_thr, b=b_thr))
+        st.markdown(t("abc_intro_articles").format(a=a_thr, b=b_thr)
+                    if by_articles else t("abc_intro").format(a=a_thr, b=b_thr))
+        st.markdown(t("abc_dist_note"))
+        if not by_articles:
+            st.markdown(t("abc_c_note"))
 
     if by_articles:
-        st.markdown(t("abc_intro_articles").format(a=a_thr, b=b_thr))
         mov_filter_note(movements_filtered, filtered)
         base = agg_articles(tpa)
         data = classify_abc(base, "bewegungen", a_thr, b_thr) \
             if not base.empty else base
         table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
     else:
-        st.markdown(t("abc_intro").format(a=a_thr, b=b_thr))
         # Klassifikation IMMER ueber das GANZE Lager (mit den Reglern) -> jeder
         # Platz hat EINE Klasse, konsistent in beiden Tabellen unten und mit
         # 3D/Uebersicht. Der Sidebar-Filter beschraenkt nur die ANGEZEIGTEN
@@ -2911,8 +2923,8 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                  if by_articles else t("picks_label"))
     ent_label = (("Artikel" if _LANG == "de" else "Articles") if by_articles
                  else ("Plätze" if _LANG == "de" else "Slots"))
-    # Verteilung: Balkendiagramm Anteil PLAETZE vs. Anteil PICKS je Klasse.
-    st.caption(t("abc_dist_note"))
+    # Verteilung: Balkendiagramm Anteil PLAETZE vs. Anteil PICKS je Klasse
+    # (Erklaerung dazu steht im eingeklappten Block oben).
     counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
     picks_sum = (data.groupby("ABC")[val_col].sum()
                  .reindex(["A", "B", "C"]).fillna(0))
@@ -2943,8 +2955,6 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     with d2:
         st.markdown(f"**{t('abc_count')}**")
         st.dataframe(summary, use_container_width=True)
-    if not by_articles:
-        st.caption(t("abc_c_note"))
 
     # --- Tabelle 1: nur Abweichungen Stamm vs. Berechnet + Empfehlung -------
     # (nur Platz-Sicht; Artikel haben kein Stamm-ABC). Gleiche Klasse wie unten.
