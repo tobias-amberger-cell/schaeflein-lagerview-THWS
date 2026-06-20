@@ -882,11 +882,64 @@ TR: dict[str, dict[str, str]] = {
         "de": "Top-15 Hochfrequenz-Plätze (Picks gesamt, Farbe = Auslastung %)",
         "en": "Top-15 high-frequency slots (total picks, color = utilization %)",
     },
+    "bottle_info_t": {
+        "de": "ℹ️ Was bedeutet das? (Hochfrequenz-Plätze + Spalten)",
+        "en": "ℹ️ What does this mean? (high-frequency slots + columns)",
+    },
+    "bottle_info_b": {
+        "de": "Dieser Tab zeigt die **meistangefahrenen Plätze** – sortiert nach **Picks gesamt** (absteigend). "
+              "Das sind die Hot-Spots im Lager.\n\n"
+              "**Warum zwei Pick-Spalten?**\n"
+              "- **Picks (Stamm)** = `ANZ_PICKS`, die im Lagersystem hinterlegte Zugriffshäufigkeit des Platzes.\n"
+              "- **Picks gesamt** = zusätzlich die Anfahrten aus den Fahrpos-Daten (`Q_PLATZ`).\n"
+              "Bei vielen Plätzen sind **beide gleich** – dann gab es **keine** zusätzlichen Fahrpos-Anfahrten. "
+              "Das ist **kein Fehler**, sondern heißt: die Stamm-Häufigkeit ist hier die einzige Quelle.\n\n"
+              "**Was heißt Auslastung 100 % vs. 0 %?** `Ist-LHM / Kapazität × 100`.\n"
+              "- **100 %** = der Platz ist **voll**.\n"
+              "- **0 %** = der Platz wird zwar **oft angefahren**, ist aber **gerade leer** → typischer "
+              "Nachschub-Kandidat (Pickplatz, der nachgefüllt werden muss).",
+        "en": "This tab shows the **most-visited slots** – sorted by **total picks** (descending). These are the "
+              "warehouse hot spots.\n\n"
+              "**Why two pick columns?**\n"
+              "- **Picks (master)** = `ANZ_PICKS`, the access frequency of the slot stored in the warehouse system.\n"
+              "- **Total picks** = plus visits from the Fahrpos data (`Q_PLATZ`).\n"
+              "For many slots **both are equal** – then there were **no** extra Fahrpos visits. That is **not an "
+              "error**; it means the master frequency is the only source here.\n\n"
+              "**What does utilization 100 % vs. 0 % mean?** `Ist-LHM / capacity × 100`.\n"
+              "- **100 %** = the slot is **full**.\n"
+              "- **0 %** = the slot is **visited often** but is **currently empty** → a typical replenishment "
+              "candidate (a pick slot to be refilled).",
+    },
     "free_intro": {
         "de": "**Free Capacity** — Plätze mit Restkapazität, sortiert nach "
               "`MAX_LHM − IST_LHM`.",
         "en": "**Free capacity** — slots with remaining capacity, sorted by "
               "`MAX_LHM − IST_LHM`.",
+    },
+    "free_info_t": {
+        "de": "ℹ️ Was bedeutet das? (Free Capacity + Spalten)",
+        "en": "ℹ️ What does this mean? (free capacity + columns)",
+    },
+    "free_info_b": {
+        "de": "Dieser Tab zeigt **Plätze mit Restkapazität** (`Frei (LHM) > 0`), sortiert nach der **größten Lücke "
+              "zuerst** – also wo noch Ware reinpasst.\n\n"
+              "**Warum ist „Kapazität (max. LHM)“ manchmal 2 (oder mehr) und nicht 1?** `MAX_LHM` ist die "
+              "**maximale Anzahl Ladehilfsmittel (Paletten/Behälter), die der Platz fasst** – ein Platz kann "
+              "baulich **mehrere** LHM aufnehmen (z. B. zwei Paletten hinter-/nebeneinander). Das ist **kein "
+              "Fehler**, sondern die echte Platzkapazität.\n\n"
+              "**Was heißt Auslastung 0 %?** `Ist-LHM / Kapazität × 100`. **0 %** = der Platz ist **ganz leer** "
+              "(volle Restkapazität). Ein freier Platz liegt immer **unter 100 %**.\n\n"
+              "**Spalten:** **Kapazität** = wie viel max. reinpasst · **Belegt** = wie viel schon drinsteht · "
+              "**Frei** = wie viel noch reinpasst · **Auslastung %** = wie voll der Platz schon ist.",
+        "en": "This tab shows **slots with remaining capacity** (`Free (LHM) > 0`), sorted by the **largest gap "
+              "first** – i.e. where goods still fit.\n\n"
+              "**Why is “Capacity (max. LHM)” sometimes 2 (or more) and not 1?** `MAX_LHM` is the **maximum number "
+              "of load units (pallets/bins) the slot holds** – a slot can physically take **several** units (e.g. "
+              "two pallets). That is **not an error**, it is the real slot capacity.\n\n"
+              "**What does utilization 0 % mean?** `Ist-LHM / capacity × 100`. **0 %** = the slot is **completely "
+              "empty** (full remaining capacity). A free slot is always **below 100 %**.\n\n"
+              "**Columns:** **Capacity** = max that fits · **Occupied** = what is already in · **Free** = what still "
+              "fits · **Utilization %** = how full the slot already is.",
     },
     "free_count": {"de": "Plätze mit freier Kapazität", "en": "Slots with free capacity"},
     "free_total": {"de": "Freie LHM gesamt", "en": "Total free LHM"},
@@ -2474,10 +2527,36 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
         _csv_download(tbl[["Wochentag", "Stunde", "Picks"]], "pick_heatmap")
 
 
+# Hochfrequenz-Tabelle: technische -> sprechende Spalten + Tooltips.
+_HF_RENAME = {
+    "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
+    "ANZ_PICKS": "Picks (Stamm)", "PICK_TOTAL": "Picks gesamt",
+    "MAX_LHM": "Kapazität (max. LHM)", "IST_LHM": "Belegt (Ist-LHM)",
+    "UTILIZATION": "Auslastung %",
+}
+_HF_HELP = {
+    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im Lagersystem.",
+    "Regal": "Regalnummer im Lager.",
+    "Fach": "Fach innerhalb des Regals.",
+    "Ebene": "Höhe/Ebene des Platzes.",
+    "Picks (Stamm)": "ANZ_PICKS – die im Lagersystem hinterlegte "
+                     "Zugriffshäufigkeit dieses Platzes.",
+    "Picks gesamt": "ANZ_PICKS + zusätzliche Anfahrten aus den Fahrpos-Daten "
+                    "(Q_PLATZ). Gleich wie „Picks (Stamm)“ = keine zusätzlichen "
+                    "Fahrpos-Anfahrten (kein Fehler).",
+    "Kapazität (max. LHM)": "MAX_LHM – wie viele Ladehilfsmittel der Platz "
+                            "maximal fasst (kann > 1 sein).",
+    "Belegt (Ist-LHM)": "IST_LHM – wie viele Ladehilfsmittel aktuell dort stehen.",
+    "Auslastung %": "Ist-LHM / Kapazität × 100. 0 % = oft angefahren, aber "
+                    "gerade leer (Nachschub nötig); 100 % = voll.",
+}
+
+
 def render_high_frequency_slots(filtered: pd.DataFrame) -> None:
     """Unter-Tab 'Hochfrequenz-Plaetze': Plaetze mit hoher Pick-Frequenz."""
     st.markdown(t("bottle_intro"))
-    st.caption(t("hf_note"))
+    with st.expander(t("bottle_info_t")):
+        st.markdown(t("bottle_info_b"))
     # Voller, sortierter Satz fuer den Export; Anzeige auf Top 50 begrenzt.
     high_freq_full = (
         filtered.assign(
@@ -2486,23 +2565,25 @@ def render_high_frequency_slots(filtered: pd.DataFrame) -> None:
         .sort_values(["PICK_TOTAL", "UTILIZATION"], ascending=[False, False])[
             ["PLATZ_ID", "REGAL", "FACH", "EBENE",
              "ANZ_PICKS", "PICK_TOTAL", "MAX_LHM", "IST_LHM", "UTILIZATION"]
-        ]
-        .rename(columns={"ANZ_PICKS": "Picks (Stamm)",
-                         "PICK_TOTAL": "Picks gesamt",
-                         "UTILIZATION": "Auslastung %"})
+        ].copy()
     )
+    high_freq_full["UTILIZATION"] = high_freq_full["UTILIZATION"].round(1)
+    high_freq_full = high_freq_full.rename(columns=_HF_RENAME)
     if high_freq_full.empty:
         st.info(t("no_data_filters"))
     else:
+        col_cfg = {c: st.column_config.Column(help=h)
+                   for c, h in _HF_HELP.items() if c in high_freq_full.columns}
         st.dataframe(high_freq_full.head(50), use_container_width=True,
-                     hide_index=True)
+                     hide_index=True, column_config=col_cfg)
         _csv_download(high_freq_full, "hochfrequenz_plaetze")
 
 
 def render_free(filtered: pd.DataFrame) -> None:
     """Unter-Tab 'Free Capacity': Plaetze mit Restkapazitaet."""
     st.markdown(t("free_intro"))
-    st.caption(t("free_note"))
+    with st.expander(t("free_info_t")):
+        st.markdown(t("free_info_b"))
     free_all = filtered[filtered["FREE_CAPACITY"] > 0]
     c1, c2, c3 = st.columns(3)
     c1.metric(t("free_count"), de_num(len(free_all)))
@@ -2517,9 +2598,14 @@ def render_free(filtered: pd.DataFrame) -> None:
         free_all.sort_values("FREE_CAPACITY", ascending=False)[
             ["PLATZ_ID", "REGAL", "FACH", "EBENE",
              "MAX_LHM", "IST_LHM", "FREE_CAPACITY", "UTILIZATION"]
-        ]
+        ].copy()
     )
-    st.dataframe(free_full.head(100), use_container_width=True, hide_index=True)
+    free_full["UTILIZATION"] = free_full["UTILIZATION"].round(1)
+    free_full = free_full.rename(columns=_PUTAWAY_RENAME)
+    col_cfg = {c: st.column_config.Column(help=h)
+               for c, h in _PUTAWAY_HELP.items() if c in free_full.columns}
+    st.dataframe(free_full.head(100), use_container_width=True,
+                 hide_index=True, column_config=col_cfg)
     _csv_download(free_full, "free_capacity")
 
 
