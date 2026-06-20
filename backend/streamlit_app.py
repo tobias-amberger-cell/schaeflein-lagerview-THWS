@@ -1818,31 +1818,6 @@ TR: dict[str, dict[str, str]] = {
         "de": "Jede Zeile = 1 Lagerplatz mit dem aktuell dort liegenden Artikel.",
         "en": "Each row = 1 storage slot with the article currently stored there.",
     },
-    "hf_note": {
-        "de": "Spalten: **Picks (Stamm)** = `ANZ_PICKS` aus den Platz-Stammdaten, "
-              "**Picks gesamt** = zusätzlich die Anfahrten aus den Fahrpos-Daten "
-              "(`Q_PLATZ`). Sind beide gleich, gab es keine zusätzlichen Fahrpos-"
-              "Anfahrten. **Auslastung 0 %** bedeutet: oft angefahren, aber gerade "
-              "leer (Pickplatz, der nachgefüllt werden muss).",
-        "en": "Columns: **Picks (master)** = `ANZ_PICKS` from slot master data, "
-              "**Picks total** = plus visits from the Fahrpos data (`Q_PLATZ`). If "
-              "both are equal there were no extra Fahrpos visits. **Utilization 0 %** "
-              "means: visited often but currently empty (pick slot to be refilled).",
-    },
-    "free_note": {
-        "de": "**MAX_LHM** ist die maximale Anzahl Ladehilfsmittel je Platz – kann "
-              "> 1 sein (ein Platz fasst mehrere LHM). **Auslastung 0 %** = leerer "
-              "Platz mit voller Restkapazität.",
-        "en": "**MAX_LHM** is the max number of load units per slot – can be > 1 (a "
-              "slot holds several units). **Utilization 0 %** = empty slot with full "
-              "remaining capacity.",
-    },
-    "pick_note": {
-        "de": "Jede Zelle zählt die TPA-Bewegungen (Auftragspositionen) in diesem "
-              "Wochentag/Stunden-Fenster.",
-        "en": "Each cell counts the TPA movements (order lines) in that weekday/hour "
-              "window.",
-    },
 }
 
 
