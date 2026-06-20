@@ -1410,6 +1410,31 @@ TR: dict[str, dict[str, str]] = {
         "en": "**Throughput** — number of warehouse movements per day (from TPA "
               "data). Period adjustable via the sidebar slider.",
     },
+    "tp_info_t": {
+        "de": "ℹ️ Was bedeutet das? (Durchsatz + „eine Bewegung“ erklärt)",
+        "en": "ℹ️ What does this mean? (throughput + “one movement”)",
+    },
+    "tp_info_b": {
+        "de": "Dieser Tab zählt **Lagerbewegungen je Tag** und zeigt sie als Balken (**ein Balken = ein Tag**).\n\n"
+              "**Was zählt als eine Bewegung?** Eine Bewegung = **ein Datensatz in den TPA-Daten** = **eine "
+              "Auftragsposition** (eine Position eines Kommissionier-/Transportauftrags, also i. d. R. eine "
+              "Entnahme / ein Pick). Mehrere Positionen desselben Auftrags zählen **einzeln**. *Ob eine Position "
+              "genau einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert und sollte "
+              "beim Betreiber bestätigt werden.*\n\n"
+              "**Kennzahlen unter dem Diagramm:** **Ø pro Tag** = Durchschnitt über die angezeigten Tage · "
+              "**Maximum** = stärkster Einzeltag · **Summe Zeitraum** = alle Bewegungen zusammen.\n\n"
+              "**Wochenende ausblenden** (Standard an): Sa/So haben kaum reguläre Bewegungen und würden den Verlauf "
+              "mit Tief-/Null-Tagen verzerren – ohne sie ist der Arbeitstag-Verlauf klarer.",
+        "en": "This tab counts **warehouse movements per day** and shows them as bars (**one bar = one day**).\n\n"
+              "**What counts as one movement?** One movement = **one record in the TPA data** = **one order line** "
+              "(a line of a picking/transport order, i.e. usually one pick). Several lines of the same order count "
+              "**individually**. *Whether one line equals exactly one order row or one article is defined in the "
+              "warehouse system (WMS) and should be confirmed with the operator.*\n\n"
+              "**KPIs below the chart:** **Avg. per day** = mean over the shown days · **Maximum** = strongest "
+              "single day · **Sum (period)** = all movements together.\n\n"
+              "**Hide weekend** (on by default): Sat/Sun have hardly any regular movements and would distort the "
+              "trend with low/zero days – without them the working-day trend is clearer.",
+    },
     "tp_chart": {"de": "Bewegungen letzte {n} Tage", "en": "Movements last {n} days"},
     "tp_avg": {"de": "Ø pro Tag", "en": "Avg. per day"},
     "tp_max": {"de": "Maximum", "en": "Maximum"},
@@ -2997,6 +3022,10 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
                  filtered: pd.DataFrame) -> None:
     """Unter-Tab 'Durchsatz': Bewegungen je Tag (letzte N Tage o. Bereich)."""
     st.markdown(t("tp_intro"))
+    # Was bedeutet das? — beantwortet v.a. "was zaehlt als EINE Bewegung?"
+    # (Lehrer-Feedback), plus Kennzahlen + Grund fuer den Wochenende-Filter.
+    with st.expander(t("tp_info_t")):
+        st.markdown(t("tp_info_b"))
     mov_filter_note(movements_filtered, filtered)
     copt1, copt2 = st.columns(2)
     with copt1:
