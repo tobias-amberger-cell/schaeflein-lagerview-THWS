@@ -847,6 +847,34 @@ TR: dict[str, dict[str, str]] = {
         "en": "**Pick heatmap** — movements per weekday and hour (from TPA data). "
               "Shows when picking peaks.",
     },
+    "pick_info_t": {
+        "de": "ℹ️ Was bedeutet das? (Pick-Heatmap + „ein Pick“ erklärt)",
+        "en": "ℹ️ What does this mean? (pick heatmap + “one pick”)",
+    },
+    "pick_info_b": {
+        "de": "Die Heatmap zeigt, **wann** im Lager gepickt wird: **eine Zelle = ein Zeitfenster** (Wochentag × "
+              "Stunde), die **Farbe = Anzahl Picks** darin (hell = wenig, rot = viel).\n\n"
+              "**Was ist ein Pick / eine Bewegung?** Ein Pick = **ein Datensatz in den TPA-Daten** = **eine "
+              "Auftragsposition** (eine Entnahmeposition) – identisch zum Durchsatz-Tab. *Ob eine Position genau "
+              "einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert.*\n\n"
+              "**Was heißt „Picks je Quellplatz“?** Standardmäßig zählt die Heatmap **alle** Picks im Lager. Wenn du "
+              "in der Sidebar **Plätze filterst**, werden nur die Bewegungen gezählt, die von diesen **Quellplätzen** "
+              "(`Q_PLATZ` = der Platz, aus dem entnommen wird) ausgehen – so siehst du das Pick-Muster gezielt für "
+              "die ausgewählten Plätze.\n\n"
+              "**Wozu?** Stoßzeiten erkennen → Personal- und Schichtplanung.\n\n"
+              "**Wochenende ausblenden** (Standard an): Sa/So haben kaum Picks und würden das Bild verwässern.",
+        "en": "The heatmap shows **when** picking happens: **one cell = one time window** (weekday × hour), the "
+              "**colour = number of picks** in it (light = few, red = many).\n\n"
+              "**What is a pick / a movement?** One pick = **one record in the TPA data** = **one order line** (a "
+              "pick line) – same as the Throughput tab. *Whether one line equals exactly one order row or one "
+              "article is defined in the warehouse system (WMS).*\n\n"
+              "**What does “picks per source slot” mean?** By default the heatmap counts **all** picks in the "
+              "warehouse. If you **filter slots** in the sidebar, only movements originating from those **source "
+              "slots** (`Q_PLATZ` = the slot picked from) are counted – so you see the pick pattern specifically for "
+              "the selected slots.\n\n"
+              "**Why?** Spot peak times → staff and shift planning.\n\n"
+              "**Hide weekend** (on by default): Sat/Sun have hardly any picks and would dilute the picture.",
+    },
     "pick_peak": {
         "de": "Spitze: {wd} {h:02d}:00 Uhr mit {p} Picks.",
         "en": "Peak: {wd} {h:02d}:00 with {p} picks.",
@@ -2448,8 +2476,12 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
                     filtered: pd.DataFrame) -> None:
     """Unter-Tab 'Pick-Heatmap': Picks je Wochentag/Stunde aus TPA."""
     st.markdown(t("pick_intro"))
-    st.caption(t("pick_note"))
+    # Was bedeutet das? — was ist ein Pick, was heisst "Picks je Quellplatz",
+    # wozu die Heatmap (Lehrer-Feedback).
+    with st.expander(t("pick_info_t")):
+        st.markdown(t("pick_info_b"))
     mov_filter_note(movements_filtered, filtered)
+    hide_we = st.checkbox(t("hide_weekend"), value=True, key="pickheat_we")
     ph = agg_pick_heatmap(tpa)
     if ph.empty:
         st.info(t("no_data_filters"))
@@ -2458,11 +2490,15 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
             0: "So", 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa",
         }
         ph = ph[(ph["weekday"].between(0, 6)) & (ph["hour"].between(0, 23))]
+        if hide_we:
+            # Sa (6) und So (0) raus -> klares Mo-Fr-Bild (Lager am WE kaum aktiv)
+            ph = ph[~ph["weekday"].isin([0, 6])]
+        day_order = range(1, 6) if hide_we else range(7)
         pivot = (
             ph.pivot_table(
                 index="weekday", columns="hour", values="picks", aggfunc="sum"
             )
-            .reindex(range(7))
+            .reindex(day_order)
             .reindex(columns=range(24))
         )
         pivot.index = [weekday_names[i] for i in pivot.index]
