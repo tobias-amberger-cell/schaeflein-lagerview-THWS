@@ -939,22 +939,29 @@ TR: dict[str, dict[str, str]] = {
     "replen_principle": {
         "de": "**Warum dieser Tab?** Ein leerer, aber häufig gepickter Platz bedeutet **Fehlmengen / Suchwege**: "
               "Der Kommissionierer steht vor einem leeren Fach. Je öfter der Platz sonst gepickt wird und je länger "
-              "er schon leer ist, desto dringender der Nachschub. Die drei Listen sind eine **Eskalation**: "
-              "*Dringend* (leer + viele Picks) → *Überfällig* (dieselben, aber schon zu lange leer) → "
-              "*Mittlere Frequenz* (leer, aber seltener gepickt). Gesperrte Plätze sind bewusst ausgeschlossen.",
+              "er schon leer ist, desto dringender der Nachschub. Die wichtigen (häufig gepickten) Plätze werden "
+              "**nach Aktualität getrennt**: *Dringend (frisch)* = wichtig + kürzlich noch gepickt → akute Nachfrage; "
+              "*Überfällig (vernachlässigt)* = wichtig, aber schon länger kein Pick → vor dem Absterben auffüllen; "
+              "*Mittlere Frequenz* = leer, aber seltener gepickt. Gesperrte Plätze sind bewusst ausgeschlossen. "
+              "**Wichtig:** Über den Regler *„Aktiv …“* werden nur Plätze gezeigt, an denen **kürzlich** gepickt "
+              "wurde – seit Monaten unberührte Fächer (hohe HISTORISCHE Picks, aber tot) werden ausgeblendet und "
+              "oben als Hinweis gezählt.",
         "en": "**Why this tab?** An empty but frequently picked slot means **shortages / search time**: "
               "the picker faces an empty bin. The more often the slot is otherwise picked and the longer it has "
               "been empty, the more urgent the replenishment. The three lists form an **escalation**: "
-              "*Urgent* (empty + many picks) → *Overdue* (the same, but empty too long) → "
-              "*Medium frequency* (empty, but picked less often). Locked slots are deliberately excluded.",
+              "the important (frequently picked) slots are **split by recency**: *Urgent (fresh)* = important + "
+              "picked recently → active demand; *Overdue (neglected)* = important but no pick for a while → refill "
+              "before it dies; *Medium frequency* = empty, but picked less often. Locked slots are deliberately excluded. "
+              "**Note:** the *‘Active …’* slider shows only slots picked **recently** – locations untouched for "
+              "months (high HISTORICAL picks but dead) are hidden and counted as a note above.",
     },
     "replen_overview": {
         "de": "#### 🔎 Überblick (aktuelle Filter & Regler)",
         "en": "#### 🔎 Overview (current filters & sliders)",
     },
     "replen_kpi_total": {
-        "de": "Leere Pickplätze",
-        "en": "Empty pick slots",
+        "de": "Leere Pickplätze (aktiv)",
+        "en": "Empty pick slots (active)",
     },
     "replen_glossary_t": {
         "de": "ℹ️ Was bedeuten „leer“, „Pick“ und die Spalten?",
@@ -1007,30 +1014,57 @@ TR: dict[str, dict[str, str]] = {
         "en": "From this many picks (slot access frequency) an empty slot counts as "
               "‘urgent’ – an important pick slot is empty.",
     },
-    "sl_overdue": {"de": "Überfällig ab Tagen", "en": "Overdue from days"},
+    "sl_overdue": {"de": "Überfällig ab Tagen ohne Pick",
+                   "en": "Overdue from days without pick"},
     "sl_overdue_h": {
-        "de": "Ab so vielen Tagen ohne Ware gilt ein dringender Platz zusätzlich als "
-              "„überfällig“ – der Nachschub wurde vermutlich vergessen.",
-        "en": "After this many days without goods an urgent slot also counts as "
-              "‘overdue’ – the replenishment was probably forgotten.",
+        "de": "Grenze zwischen „dringend“ und „überfällig“: Ein wichtiger leerer Platz, "
+              "an dem seit mehr als so vielen Tagen NICHT gepickt wurde (ZUGRIFF_DATUM), "
+              "gilt als überfällig/vernachlässigt; darunter als frisch-dringend.",
+        "en": "Threshold between ‘urgent’ and ‘overdue’: an important empty slot not "
+              "picked (ZUGRIFF_DATUM) for more than this many days counts as "
+              "overdue/neglected; below it as freshly urgent.",
     },
-    "replen_urgent_t": {"de": "Dringend leer", "en": "Urgently empty"},
+    "sl_active": {"de": "Aktiv: zuletzt gepickt vor max. Tagen",
+                  "en": "Active: last picked within days"},
+    "sl_active_h": {
+        "de": "Nur Plätze berücksichtigen, an denen in diesem Zeitraum zuletzt "
+              "gepickt wurde (ZUGRIFF_DATUM). Trennt echte Nachfüll-Kandidaten von "
+              "lange ungenutzten/toten Fächern (hohe HISTORISCHE Picks, aber seit "
+              "Monaten kein Zugriff).",
+        "en": "Only consider slots last picked within this window (ZUGRIFF_DATUM). "
+              "Separates genuine refill candidates from long-unused/dead locations "
+              "(high HISTORICAL picks but no access for months).",
+    },
+    "replen_inactive_note": {
+        "de": "ℹ️ **{n} leere Plätze ausgeblendet**, weil seit > {d} Tagen kein Pick "
+              "(oder kein Zugriffsdatum) – wahrscheinlich **tote Fächer**, kein akuter "
+              "Nachschub. Regler „Aktiv …“ erhöhen, um sie einzubeziehen.",
+        "en": "ℹ️ **{n} empty slots hidden** because not picked for > {d} days (or no "
+              "access date) – likely **dead locations**, not urgent replenishment. "
+              "Increase the ‘Active …’ slider to include them.",
+    },
+    "replen_urgent_t": {"de": "Dringend leer (frisch)", "en": "Urgently empty (fresh)"},
     "replen_urgent_d": {
-        "de": "Leer + hohe Pickhäufigkeit – wichtiger Pickplatz, dringend nachfüllen.",
-        "en": "Empty + high pick frequency – important pick slot, replenish urgently.",
+        "de": "Wichtiger Platz, leer, aber **kürzlich** noch gepickt (≤ {n} T) – "
+              "akute Nachfrage, sofort nachfüllen.",
+        "en": "Important slot, empty, but picked **recently** (≤ {n} d) – "
+              "active demand, refill now.",
     },
     "replen_urgent_v": {
         "de": "Sofort auffüllen (Soll {x} LHM) – wichtiger Pickplatz leer",
         "en": "Refill now (target {x} LU) – important pick slot empty",
     },
-    "replen_overdue_t": {"de": "Überfällig", "en": "Overdue"},
+    "replen_overdue_t": {"de": "Überfällig (vernachlässigt)",
+                         "en": "Overdue (neglected)"},
     "replen_overdue_d": {
-        "de": "Dringende Plätze, die bereits ≥ {n} Tage leer sind – Nachschub vergessen?",
-        "en": "Urgent slots already empty for ≥ {n} days – replenishment forgotten?",
+        "de": "Wichtiger Platz, leer und seit **> {n} Tagen kein Pick** mehr – "
+              "vernachlässigt; auffüllen, bevor das Fach ganz abstirbt.",
+        "en": "Important slot, empty and **not picked for > {n} days** – "
+              "neglected; refill before the location dies off.",
     },
     "replen_overdue_v": {
-        "de": "Priorisiert auffüllen (Soll {x} LHM) – seit {d} T leer, Ursache prüfen",
-        "en": "Refill with priority (target {x} LU) – empty {d} d, check root cause",
+        "de": "Priorisiert auffüllen (Soll {x} LHM) – seit {d} T kein Pick, Ursache prüfen",
+        "en": "Refill with priority (target {x} LU) – no pick for {d} d, check cause",
     },
     "replen_medium_t": {"de": "Mittlere Frequenz", "en": "Medium frequency"},
     "replen_medium_d": {
@@ -2539,13 +2573,13 @@ def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
     Handlung). Die Empfehlung ist nicht fix, sondern entsteht aus:
       - der Listenregel (kind: urgent/overdue/medium) -> Dringlichkeit/Wortlaut,
       - x = Soll-LHM (MAX_LHM; Platz ist leer -> auf Soll auffuellen),
-      - bei 'overdue' zusaetzlich d = Tage leer (DAYS_EMPTY).
+      - bei 'overdue' zusaetzlich d = Tage seit letztem Pick (DAYS_SINCE_PICK).
     So ist im Tab nachvollziehbar, WIE der Vorschlag zustande kommt."""
     out = df.copy()
     lhm = (pd.to_numeric(out["MAX_LHM"], errors="coerce")
            .fillna(0).astype(int).clip(lower=1))
     if kind == "overdue":
-        days = (pd.to_numeric(out["DAYS_EMPTY"], errors="coerce")
+        days = (pd.to_numeric(out["DAYS_SINCE_PICK"], errors="coerce")
                 .fillna(0).astype(int))
         tmpl = t("replen_overdue_v")
         col = [tmpl.format(x=x, d=d) for x, d in zip(lhm, days)]
@@ -2564,38 +2598,57 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
     # Kurz-Glossar: beantwortet "was heisst leer / was zaehlt als Pick / Spalten".
     with st.expander(t("replen_glossary_t")):
         st.markdown(t("replen_glossary_b"))
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         pick_level = st.slider(t("sl_picklevel"), 1, 6, 2,
                                help=t("sl_picklevel_h"))
     with c2:
+        active_days = st.slider(t("sl_active"), 7, 365, 90, step=7,
+                                help=t("sl_active_h"))
+    with c3:
         pick_threshold = st.slider(t("sl_pickthresh"), 10, 300, 50, step=10,
                                    help=t("sl_pickthresh_h"))
-    with c3:
+    with c4:
         overdue_days = st.slider(t("sl_overdue"), 3, 60, 14,
                                  help=t("sl_overdue_h"))
 
     # Basis: leere Pickplaetze (IST_LHM=0) in der Pickzone (niedrige Ebene),
-    # nicht gesperrt. Daraus drei Dringlichkeitsstufen:
+    # nicht gesperrt.
     empty_pick = filtered[
         (filtered["IST_LHM"].fillna(0) == 0)
         & (filtered["EBENE"] <= pick_level)
         & (~filtered["GESPERRT"])
     ]
-    # dringend = leer + hohe Pickfrequenz
-    urgent = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold] \
+    # AKTIV-Filter: nur Plaetze, an denen zuletzt innerhalb `active_days` gepickt
+    # wurde. Trennt echte Nachfuell-Kandidaten von toten Faechern (hohe HISTORISCHE
+    # Picks, aber seit Monaten leer & kein Zugriff). NaN (kein Zugriffsdatum) zaehlt
+    # als inaktiv. Ausgeblendete Anzahl wird transparent gemeldet (kein stilles Cap).
+    is_active = empty_pick["DAYS_SINCE_PICK"].fillna(10**9) <= active_days
+    inactive_n = int((~is_active).sum())
+    active_pick = empty_pick[is_active]
+    if inactive_n:
+        st.warning(t("replen_inactive_note").format(n=de_num(inactive_n),
+                                                     d=active_days))
+    empty_pick = active_pick
+    # Wichtige (hochfrequente) leere Plaetze, aufgeteilt nach Aktualitaet des
+    # letzten Picks (DAYS_SINCE_PICK). DAYS_EMPTY taugt hier NICHT zur Trennung
+    # (Leer-Datum oft Jahre alt), DAYS_SINCE_PICK schon -> disjunkte Listen:
+    #   dringend    = wichtig + GERADE ERST ohne Pick (<= Schwelle) -> jetzt fuellen
+    #   ueberfaellig= wichtig + schon LAENGER ohne Pick (> Schwelle) -> vernachlaessigt
+    important = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold]
+    days_since = important["DAYS_SINCE_PICK"].fillna(10**9)
+    urgent = important[days_since <= overdue_days] \
         .sort_values("ANZ_PICKS", ascending=False)
-    # ueberfaellig = dringend + schon zu lange leer (DAYS_EMPTY)
-    overdue = urgent[urgent["DAYS_EMPTY"] >= overdue_days] \
-        .sort_values("DAYS_EMPTY", ascending=False)
-    # mittlere Frequenz = leer mit Picks unterhalb der Dringend-Schwelle (>0)
+    overdue = important[days_since > overdue_days] \
+        .sort_values("DAYS_SINCE_PICK", ascending=False)
+    # mittlere Frequenz = aktiv leer mit Picks unterhalb der Dringend-Schwelle (>0)
     medium = empty_pick[
         (empty_pick["ANZ_PICKS"] > 0)
         & (empty_pick["ANZ_PICKS"] < pick_threshold)
     ].sort_values("ANZ_PICKS", ascending=False)
 
     # Überblick zuerst: wie viele leere Pickplaetze insgesamt und je Stufe?
-    # (Ueberfaellig ist eine Teilmenge von Dringend – siehe Prinzip-Text.)
+    # (Dringend + Überfällig = disjunkte Aufteilung der wichtigen Plaetze.)
     st.markdown(t("replen_overview"))
     k1, k2, k3, k4 = st.columns(4)
     k1.metric(t("replen_kpi_total"), de_num(len(empty_pick)))
@@ -2607,7 +2660,7 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
     # Spaltenende je Liste: zwei Staleness-Signale + abgeleiteter Vorschlag.
     replen_extra = ["DAYS_EMPTY", "DAYS_SINCE_PICK", t("col_vorschlag")]
     render_massnahme_kategorie(
-        t("replen_urgent_t"), t("replen_urgent_d"),
+        t("replen_urgent_t"), t("replen_urgent_d").format(n=overdue_days),
         _replen_vorschlag_col(urgent, "urgent"),
         cols=_REPLEN_COLS, extra_cols=replen_extra,
         rename=_REPLEN_RENAME, col_help=_REPLEN_HELP)
@@ -2624,6 +2677,21 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
         rename=_REPLEN_RENAME, col_help=_REPLEN_HELP)
 
 
+def _putaway_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
+    """Abgeleitete Vorschlag-Spalte (1 Zeile = 1 konkrete Handlung).
+    'fast'/'reserve': x = freie Kapazitaet der Zeile (so viele LHM passen rein).
+    'blocked': fixer Hinweis (Platz ist gesperrt)."""
+    out = df.copy()
+    if kind == "blocked":
+        out[t("col_vorschlag")] = t("put_blocked_v")
+        return out
+    frei = (pd.to_numeric(out["FREE_CAPACITY"], errors="coerce")
+            .fillna(0).astype(int).clip(lower=1))
+    tmpl = t("put_fast_v") if kind == "fast" else t("put_reserve_v")
+    out[t("col_vorschlag")] = [tmpl.format(x=x) for x in frei]
+    return out
+
+
 def render_einlagern(filtered: pd.DataFrame) -> None:
     """Tab 'Einlagern': wohin eingehende Ware (freie A-Plaetze + Reserve)."""
     st.markdown(t("put_head"))
@@ -2632,6 +2700,7 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
     #    damit oben kein Textblock dauerhaft zustellt.
     with st.expander(t("put_info_t")):
         st.markdown(t("put_principle"))
+        st.markdown(t("put_twocrit"))
         st.markdown(t("put_cols_head"))
         st.markdown(t("put_glossary_b"))
     # 2) SCHIEBEREGLER
@@ -2646,44 +2715,56 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
     #    die Regelwerte folgen live den Reglern oben.
     with st.expander(t("put_logic_t")):
         st.markdown(t("put_logic_b").format(fast=fast_level, reserve=reserve_level))
+
+    # Freie Plaetze = Restkapazitaet > 0. Nutzbar = nicht gesperrt.
     free_slots = filtered[filtered["FREE_CAPACITY"] > 0]
+    free_usable = free_slots[~free_slots["GESPERRT"]]
 
-    # Schnelldreher-Plaetze: freie A-Plaetze auf niedriger Ebene -> kurze
-    # Wege. Schwelle ueber den Slider fast_level einstellbar.
-    fast_lane = free_slots[
-        (free_slots["ABC_KLASSE"] == "A")
-        & (free_slots["EBENE"] <= fast_level)
-        & (~free_slots["GESPERRT"])
+    # Schnelldreher-Plaetze: freie A-Plaetze auf niedriger Ebene -> kurze Wege.
+    fast_lane = free_usable[
+        (free_usable["ABC_KLASSE"] == "A")
+        & (free_usable["EBENE"] <= fast_level)
     ].sort_values("FREE_CAPACITY", ascending=False)
 
-    # Reserve fuer Langsamdreher / Nicht-A-Produkte: freie Plaetze auf hoeheren
-    # Ebenen, NICHT A-Klasse (B/C oder ohne Stamm-ABC) -> zweite Vorschlagsliste,
-    # wenn die Ware kein Schnelldreher ist.
-    reserve = free_slots[
-        (free_slots["ABC_KLASSE"] != "A")
-        & (free_slots["EBENE"] >= reserve_level)
-        & (~free_slots["GESPERRT"])
+    # Reserve fuer Langsamdreher / Nicht-A: freie Nicht-A-Plaetze hoeher oben.
+    reserve = free_usable[
+        (free_usable["ABC_KLASSE"] != "A")
+        & (free_usable["EBENE"] >= reserve_level)
     ].sort_values("FREE_CAPACITY", ascending=False)
 
-    # Gesperrte Plaetze nicht bestuecken.
-    blocked = filtered[filtered["GESPERRT"]].sort_values(
+    # Gesperrt: nur Plaetze, die FREI waeren, aber gesperrt sind (waeren sonst
+    # Einlager-Ziele). Voll belegte Sperrplaetze sind hier irrelevant -> raus.
+    blocked = free_slots[free_slots["GESPERRT"]].sort_values(
         ["REGAL", "EBENE", "FACH"])
 
+    # Ueberblick: wie viel freier Platz ueberhaupt (gesamt + je Kategorie)?
+    st.markdown(t("put_overview"))
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric(t("put_kpi_free"), de_num(len(free_usable)))
+    k2.metric(t("put_fast_t"), de_num(len(fast_lane)))
+    k3.metric(t("put_reserve_t"), de_num(len(reserve)))
+    k4.metric(t("put_kpi_blocked"), de_num(len(blocked)))
+    st.caption(t("put_kpi_capacity").format(
+        n=de_num(int(free_usable["FREE_CAPACITY"].fillna(0).sum()))))
+    st.divider()
+
+    put_extra = [t("col_vorschlag")]
     render_massnahme_kategorie(
         t("put_fast_t"), t("put_fast_d").format(n=fast_level),
-        fast_lane, cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
-        rowhint=t("put_rowhint"), vorschlag=t("put_fast_v"),
-        col_help=_PUTAWAY_HELP)
+        _putaway_vorschlag_col(fast_lane, "fast"),
+        cols=_PUTAWAY_COLS, extra_cols=put_extra, rename=_PUTAWAY_RENAME,
+        rowhint=t("put_rowhint"), col_help=_PUTAWAY_HELP)
     render_massnahme_kategorie(
         t("put_reserve_t"), t("put_reserve_d").format(n=reserve_level),
-        reserve, cols=_PUTAWAY_COLS, rename=_PUTAWAY_RENAME,
-        rowhint=t("put_rowhint"), vorschlag=t("put_reserve_v"),
-        col_help=_PUTAWAY_HELP)
+        _putaway_vorschlag_col(reserve, "reserve"),
+        cols=_PUTAWAY_COLS, extra_cols=put_extra, rename=_PUTAWAY_RENAME,
+        rowhint=t("put_rowhint"), col_help=_PUTAWAY_HELP)
     render_massnahme_kategorie(
-        t("put_blocked_t"), t("put_blocked_d"), blocked,
-        cols=_PUTAWAY_BLOCKED_COLS, rename=_PUTAWAY_BLOCKED_RENAME,
-        rowhint=t("put_blocked_rowhint"), vorschlag=t("put_blocked_v"),
-        col_help=_PUTAWAY_HELP)
+        t("put_blocked_t"), t("put_blocked_d"),
+        _putaway_vorschlag_col(blocked, "blocked"),
+        cols=_PUTAWAY_BLOCKED_COLS, extra_cols=put_extra,
+        rename=_PUTAWAY_BLOCKED_RENAME,
+        rowhint=t("put_blocked_rowhint"), col_help=_PUTAWAY_HELP)
 
 
 def render_auslagern(filtered: pd.DataFrame) -> None:
