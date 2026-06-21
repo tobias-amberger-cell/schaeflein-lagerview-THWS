@@ -1115,14 +1115,6 @@ TR: dict[str, dict[str, str]] = {
               "**Note:** the *‘Active …’* slider shows only slots picked **recently** – locations untouched for "
               "months (high HISTORICAL picks but dead) are hidden and counted as a note above.",
     },
-    "replen_overview": {
-        "de": "#### 🔎 Überblick (aktuelle Filter & Regler)",
-        "en": "#### 🔎 Overview (current filters & sliders)",
-    },
-    "replen_kpi_total": {
-        "de": "Leere Pickplätze (aktiv)",
-        "en": "Empty pick slots (active)",
-    },
     "replen_glossary_t": {
         "de": "ℹ️ Was bedeuten „leer“, „Pick“ und die Spalten?",
         "en": "ℹ️ What do ‘empty’, ‘pick’ and the columns mean?",
@@ -2959,16 +2951,6 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
         (empty_pick["ANZ_PICKS"] > 0)
         & (empty_pick["ANZ_PICKS"] < pick_threshold)
     ].sort_values("ANZ_PICKS", ascending=False)
-
-    # Überblick zuerst: wie viele leere Pickplaetze insgesamt und je Stufe?
-    # (Dringend + Überfällig = disjunkte Aufteilung der wichtigen Plaetze.)
-    st.markdown(t("replen_overview"))
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric(t("replen_kpi_total"), de_num(len(empty_pick)))
-    k2.metric(t("replen_urgent_t"), de_num(len(urgent)))
-    k3.metric(t("replen_overdue_t"), de_num(len(overdue)))
-    k4.metric(t("replen_medium_t"), de_num(len(medium)))
-    st.divider()
 
     # Spaltenende je Liste: zwei Staleness-Signale + abgeleiteter Vorschlag.
     replen_extra = ["DAYS_EMPTY", "DAYS_SINCE_PICK", t("col_vorschlag")]
