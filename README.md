@@ -86,6 +86,23 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 
 ---
 
+## Neue CSV-Daten laden
+
+Einfachster Weg: CSVs in `data/incoming/` legen, dann:
+
+```powershell
+python backend/ingest.py                              # liest aus data/incoming/
+# oder mit explizitem Pfad:
+python backend/ingest.py C:\Pfad\zu\den\CSVs\
+
+# Integritaet pruefen (Schluessellaengen, Join-Rate, Auslastung):
+pytest backend/test_golden.py
+```
+
+Danach `streamlit run backend/streamlit_app.py` – die App liest `data/warehouse.db`.
+
+---
+
 ## Deployment
 
 - **Streamlit Cloud** (kostenlos): Main file `backend/streamlit_app.py`, Branch
