@@ -77,8 +77,12 @@ data/*.csv
 __pycache__/
 *.pyo
 *.pyd
+.pytest_cache/
 .venv/
 venv/
+
+# SQLite-Dateien global (Sicherheitsnetz)
+*.db
 
 # VS Code local workspace files
 .vscode/*
