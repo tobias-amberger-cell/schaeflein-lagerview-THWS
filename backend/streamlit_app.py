@@ -745,12 +745,14 @@ TR: dict[str, dict[str, str]] = {
     },
     "util": {"de": "Auslastung (%)", "en": "Utilization (%)"},
     "util_help": {
-        "de": "IST_LHM / MAX_LHM × 100. 0 = leer, 100 = voll. Obergrenze 100 = "
-              "„100 % und mehr\" (offen) – schließt seltene Überlast-Artefakte "
-              "(≥ 200 %, MAX_LHM zu klein gepflegt) mit ein.",
-        "en": "IST_LHM / MAX_LHM × 100. 0 = empty, 100 = full. Upper bound 100 = "
-              "\"100 % and above\" (open) – includes rare overload artefacts "
-              "(≥ 200 %, MAX_LHM set too low).",
+        "de": "Wie voll ein Platz ist: belegte Menge geteilt durch Kapazität, mal 100. "
+              "0 = leer, 100 = voll. Der obere Reglerwert 100 meint „100 % und mehr\", "
+              "damit auch die wenigen Plätze über 100 % (Kapazität zu niedrig gepflegt) "
+              "mit dabei bleiben.",
+        "en": "How full a slot is: amount stored divided by capacity, times 100. "
+              "0 = empty, 100 = full. The upper slider value 100 means \"100 % and "
+              "above\", so the few slots over 100 % (capacity set too low) stay "
+              "included.",
     },
     "only_occ": {"de": "Nur belegte Plaetze", "en": "Occupied slots only"},
     "place_filter": {
@@ -760,12 +762,12 @@ TR: dict[str, dict[str, str]] = {
     "rack": {"de": "Regal", "en": "Rack"},
     "level": {"de": "Ebene", "en": "Level"},
     "level_help": {
-        "de": "Regalebene laut Feld EBENE. Obergrenze = höchste real belegte "
-              "Ebene (≥ 20 Plätze) – einzelne Ausreißer-Datensätze (EBENE 14–24, "
-              "je 1 Platz) blähen die Skala nicht mehr auf.",
-        "en": "Rack level from field EBENE. Upper bound = highest substantially "
-              "occupied level (≥ 20 slots) – single outlier records (EBENE 14–24, "
-              "1 slot each) no longer inflate the scale.",
+        "de": "Die Regalebene. Der Regler endet bei der höchsten Ebene, auf der "
+              "wirklich viele Plätze liegen (mindestens 20). Einzelne Ausreißer ganz "
+              "oben blähen die Skala so nicht auf.",
+        "en": "The rack level. The slider stops at the highest level that actually "
+              "holds many slots (at least 20), so single outliers at the very top "
+              "don't inflate the scale.",
     },
     "min_picks": {"de": "Min. Picks (ANZ_PICKS)", "en": "Min. picks (ANZ_PICKS)"},
     "lock_status": {"de": "Sperr-Status", "en": "Lock status"},
@@ -779,16 +781,18 @@ TR: dict[str, dict[str, str]] = {
     "m_avg_util": {"de": "Ø Auslastung", "en": "Avg. utilization"},
     # KPI-Hilfetexte (Tooltip am ?-Symbol der Kacheln)
     "m_slots_help": {
-        "de": "Anzahl Stellplaetze in der aktuellen Filter-Auswahl.",
-        "en": "Number of slots in the current filter selection.",
+        "de": "So viele Stellplaetze sind aktuell ausgewaehlt (nach den Filtern).",
+        "en": "How many slots are currently selected (after the filters).",
     },
     "m_occupied_help": {
-        "de": "Plaetze mit Ware (ZUSTAND > 0). Delta = Anteil belegter Plaetze.",
-        "en": "Slots with goods (ZUSTAND > 0). Delta = share of occupied slots.",
+        "de": "Plaetze, auf denen Ware steht. Der kleine Wert darunter ist ihr Anteil "
+              "an allen Plaetzen.",
+        "en": "Slots that hold goods. The small value below is their share of all "
+              "slots.",
     },
     "m_avg_util_help": {
-        "de": "Mittelwert von IST_LHM / MAX_LHM x 100 ueber alle gefilterten Plaetze.",
-        "en": "Average of IST_LHM / MAX_LHM x 100 across all filtered slots.",
+        "de": "Durchschnittliche Fuellung ueber alle ausgewaehlten Plaetze.",
+        "en": "Average fill level across all selected slots.",
     },
     # Tab-Titel
     "tab_halls": {"de": "Übersicht", "en": "Overview"},
@@ -813,75 +817,73 @@ TR: dict[str, dict[str, str]] = {
     "dl": {"de": "⬇️ Als CSV", "en": "⬇️ As CSV"},
     # Tab-Erklaerungen / Ueberschriften
     "halls_intro": {
-        "de": "**Lager-Übersicht** — Belegung, Auslastung und ABC-Verteilung für "
-              "das gesamte Lager BER03 (eine Halle, keine Trennung).",
-        "en": "**Warehouse overview** — occupancy, utilization and ABC "
-              "distribution for the whole warehouse BER03 (single hall).",
+        "de": "**Lager-Übersicht** — Belegung, Auslastung und ABC-Verteilung für das "
+              "ganze Lager BER03 auf einen Blick (eine Halle, keine Trennung).",
+        "en": "**Warehouse overview** — occupancy, utilization and ABC distribution "
+              "for the whole warehouse BER03 at a glance (single hall).",
     },
     "halls_info_t": {
         "de": "ℹ️ Was bedeutet das? — zentrale Begriffe (gelten für ALLE Tabs)",
         "en": "ℹ️ What does this mean? — central terms (apply to ALL tabs)",
     },
     "halls_info_b": {
-        "de": "Diese Übersicht fasst das **ganze (gefilterte) Lager** zusammen. Die wichtigsten Begriffe – sie "
-              "gelten in **allen Tabs** gleich:\n\n"
-              "- **Belegt** = an einem Platz steht **mind. ein** Ladehilfsmittel (`Ist-LHM > 0`) – zählt **auch bei "
-              "teilweiser** Belegung, nicht erst wenn voll.\n"
-              "- **Frei / leer** = es passt noch etwas rein (`freie Kapazität > 0`). **Ganz leer** = gar kein LHM "
-              "(`Ist-LHM = 0`).\n"
-              "- **Auslastung** = `Ist-LHM / Kapazität × 100`. 0 % = leer, 100 % = voll. (Ø Auslastung = Mittel über "
-              "alle Plätze.)\n"
-              "- **Kapazität (MAX_LHM)** = wie viele Ladehilfsmittel (Paletten/Behälter) ein Platz fasst – **kann > "
-              "1 sein**.\n"
-              "- **Pick / Bewegung** = ein Datensatz in den TPA-Daten = **eine Auftragsposition** (eine Entnahme). "
-              "*Ob das genau einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert.*\n"
-              "- **ABC eines Platzes** – zwei Bedeutungen:\n"
-              "    - **Stamm-ABC** = die im Lagersystem hinterlegte **Güteklasse des Ortes** (A = wegoptimaler "
-              "Premiumplatz). Beschreibt den **Platz**.\n"
-              "    - **Berechnete ABC** = aus dem **kumulierten Pick-Anteil** ermittelt (viel gepickt → A). "
-              "Beschreibt die **tatsächliche Nutzung** (Details im ABC-Tab).\n"
-              "- **ABC eines Artikels (SKU)** = nach **Bewegungen** (kumulierter Anteil): meistbewegte Artikel bis "
-              "~80 % → A, bis ~95 % → B, Rest → C.\n\n"
+        "de": "Diese Übersicht fasst das **ganze (gefilterte) Lager** zusammen. Die wichtigsten Begriffe gelten in "
+              "**allen Tabs** gleich:\n\n"
+              "- **Belegt** = auf dem Platz steht mindestens eine Palette oder ein Behälter. Das zählt schon, wenn "
+              "der Platz nur teilweise gefüllt ist – nicht erst, wenn er voll ist.\n"
+              "- **Frei / leer** = es passt noch etwas drauf. **Ganz leer** heißt: gar nichts steht drauf.\n"
+              "- **Auslastung** = wie voll der Platz ist, in Prozent (0 % = leer, 100 % = voll). Die Ø Auslastung ist "
+              "der Durchschnitt über alle Plätze.\n"
+              "- **Kapazität** = wie viele Paletten oder Behälter auf einen Platz passen. Das können auch mehrere "
+              "sein, nicht nur einer.\n"
+              "- **Pick / Bewegung** = eine einzelne Entnahme – also eine Position eines Auftrags. *Ob eine Position "
+              "genau einer Orderzeile oder einem Artikel entspricht, legt das Lagersystem fest.*\n"
+              "- **ABC eines Platzes** hat zwei Bedeutungen:\n"
+              "    - **Stamm-ABC** = die Güteklasse, die im Lagersystem für den **Ort** hinterlegt ist (A = bester, "
+              "wegoptimaler Platz).\n"
+              "    - **Berechnete ABC** = aus der tatsächlichen Pick-Häufigkeit ermittelt (viel gepickt → A). Zeigt, "
+              "wie der Platz wirklich genutzt wird (Details im ABC-Tab).\n"
+              "- **ABC eines Artikels** = nach Bewegungen: die meistbewegten Artikel bis ~80 % sind A, bis ~95 % B, "
+              "der Rest C.\n\n"
               "**Beispiele:**\n"
-              "- *Pick:* Ein Kommissionierauftrag enthält **3 verschiedene Artikel** → das sind **3 Picks** "
-              "(3 Auftragspositionen). 10 Stück desselben Artikels auf **einer** Position = **1 Pick**.\n"
-              "- *ABC berechnet:* 5 Plätze mit Picks **50, 30, 15, 4, 1** (Summe 100). Kumulierter Anteil: "
-              "50 % → 80 % → 95 % → 99 % → 100 %. Bei Schwellen 80/95 %: Platz 1+2 (≤ 80 %) = **A**, "
-              "Platz 3 (≤ 95 %) = **B**, Platz 4+5 = **C**.\n\n"
+              "- *Pick:* Ein Auftrag mit **3 verschiedenen Artikeln** sind **3 Picks**. 10 Stück desselben Artikels "
+              "auf **einer** Position sind nur **1 Pick**.\n"
+              "- *ABC berechnet:* 5 Plätze mit den Picks **50, 30, 15, 4, 1** (zusammen 100). Aufsummiert ergibt das "
+              "50 %, 80 %, 95 %, 99 %, 100 %. Bei den Schwellen 80/95 %: Platz 1+2 sind **A**, Platz 3 ist **B**, "
+              "Platz 4+5 sind **C**.\n\n"
               "**Spalten dieser Tabelle:** *Plätze* = Anzahl Stellplätze · *Belegt/Frei* = wie viele davon · "
-              "*Belegung %* = Belegt/Plätze · *Ø Auslastung %* = mittlere Füllung · *Picks gesamt* = alle Zugriffe · "
-              "*A/B/C-Plätze* = Verteilung nach **berechneter** ABC.\n\n"
-              "*Alle Tabellen lassen sich als CSV herunterladen – inkl. der aktuell gesetzten Filter (als "
-              "Kommentarzeile) und mit **allen** Treffern, nicht nur den angezeigten.*",
-        "en": "This overview summarizes the **whole (filtered) warehouse**. The key terms – they apply the same in "
+              "*Belegung %* = Anteil belegter Plätze · *Ø Auslastung %* = mittlere Füllung · *Picks gesamt* = alle "
+              "Zugriffe · *A/B/C-Plätze* = Verteilung nach **berechneter** ABC.\n\n"
+              "*Jede Tabelle lässt sich als CSV herunterladen – mit allen Treffern (nicht nur den angezeigten) und "
+              "den aktuell gesetzten Filtern als Kommentarzeile.*",
+        "en": "This overview summarizes the **whole (filtered) warehouse**. The key terms apply the same in "
               "**all tabs**:\n\n"
-              "- **Occupied** = a slot holds **at least one** load unit (`Ist-LHM > 0`) – counts **even when "
-              "partially** filled, not only when full.\n"
-              "- **Free / empty** = something still fits (`free capacity > 0`). **Completely empty** = no load unit "
-              "(`Ist-LHM = 0`).\n"
-              "- **Utilization** = `Ist-LHM / capacity × 100`. 0 % = empty, 100 % = full. (Avg. = mean over all "
-              "slots.)\n"
-              "- **Capacity (MAX_LHM)** = how many load units (pallets/bins) a slot holds – **can be > 1**.\n"
-              "- **Pick / movement** = one record in the TPA data = **one order line** (a pick). *Whether this "
-              "equals exactly one order row or one article is defined in the warehouse system (WMS).*\n"
-              "- **ABC of a slot** – two meanings:\n"
-              "    - **Master ABC** = the **quality class of the location** stored in the warehouse system (A = "
-              "path-optimal premium slot). Describes the **slot**.\n"
-              "    - **Calculated ABC** = derived from the **cumulative pick share** (much picked → A). Describes "
-              "the **actual usage** (details in the ABC tab).\n"
-              "- **ABC of an article (SKU)** = by **movements** (cumulative share): most-moved articles up to ~80 % "
-              "→ A, up to ~95 % → B, rest → C.\n\n"
+              "- **Occupied** = the slot holds at least one pallet or bin. This already counts when the slot is only "
+              "partly filled, not just when it's full.\n"
+              "- **Free / empty** = something still fits on it. **Completely empty** means nothing is on it at all.\n"
+              "- **Utilization** = how full the slot is, in percent (0 % = empty, 100 % = full). The average is the "
+              "mean across all slots.\n"
+              "- **Capacity** = how many pallets or bins fit on a slot. This can be more than one, not just one.\n"
+              "- **Pick / movement** = a single retrieval – one line of an order. *Whether one line equals exactly "
+              "one order row or one article is defined by the warehouse system.*\n"
+              "- **ABC of a slot** has two meanings:\n"
+              "    - **Master ABC** = the quality class stored in the warehouse system for the **location** (A = "
+              "best, path-optimal slot).\n"
+              "    - **Calculated ABC** = derived from the actual pick frequency (picked often → A). Shows how the "
+              "slot is really used (details in the ABC tab).\n"
+              "- **ABC of an article** = by movements: the most-moved articles up to ~80 % are A, up to ~95 % B, the "
+              "rest C.\n\n"
               "**Examples:**\n"
-              "- *Pick:* a picking order contains **3 different articles** → that's **3 picks** (3 order lines). "
-              "10 units of the same article on **one** line = **1 pick**.\n"
-              "- *ABC calculated:* 5 slots with picks **50, 30, 15, 4, 1** (sum 100). Cumulative share: "
-              "50 % → 80 % → 95 % → 99 % → 100 %. With thresholds 80/95 %: slots 1+2 (≤ 80 %) = **A**, "
-              "slot 3 (≤ 95 %) = **B**, slots 4+5 = **C**.\n\n"
+              "- *Pick:* an order with **3 different articles** is **3 picks**. 10 units of the same article on "
+              "**one** line is only **1 pick**.\n"
+              "- *ABC calculated:* 5 slots with picks **50, 30, 15, 4, 1** (100 in total). Adding them up gives "
+              "50 %, 80 %, 95 %, 99 %, 100 %. With thresholds 80/95 %: slots 1+2 are **A**, slot 3 is **B**, slots "
+              "4+5 are **C**.\n\n"
               "**Columns of this table:** *Slots* = number of slots · *Occupied/Free* = how many · *Occupancy %* = "
-              "occupied/slots · *Avg. utilization %* = mean fill · *Total picks* = all accesses · *A/B/C slots* = "
-              "distribution by **calculated** ABC.\n\n"
-              "*All tables can be downloaded as CSV – including the currently set filters (as a comment line) and "
-              "with **all** matches, not just the displayed ones.*",
+              "share of occupied slots · *Avg. utilization %* = mean fill · *Total picks* = all accesses · *A/B/C "
+              "slots* = distribution by **calculated** ABC.\n\n"
+              "*Every table can be downloaded as CSV – with all matches (not just the displayed ones) and the "
+              "currently set filters as a comment line.*",
     },
     "halls_kpis": {"de": "**Kennzahlen Lager gesamt**", "en": "**Metrics (whole warehouse)**"},
     "halls_chart": {
@@ -893,38 +895,38 @@ TR: dict[str, dict[str, str]] = {
         "en": "Pick activity per weekday/hour",
     },
     "pick_intro": {
-        "de": "**Pick-Heatmap** — Bewegungen je Wochentag und Stunde (aus den "
-              "TPA-Daten). Zeigt, wann am meisten gepickt wird.",
-        "en": "**Pick heatmap** — movements per weekday and hour (from TPA data). "
-              "Shows when picking peaks.",
+        "de": "**Pick-Heatmap** — wann im Lager gepickt wird, aufgeschlüsselt nach "
+              "Wochentag und Stunde. So sieht man die Stoßzeiten.",
+        "en": "**Pick heatmap** — when picking happens, broken down by weekday and "
+              "hour. Shows the peak times.",
     },
     "pick_info_t": {
         "de": "ℹ️ Was bedeutet das? (Pick-Heatmap + „ein Pick“ erklärt)",
         "en": "ℹ️ What does this mean? (pick heatmap + “one pick”)",
     },
     "pick_info_b": {
-        "de": "Die Heatmap zeigt, **wann** im Lager gepickt wird: **eine Zelle = ein Zeitfenster** (Wochentag × "
-              "Stunde), die **Farbe = Anzahl Picks** darin (hell = wenig, rot = viel).\n\n"
-              "**Was ist ein Pick / eine Bewegung?** Ein Pick = **ein Datensatz in den TPA-Daten** = **eine "
-              "Auftragsposition** (eine Entnahmeposition) – identisch zum Durchsatz-Tab. *Ob eine Position genau "
-              "einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert.*\n\n"
-              "**Was heißt „Picks je Quellplatz“?** Standardmäßig zählt die Heatmap **alle** Picks im Lager. Wenn du "
-              "in der Sidebar **Plätze filterst**, werden nur die Bewegungen gezählt, die von diesen **Quellplätzen** "
-              "(`Q_PLATZ` = der Platz, aus dem entnommen wird) ausgehen – so siehst du das Pick-Muster gezielt für "
-              "die ausgewählten Plätze.\n\n"
-              "**Wozu?** Stoßzeiten erkennen → Personal- und Schichtplanung.\n\n"
-              "**Wochenende ist immer ausgeblendet:** Sa/So haben kaum Picks und würden das Bild verwässern.",
-        "en": "The heatmap shows **when** picking happens: **one cell = one time window** (weekday × hour), the "
-              "**colour = number of picks** in it (light = few, red = many).\n\n"
-              "**What is a pick / a movement?** One pick = **one record in the TPA data** = **one order line** (a "
-              "pick line) – same as the Throughput tab. *Whether one line equals exactly one order row or one "
-              "article is defined in the warehouse system (WMS).*\n\n"
-              "**What does “picks per source slot” mean?** By default the heatmap counts **all** picks in the "
-              "warehouse. If you **filter slots** in the sidebar, only movements originating from those **source "
-              "slots** (`Q_PLATZ` = the slot picked from) are counted – so you see the pick pattern specifically for "
-              "the selected slots.\n\n"
-              "**Why?** Spot peak times → staff and shift planning.\n\n"
-              "**Weekend is always excluded:** Sat/Sun have hardly any picks and would dilute the picture.",
+        "de": "Die Heatmap zeigt, **wann** im Lager gepickt wird. Jedes Kästchen steht für ein Zeitfenster "
+              "(Wochentag und Stunde), und die Farbe sagt, wie viel darin gepickt wurde: hell = wenig, rot = viel.\n\n"
+              "**Was ist ein Pick?** Ein Pick ist eine einzelne Entnahme – also eine Position eines Auftrags, genau "
+              "wie im Durchsatz-Tab. *Ob eine Position genau einer Orderzeile oder einem Artikel entspricht, legt das "
+              "Lagersystem fest.*\n\n"
+              "**Was heißt „Picks je Quellplatz“?** Normalerweise zählt die Heatmap alle Picks im Lager. Sobald du "
+              "links Plätze filterst, zählen nur noch die Entnahmen, die von genau diesen Plätzen ausgehen – so "
+              "siehst du das Pick-Muster gezielt für deine Auswahl.\n\n"
+              "**Wozu das Ganze?** Man erkennt die Stoßzeiten und kann Personal und Schichten besser planen.\n\n"
+              "**Das Wochenende ist immer ausgeblendet**, weil samstags und sonntags kaum gepickt wird und das Bild "
+              "sonst verwässert.",
+        "en": "The heatmap shows **when** picking happens. Each cell stands for one time window (weekday and hour), "
+              "and the colour tells you how much was picked in it: light = little, red = a lot.\n\n"
+              "**What is a pick?** A pick is a single retrieval – one line of an order, just like in the Throughput "
+              "tab. *Whether one line equals exactly one order row or one article is defined by the warehouse "
+              "system.*\n\n"
+              "**What does “picks per source slot” mean?** By default the heatmap counts all picks in the warehouse. "
+              "As soon as you filter slots on the left, only the retrievals from exactly those slots are counted – so "
+              "you see the pick pattern specifically for your selection.\n\n"
+              "**What's it for?** You can spot the peak times and plan staff and shifts better.\n\n"
+              "**The weekend is always hidden**, because there's hardly any picking on Saturdays and Sundays and it "
+              "would otherwise dilute the picture.",
     },
     "pick_peak": {
         "de": "Spitze: {wd} {h:02d}:00 Uhr mit {p} Picks.",
@@ -936,12 +938,10 @@ TR: dict[str, dict[str, str]] = {
     "hour_label": {"de": "Stunde", "en": "Hour"},
     "picks_label": {"de": "Picks", "en": "Picks"},
     "bottle_intro": {
-        "de": "**Hochfrequenz-Plätze** — Plätze mit hoher Pick-Frequenz "
-              "(`ANZ_PICKS` + `Q_PLATZ`-Count aus Fahrpos). Diese Plätze werden "
-              "am häufigsten angefahren und sind oft hoch ausgelastet.",
-        "en": "**High-frequency slots** — slots with high pick frequency "
-              "(`ANZ_PICKS` + `Q_PLATZ` count from Fahrpos). These slots are "
-              "visited most often and are frequently highly utilized.",
+        "de": "**Hochfrequenz-Plätze** — die Plätze, die am häufigsten angefahren "
+              "werden. Das sind die Hot-Spots im Lager; sie sind oft stark ausgelastet.",
+        "en": "**High-frequency slots** — the slots that are visited most often. "
+              "These are the warehouse hot spots and are often heavily utilized.",
     },
     "bottle_chart": {
         "de": "Top-15 Hochfrequenz-Plätze (Picks gesamt, Farbe = Auslastung %)",
@@ -952,59 +952,58 @@ TR: dict[str, dict[str, str]] = {
         "en": "ℹ️ What does this mean? (high-frequency slots + columns)",
     },
     "bottle_info_b": {
-        "de": "Dieser Tab zeigt die **meistangefahrenen Plätze** – sortiert nach **Picks gesamt** (absteigend). "
-              "Das sind die Hot-Spots im Lager.\n\n"
+        "de": "Dieser Tab zeigt die **meistangefahrenen Plätze**, sortiert nach den gesamten Picks (oben die "
+              "stärksten). Das sind die Hot-Spots im Lager.\n\n"
               "**Warum zwei Pick-Spalten?**\n"
-              "- **Picks (Stamm)** = `ANZ_PICKS`, die im Lagersystem hinterlegte Zugriffshäufigkeit des Platzes.\n"
-              "- **Picks gesamt** = zusätzlich die Anfahrten aus den Fahrpos-Daten (`Q_PLATZ`).\n"
-              "Bei vielen Plätzen sind **beide gleich** – dann gab es **keine** zusätzlichen Fahrpos-Anfahrten. "
-              "Das ist **kein Fehler**, sondern heißt: die Stamm-Häufigkeit ist hier die einzige Quelle.\n\n"
-              "**Was heißt Auslastung 100 % vs. 0 %?** `Ist-LHM / Kapazität × 100`.\n"
-              "- **100 %** = der Platz ist **voll**.\n"
-              "- **0 %** = der Platz wird zwar **oft angefahren**, ist aber **gerade leer** → typischer "
-              "Nachschub-Kandidat (Pickplatz, der nachgefüllt werden muss).",
-        "en": "This tab shows the **most-visited slots** – sorted by **total picks** (descending). These are the "
+              "- **Picks (Stamm)** = die Zugriffshäufigkeit, die im Lagersystem für den Platz hinterlegt ist.\n"
+              "- **Picks gesamt** = zusätzlich die tatsächlichen Anfahrten aus den Bewegungsdaten.\n"
+              "Bei vielen Plätzen sind beide Werte gleich – dann gab es eben keine zusätzlichen Anfahrten. Das ist "
+              "kein Fehler, sondern heißt nur: hier ist der Stamm-Wert die einzige Quelle.\n\n"
+              "**Was bedeutet Auslastung 100 % oder 0 %?**\n"
+              "- **100 %** = der Platz ist voll.\n"
+              "- **0 %** = der Platz wird oft angefahren, ist aber gerade leer. Genau so ein Platz gehört auf die "
+              "Nachschub-Liste.",
+        "en": "This tab shows the **most-visited slots**, sorted by total picks (the busiest on top). These are the "
               "warehouse hot spots.\n\n"
               "**Why two pick columns?**\n"
-              "- **Picks (master)** = `ANZ_PICKS`, the access frequency of the slot stored in the warehouse system.\n"
-              "- **Total picks** = plus visits from the Fahrpos data (`Q_PLATZ`).\n"
-              "For many slots **both are equal** – then there were **no** extra Fahrpos visits. That is **not an "
-              "error**; it means the master frequency is the only source here.\n\n"
-              "**What does utilization 100 % vs. 0 % mean?** `Ist-LHM / capacity × 100`.\n"
-              "- **100 %** = the slot is **full**.\n"
-              "- **0 %** = the slot is **visited often** but is **currently empty** → a typical replenishment "
-              "candidate (a pick slot to be refilled).",
+              "- **Picks (master)** = the access frequency stored for the slot in the warehouse system.\n"
+              "- **Total picks** = plus the actual visits from the movement data.\n"
+              "For many slots both values are equal – then there simply were no extra visits. That's not an error, "
+              "it just means the master value is the only source here.\n\n"
+              "**What does utilization 100 % or 0 % mean?**\n"
+              "- **100 %** = the slot is full.\n"
+              "- **0 %** = the slot is visited often but is currently empty. Exactly such a slot belongs on the "
+              "replenishment list.",
     },
     "free_intro": {
-        "de": "**Free Capacity** — Plätze mit Restkapazität, sortiert nach "
-              "`MAX_LHM − IST_LHM`.",
-        "en": "**Free capacity** — slots with remaining capacity, sorted by "
-              "`MAX_LHM − IST_LHM`.",
+        "de": "**Free Capacity** — Plätze, auf die noch etwas draufpasst. Oben stehen "
+              "die mit der größten freien Lücke.",
+        "en": "**Free capacity** — slots that still have room. The ones with the "
+              "largest free gap are at the top.",
     },
     "free_info_t": {
         "de": "ℹ️ Was bedeutet das? (Free Capacity + Spalten)",
         "en": "ℹ️ What does this mean? (free capacity + columns)",
     },
     "free_info_b": {
-        "de": "Dieser Tab zeigt **Plätze mit Restkapazität** (`Frei (LHM) > 0`), sortiert nach der **größten Lücke "
-              "zuerst** – also wo noch Ware reinpasst.\n\n"
-              "**Warum ist „Kapazität (max. LHM)“ manchmal 2 (oder mehr) und nicht 1?** `MAX_LHM` ist die "
-              "**maximale Anzahl Ladehilfsmittel (Paletten/Behälter), die der Platz fasst** – ein Platz kann "
-              "baulich **mehrere** LHM aufnehmen (z. B. zwei Paletten hinter-/nebeneinander). Das ist **kein "
-              "Fehler**, sondern die echte Platzkapazität.\n\n"
-              "**Was heißt Auslastung 0 %?** `Ist-LHM / Kapazität × 100`. **0 %** = der Platz ist **ganz leer** "
-              "(volle Restkapazität). Ein freier Platz liegt immer **unter 100 %**.\n\n"
-              "**Spalten:** **Kapazität** = wie viel max. reinpasst · **Belegt** = wie viel schon drinsteht · "
-              "**Frei** = wie viel noch reinpasst · **Auslastung %** = wie voll der Platz schon ist.",
-        "en": "This tab shows **slots with remaining capacity** (`Free (LHM) > 0`), sorted by the **largest gap "
-              "first** – i.e. where goods still fit.\n\n"
-              "**Why is “Capacity (max. LHM)” sometimes 2 (or more) and not 1?** `MAX_LHM` is the **maximum number "
-              "of load units (pallets/bins) the slot holds** – a slot can physically take **several** units (e.g. "
-              "two pallets). That is **not an error**, it is the real slot capacity.\n\n"
-              "**What does utilization 0 % mean?** `Ist-LHM / capacity × 100`. **0 %** = the slot is **completely "
-              "empty** (full remaining capacity). A free slot is always **below 100 %**.\n\n"
-              "**Columns:** **Capacity** = max that fits · **Occupied** = what is already in · **Free** = what still "
-              "fits · **Utilization %** = how full the slot already is.",
+        "de": "Dieser Tab zeigt alle Plätze, auf die noch etwas draufpasst – oben die mit der größten freien Lücke. "
+              "So findest du schnell Platz für neue Ware.\n\n"
+              "**Warum steht bei „Kapazität“ manchmal 2 oder mehr und nicht 1?** Die Kapazität ist, wie viele "
+              "Paletten oder Behälter auf den Platz passen. Manche Plätze fassen baulich mehrere (z. B. zwei "
+              "Paletten nebeneinander). Das ist kein Fehler, sondern die echte Größe des Platzes.\n\n"
+              "**Was heißt Auslastung 0 %?** Der Platz ist ganz leer und komplett frei. Ein freier Platz liegt immer "
+              "unter 100 %.\n\n"
+              "**Spalten:** *Kapazität* = wie viel maximal draufpasst · *Belegt* = wie viel schon drauf steht · "
+              "*Frei* = wie viel noch reinpasst · *Auslastung %* = wie voll der Platz schon ist.",
+        "en": "This tab shows every slot that still has room – the ones with the largest free gap on top. So you "
+              "quickly find space for new goods.\n\n"
+              "**Why does “Capacity” sometimes say 2 or more, not 1?** Capacity is how many pallets or bins fit on "
+              "the slot. Some slots physically hold several (e.g. two pallets side by side). That's not an error, "
+              "it's the real size of the slot.\n\n"
+              "**What does utilization 0 % mean?** The slot is completely empty and fully free. A free slot is always "
+              "below 100 %.\n\n"
+              "**Columns:** *Capacity* = max that fits · *Occupied* = what's already on it · *Free* = what still "
+              "fits · *Utilization %* = how full the slot already is.",
     },
     "free_count": {"de": "Plätze mit freier Kapazität", "en": "Slots with free capacity"},
     "free_total": {"de": "Freie LHM gesamt", "en": "Total free LHM"},
@@ -1012,36 +1011,41 @@ TR: dict[str, dict[str, str]] = {
     "free_byhall": {"de": "Freie Kapazität (LHM) je Halle", "en": "Free capacity (LHM) per hall"},
     # Maßnahmen
     "reloc_head": {
-        "de": "### 🔄 Umlagern\nDatenbasierte Umlager-Vorschläge.",
-        "en": "### 🔄 Relocate\nData-driven relocation suggestions (same logic as the app).",
+        "de": "### 🔄 Umlagern\nVorschläge, welche Ware auf einen besseren Platz "
+              "sollte – direkt aus den Lagerdaten.",
+        "en": "### 🔄 Relocate\nSuggestions for which goods should move to a better "
+              "slot – straight from the warehouse data.",
     },
     "reloc_info_t": {
         "de": "ℹ️ Was bedeutet Umlagern? (Regeln + Spalten)",
         "en": "ℹ️ What is relocation? (rules + columns)",
     },
     "reloc_info_b": {
-        "de": "**Umlagern** = einen Artikel von einem **schlechten auf einen besseren Platz** bringen – **ohne** "
-              "dass neue Ware reinkommt. Ziel: Premium-Plätze (A, niedrige Ebene) für Schnelldreher frei machen.\n\n"
-              "**So entstehen die Listen (Filter-Regeln, alle Kriterien stehen als Spalte):**\n"
-              "1. **Premium ungenutzt** – Platz ist **A**, hat aber **0 Picks** → wertvoller Platz steht brach. "
-              "→ Inhalt auf einen Reserve-Platz (höhere Ebene) umlagern.\n"
-              "2. **Heiße C-Plätze** – Platz ist **C**, hat aber **≥ Regler-Schwelle Picks** → falsch eingestuft / "
-              "am falschen Ort. → auf einen guten Pickplatz (niedrige Ebene) holen.\n"
-              "3. **A weit oben** – **A**-Platz mit Picks, aber **Ebene ≥ Regler** → ergonomisch ungünstig "
-              "(Hochhub). → nach unten holen.\n\n"
-              "**Zielplatz-Vorschlag** = ein konkreter freier Platz, der passt (niedrige Ebene für heiße/hohe A, "
-              "Reserve oben für ungenutzte A); 1:1 nach freier Kapazität zugeordnet.",
-        "en": "**Relocation** = move an article from a **worse to a better slot** – **without** new goods coming "
-              "in. Goal: free up premium slots (A, low level) for fast movers.\n\n"
-              "**How the lists are built (filter rules, every criterion is a column):**\n"
-              "1. **Premium unused** – slot is **A** but has **0 picks** → a valuable slot lies idle. → move its "
-              "content to a reserve slot (higher level).\n"
-              "2. **Hot C slots** – slot is **C** but has **≥ slider threshold picks** → misclassified / wrong "
-              "place. → bring to a good pick slot (low level).\n"
-              "3. **A high up** – **A** slot with picks but **level ≥ slider** → ergonomically poor (lifting). → "
-              "bring down.\n\n"
-              "**Suggested target slot** = a concrete free slot that fits (low level for hot/high A, reserve up for "
-              "unused A); matched 1:1 by free capacity.",
+        "de": "**Umlagern** heißt: einen Artikel von einem schlechteren auf einen besseren Platz bringen, ohne dass "
+              "neue Ware reinkommt. Ziel ist, die besten Plätze (A, niedrige Ebene) für die Schnelldreher frei zu "
+              "halten.\n\n"
+              "**So entstehen die Listen** – jede Regel steht auch als Spalte in der Tabelle, du kannst sie also "
+              "nachprüfen:\n"
+              "1. **Premium ungenutzt** – ein A-Platz, der aber gar nicht gepickt wird. Ein wertvoller Platz steht "
+              "brach → seinen Inhalt auf einen Reserveplatz weiter oben umlagern.\n"
+              "2. **Heiße C-Plätze** – ein C-Platz, der trotzdem oft gepickt wird (ab dem Regler-Wert). Er ist falsch "
+              "eingestuft oder steht am falschen Ort → auf einen guten Pickplatz unten holen.\n"
+              "3. **A weit oben** – ein A-Platz mit Picks, der aber weit oben liegt (ab dem Regler-Wert). Das heißt "
+              "Hochhub und kostet Zeit → nach unten holen.\n\n"
+              "**Der Zielplatz-Vorschlag** ist jeweils ein konkreter freier Platz, der passt: unten für heiße oder "
+              "hoch liegende A-Plätze, oben in der Reserve für die ungenutzten A-Plätze. Zugeordnet wird 1:1 nach "
+              "freier Kapazität.",
+        "en": "**Relocation** means moving an article from a worse to a better slot, without any new goods coming "
+              "in. The goal is to keep the best slots (A, low level) free for the fast movers.\n\n"
+              "**How the lists are built** – every rule is also shown as a column, so you can check it:\n"
+              "1. **Premium unused** – an A slot that isn't picked at all. A valuable slot lies idle → move its "
+              "content to a reserve slot higher up.\n"
+              "2. **Hot C slots** – a C slot that is picked often anyway (from the slider value up). It's "
+              "misclassified or in the wrong place → bring it to a good pick slot down low.\n"
+              "3. **A high up** – an A slot with picks that sits high up (from the slider value up). That means "
+              "lifting and costs time → bring it down.\n\n"
+              "**The suggested target slot** is always a concrete free slot that fits: low for hot or high-up A "
+              "slots, up in the reserve for the unused A slots. Matched 1:1 by free capacity.",
     },
     "reloc_abc_help": {
         "de": "Welche Klassen anzeigen: A blendet „Premium ungenutzt“ + „A weit "
@@ -1089,144 +1093,144 @@ TR: dict[str, dict[str, str]] = {
         "en": "A class high up & active – bring down.",
     },
     "replen_head": {
-        "de": "### ⬆️ Nachschub / Replenishment\n**Welche Pickplätze sind leer und sollten nachgefüllt werden?** "
-              "Gelistet werden **ganz leere** Plätze (`IST_LHM = 0`) in der **Pickzone** (niedrige Ebenen), "
-              "sortiert nach **Dringlichkeit**.",
+        "de": "### ⬆️ Nachschub\n**Welche Pickplätze sind leer und sollten nachgefüllt werden?** "
+              "Gelistet werden ganz leere Plätze in der Pickzone (den niedrigen Ebenen), sortiert nach "
+              "Dringlichkeit.",
         "en": "### ⬆️ Replenishment\n**Which pick slots are empty and should be refilled?** "
-              "The lists show **completely empty** slots (`IST_LHM = 0`) in the **pick zone** (low levels), "
-              "ranked by **urgency**.",
+              "The lists show completely empty slots in the pick zone (the low levels), ranked by urgency.",
     },
     "replen_principle": {
-        "de": "**Warum dieser Tab?** Ein leerer, aber häufig gepickter Platz bedeutet **Fehlmengen / Suchwege**: "
-              "Der Kommissionierer steht vor einem leeren Fach. Je öfter der Platz sonst gepickt wird und je länger "
-              "er schon leer ist, desto dringender der Nachschub. Es gibt zwei Listen: "
-              "*Überfällig (vernachlässigt)* = wichtiger Platz, leer und schon länger kein Pick → vor dem Absterben "
-              "auffüllen; *Mittlere Frequenz* = leer, aber seltener gepickt. Gesperrte Plätze sind bewusst ausgeschlossen. "
-              "**Wichtig:** Über den Regler *„Aktiv …“* werden nur Plätze gezeigt, an denen **kürzlich** gepickt "
-              "wurde – seit Monaten unberührte Fächer (hohe HISTORISCHE Picks, aber tot) werden ausgeblendet und "
-              "oben als Hinweis gezählt.",
-        "en": "**Why this tab?** An empty but frequently picked slot means **shortages / search time**: "
-              "the picker faces an empty bin. The more often the slot is otherwise picked and the longer it has "
-              "been empty, the more urgent the replenishment. There are two lists: "
-              "*Overdue (neglected)* = important slot, empty and no pick for a while → refill before it dies; "
-              "*Medium frequency* = empty, but picked less often. Locked slots are deliberately excluded. "
-              "**Note:** the *‘Active …’* slider shows only slots picked **recently** – locations untouched for "
-              "months (high HISTORICAL picks but dead) are hidden and counted as a note above.",
+        "de": "**Worum geht's hier?** Ist ein Platz leer, an dem sonst oft gepickt wird, steht der Mitarbeiter vor "
+              "einem leeren Fach – er muss suchen, oder die Ware fehlt. Je öfter der Platz normalerweise gepickt "
+              "wird und je länger er schon leer ist, desto dringender der Nachschub.\n\n"
+              "Es gibt zwei Listen:\n"
+              "- **Überfällig (vernachlässigt)** – wichtiger Platz, leer und schon länger kein Pick. Auffüllen, bevor "
+              "das Fach ganz einschläft.\n"
+              "- **Mittlere Frequenz** – leer, aber seltener gebraucht.\n\n"
+              "Gesperrte Plätze lassen wir bewusst weg. Über den Regler **„Aktiv …“** zeigen wir außerdem nur Plätze, "
+              "an denen kürzlich gepickt wurde. Fächer, die seit Monaten unberührt sind (früher viel gepickt, jetzt "
+              "tot), blenden wir aus und zählen sie oben nur als Hinweis.",
+        "en": "**What's this about?** If a slot is empty where picking usually happens often, the worker faces an "
+              "empty bin – they have to search, or goods are missing. The more often the slot is normally picked and "
+              "the longer it has been empty, the more urgent the refill.\n\n"
+              "There are two lists:\n"
+              "- **Overdue (neglected)** – important slot, empty and no pick for a while. Refill before the location "
+              "goes dormant.\n"
+              "- **Medium frequency** – empty, but needed less often.\n\n"
+              "Locked slots are deliberately left out. The **‘Active …’** slider also shows only slots picked "
+              "recently. Bins untouched for months (once busy, now dead) are hidden and only counted as a note "
+              "above.",
     },
     "replen_glossary_t": {
         "de": "ℹ️ Was bedeuten „leer“, „Pick“ und die Spalten?",
         "en": "ℹ️ What do ‘empty’, ‘pick’ and the columns mean?",
     },
     "replen_glossary_b": {
-        "de": "- **Leer** = **ganz leer**: `IST_LHM = 0`, es steht **kein** Ladehilfsmittel (Palette/Behälter) am Platz. "
-              "*Teilweise* gefüllte Plätze (noch Restkapazität, aber Ware vorhanden) stehen **nicht** hier, sondern im "
-              "Tab **Einlagern / Free Capacity**.\n"
-              "- **Pick (Spalte „Picks (Häufigkeit)“)** = `ANZ_PICKS`, die im WMS hinterlegte **Zugriffshäufigkeit "
-              "dieses Platzes** (wie oft an diesem Ort entnommen wurde). Es ist ein **Platz-Zähler**, nicht der "
-              "aktuelle Bestand. *Hinweis: ob ein Zugriff genau 1 Orderzeile oder 1 Artikel zählt, ist im WMS-Stamm "
-              "definiert und sollte beim Betreiber bestätigt werden.*\n"
-              "- **ABC (Platz)** = im WMS hinterlegte **Güteklasse des Ortes** (A = wegoptimaler Premiumplatz). "
-              "Beschreibt den **Platz**, wird hier **nicht** aus Picks berechnet.\n"
-              "- **Soll-LHM** = `MAX_LHM` = auf wie viele Ladehilfsmittel der Platz **aufgefüllt** werden soll.\n"
-              "- **Tage leer** = `DAYS_EMPTY`, Tage seit dem Leer-Datum (`LEER_DATUM`). Bei manchen Plätzen leer.\n"
-              "- **Tage seit letztem Pick** = `ZUGRIFF_DATUM`, zweites Staleness-Signal (besser gefüllt als das "
-              "Leer-Datum): *kürzlich gepickt + leer* = vergessener Nachschub; *lange kein Pick* = evtl. totes Fach.\n"
-              "- **Vorschlag** = **abgeleitete** Handlung, kein fester Text: Dringlichkeit aus der Listenregel, "
-              "Menge = **Soll-LHM** (Platz leer → auf Soll auffüllen), bei *Überfällig* zusätzlich die Tage leer.\n\n"
-              "Eine **Wert-Spalte** (`MAX_LHM × Picks`) gibt es hier bewusst **nicht** – die Dringlichkeit ergibt "
-              "sich allein aus **Pickhäufigkeit** und **Tage leer/ohne Pick**. *(`ANZ_NACHSCHUB` aus dem WMS ist in "
-              "diesen Daten durchgehend 0 und daher nicht verwertbar.)*",
-        "en": "- **Empty** = **completely empty**: `IST_LHM = 0`, **no** load unit (pallet/bin) at the slot. "
-              "*Partially* filled slots (spare capacity but goods present) are **not** here but in the "
-              "**Put-away / Free Capacity** tab.\n"
-              "- **Pick (column ‘Picks (frequency)’)** = `ANZ_PICKS`, the **access frequency of this slot** stored "
-              "in the WMS (how often it was picked from this location). It is a **slot counter**, not the current "
-              "stock. *Note: whether one access counts as 1 order line or 1 article is defined in the WMS master and "
-              "should be confirmed with the operator.*\n"
-              "- **ABC (slot)** = the **quality class of the location** stored in the WMS (A = path-optimal premium "
-              "slot). Describes the **slot**, **not** computed from picks here.\n"
-              "- **Soll-LHM** = `MAX_LHM` = the number of load units the slot should be **refilled** to.\n"
-              "- **Days empty** = `DAYS_EMPTY`, days since the empty date (`LEER_DATUM`).\n\n"
-              "There is deliberately **no value column** (`MAX_LHM × picks`) here – urgency comes solely from "
-              "**pick frequency** and **days empty**.",
+        "de": "- **Leer** heißt hier **ganz leer**: gar nichts steht auf dem Platz. Teilweise gefüllte Plätze (noch "
+              "Platz frei, aber schon Ware drauf) stehen nicht hier, sondern im Tab **Einlagern / Free Capacity**.\n"
+              "- **Picks (Häufigkeit)** = wie oft an diesem Platz normalerweise gepickt wird (im Lagersystem "
+              "hinterlegt). Das ist ein Zähler für den Ort, nicht der aktuelle Bestand.\n"
+              "- **ABC (Platz)** = die Güteklasse des Ortes aus dem Lagersystem (A = bester Platz). Sie beschreibt "
+              "den Platz und wird hier nicht aus den Picks berechnet.\n"
+              "- **Soll-LHM** = auf wie viele Paletten/Behälter der Platz aufgefüllt werden soll.\n"
+              "- **Tage seit letztem Pick** = wie lange hier nichts mehr entnommen wurde – der eine "
+              "Zeit-Wert dieser Tabelle. Kürzlich gepickt und trotzdem leer heißt: Nachschub vergessen. "
+              "Lange kein Pick heißt: vielleicht ein totes Fach. (Das reine „leer seit“-Datum ist in den "
+              "Daten oft veraltet und wird deshalb nicht extra angezeigt.)\n"
+              "- **Vorschlag** = die abgeleitete Handlung. Wie dringend, ergibt sich aus der Liste; die Menge ist das "
+              "Soll-LHM (Platz ist leer, also auf Soll auffüllen), bei Überfälligen zusätzlich die Tage ohne Pick.\n\n"
+              "Eine **Wert-Spalte** gibt es hier bewusst nicht – die Dringlichkeit ergibt sich allein aus "
+              "Pick-Häufigkeit und Tagen ohne Pick.",
+        "en": "- **Empty** here means **completely empty**: nothing is on the slot at all. Partly filled slots "
+              "(still room, but goods already on them) are not here but in the **Put-away / Free Capacity** tab.\n"
+              "- **Picks (frequency)** = how often this slot is normally picked (stored in the warehouse system). "
+              "It's a counter for the location, not the current stock.\n"
+              "- **ABC (slot)** = the quality class of the location from the warehouse system (A = best slot). It "
+              "describes the slot and is not computed from picks here.\n"
+              "- **Target LU** = how many pallets/bins the slot should be refilled to.\n"
+              "- **Days since last pick** = how long nothing has been taken from here – the single time value of "
+              "this table. Picked recently yet empty means a forgotten refill. No pick for a long time may mean a "
+              "dead bin. (The plain ‘empty since’ date is often outdated in the data and is therefore not shown "
+              "separately.)\n"
+              "- **Suggestion** = the derived action. How urgent comes from the list; the amount is the target LU "
+              "(the slot is empty, so refill to target), plus the days without a pick for overdue ones.\n\n"
+              "There is deliberately **no value column** here – urgency comes solely from pick frequency and days "
+              "without a pick.",
     },
     "sl_picklevel": {"de": "Max. Ebene (Pickzone)", "en": "Max. level (pick zone)"},
     "sl_picklevel_h": {
-        "de": "Nur Plätze bis zu dieser Ebene gelten als Pickzone. Höher = Reserve, "
-              "die nicht zwingend ständig gefüllt sein muss.",
-        "en": "Only slots up to this level count as the pick zone. Higher = reserve "
-              "that need not always be stocked.",
+        "de": "Nur Plätze bis zu dieser Ebene zählen als Pickzone. Was höher liegt, "
+              "ist Reserve und muss nicht ständig gefüllt sein.",
+        "en": "Only slots up to this level count as the pick zone. Anything higher is "
+              "reserve and need not always be stocked.",
     },
-    "sl_pickthresh": {"de": "Dringend ab Picks", "en": "Urgent from picks"},
+    "sl_pickthresh": {"de": "Wichtig ab Picks", "en": "Important from picks"},
     "sl_pickthresh_h": {
-        "de": "Ab so vielen Picks (Zugriffshäufigkeit des Platzes) zählt ein leerer "
-              "Platz als „dringend“ – ein wichtiger Pickplatz steht leer.",
-        "en": "From this many picks (slot access frequency) an empty slot counts as "
-              "‘urgent’ – an important pick slot is empty.",
+        "de": "Ab so vielen Picks gilt ein leerer Platz als wichtig. Darunter landet "
+              "er in der Liste „Mittlere Frequenz“.",
+        "en": "From this many picks an empty slot counts as important. Below that it "
+              "goes into the ‘Medium frequency’ list.",
     },
     "sl_overdue": {"de": "Überfällig ab Tagen ohne Pick",
                    "en": "Overdue from days without pick"},
     "sl_overdue_h": {
-        "de": "Grenze zwischen „dringend“ und „überfällig“: Ein wichtiger leerer Platz, "
-              "an dem seit mehr als so vielen Tagen NICHT gepickt wurde (ZUGRIFF_DATUM), "
-              "gilt als überfällig/vernachlässigt; darunter als frisch-dringend.",
-        "en": "Threshold between ‘urgent’ and ‘overdue’: an important empty slot not "
-              "picked (ZUGRIFF_DATUM) for more than this many days counts as "
-              "overdue/neglected; below it as freshly urgent.",
+        "de": "Ab so vielen Tagen ohne Pick gilt ein wichtiger leerer Platz als "
+              "überfällig (vernachlässigt).",
+        "en": "After this many days without a pick, an important empty slot counts as "
+              "overdue (neglected).",
     },
     "sl_active": {"de": "Aktiv: zuletzt gepickt vor max. Tagen",
                   "en": "Active: last picked within days"},
     "sl_active_h": {
-        "de": "Nur Plätze berücksichtigen, an denen in diesem Zeitraum zuletzt "
-              "gepickt wurde (ZUGRIFF_DATUM). Trennt echte Nachfüll-Kandidaten von "
-              "lange ungenutzten/toten Fächern (hohe HISTORISCHE Picks, aber seit "
-              "Monaten kein Zugriff).",
-        "en": "Only consider slots last picked within this window (ZUGRIFF_DATUM). "
-              "Separates genuine refill candidates from long-unused/dead locations "
-              "(high HISTORICAL picks but no access for months).",
+        "de": "Nur Plätze zeigen, an denen in diesem Zeitraum zuletzt gepickt wurde. "
+              "Das trennt echte Nachfüll-Kandidaten von toten Fächern, die früher viel "
+              "gepickt wurden, aber seit Monaten unberührt sind.",
+        "en": "Only show slots last picked within this window. This separates real "
+              "refill candidates from dead bins that were busy once but haven't been "
+              "touched for months.",
     },
     "replen_inactive_note": {
-        "de": "ℹ️ **{n} leere Plätze ausgeblendet**, weil seit > {d} Tagen kein Pick "
-              "(oder kein Zugriffsdatum) – wahrscheinlich **tote Fächer**, kein akuter "
-              "Nachschub. Regler „Aktiv …“ erhöhen, um sie einzubeziehen.",
-        "en": "ℹ️ **{n} empty slots hidden** because not picked for > {d} days (or no "
-              "access date) – likely **dead locations**, not urgent replenishment. "
-              "Increase the ‘Active …’ slider to include them.",
+        "de": "ℹ️ **{n} leere Plätze ausgeblendet**, weil seit über {d} Tagen kein Pick "
+              "mehr (oder kein Datum bekannt). Das sind wahrscheinlich tote Fächer, kein "
+              "akuter Nachschub. Über den Regler „Aktiv …“ kannst du sie einblenden.",
+        "en": "ℹ️ **{n} empty slots hidden** because there's been no pick for over {d} "
+              "days (or no date known). These are likely dead bins, not urgent "
+              "replenishment. Use the ‘Active …’ slider to include them.",
     },
     "replen_overdue_t": {"de": "Überfällig (vernachlässigt)",
                          "en": "Overdue (neglected)"},
     "replen_overdue_d": {
-        "de": "Wichtiger Platz, leer und seit **> {n} Tagen kein Pick** mehr – "
-              "vernachlässigt; auffüllen, bevor das Fach ganz abstirbt.",
-        "en": "Important slot, empty and **not picked for > {n} days** – "
-              "neglected; refill before the location dies off.",
+        "de": "Wichtiger Platz, leer und seit über {n} Tagen nicht mehr gepickt. "
+              "Vernachlässigt – auffüllen, bevor das Fach ganz einschläft.",
+        "en": "Important slot, empty and not picked for over {n} days. Neglected – "
+              "refill before the bin goes dormant.",
     },
     "replen_overdue_v": {
-        "de": "Priorisiert auffüllen (Soll {x} LHM) – seit {d} T kein Pick, Ursache prüfen",
-        "en": "Refill with priority (target {x} LU) – no pick for {d} d, check cause",
+        "de": "Bevorzugt auffüllen (Soll {x} LHM) – seit {d} Tagen kein Pick, Ursache prüfen",
+        "en": "Refill first (target {x} LU) – no pick for {d} days, check the cause",
     },
     "replen_medium_t": {"de": "Mittlere Frequenz", "en": "Medium frequency"},
     "replen_medium_d": {
-        "de": "Leer mit mittlerer Pickhäufigkeit – einplanen, aber weniger dringend.",
-        "en": "Empty with medium pick frequency – schedule, but less urgent.",
+        "de": "Leer und nur mittel oft gepickt – einplanen, aber nicht so dringend.",
+        "en": "Empty and only picked moderately often – schedule it, but less urgent.",
     },
     "replen_medium_v": {
-        "de": "Bei nächster Tour auffüllen (Soll {x} LHM)",
-        "en": "Refill on next round (target {x} LU)",
+        "de": "Bei der nächsten Tour auffüllen (Soll {x} LHM)",
+        "en": "Refill on the next round (target {x} LU)",
     },
     "put_head": {
-        "de": "### 📥 Einlagern / Putaway\n**Wohin mit eingehender Ware?** Die Listen zeigen **freie Plätze** "
-              "(`freie Kapazität > 0`), sortiert nach Eignung – Schnelldreher nach vorne/unten, Reserve nach hinten/oben.",
-        "en": "### 📥 Put-away\n**Where to store incoming goods?** The lists show **free slots** "
-              "(`free capacity > 0`), ranked by suitability – fast movers to the front/low, reserve to the back/high.",
+        "de": "### 📥 Einlagern\n**Wohin mit eingehender Ware?** Die Listen zeigen freie Plätze, sortiert danach, "
+              "wie gut sie passen – Schnelldreher nach vorne und unten, Reserve nach hinten und oben.",
+        "en": "### 📥 Put-away\n**Where to store incoming goods?** The lists show free slots, ranked by how well "
+              "they fit – fast movers to the front and low, reserve to the back and high.",
     },
     "put_principle": {
-        "de": "**Warum dieser Tab?** Jeder Pick kostet Weg. Schnelldreher gehören deshalb auf wegoptimale "
-              "**A-Plätze auf niedriger Ebene** (kurze Greifwege, kein Hochhub); Langsamdreher dürfen weiter oben/hinten "
-              "als Reserve stehen. So sinkt die mittlere Wegzeit pro Pick. Gesperrte Plätze werden bewusst ausgeschlossen.",
-        "en": "**Why this tab?** Every pick costs travel. Fast movers therefore belong in path-optimal "
-              "**A slots on low levels** (short reach, no lifting); slow movers may sit higher/further back as reserve. "
-              "This lowers the average travel time per pick. Locked slots are deliberately excluded.",
+        "de": "**Worum geht's hier?** Jeder Pick kostet Weg. Schnelldreher gehören deshalb auf die besten Plätze "
+              "weit unten und nah dran – kurze Greifwege, kein Hochhub. Langsamdreher dürfen weiter oben oder hinten "
+              "als Reserve stehen. So wird der mittlere Weg pro Pick kürzer. Gesperrte Plätze lassen wir bewusst weg.",
+        "en": "**What's this about?** Every pick costs travel. Fast movers therefore belong in the best slots, low "
+              "down and close by – short reach, no lifting. Slow movers may sit higher up or further back as "
+              "reserve. That shortens the average travel per pick. Locked slots are deliberately left out.",
     },
     "put_glossary_t": {
         "de": "ℹ️ Was bedeuten die Spalten?",
@@ -1237,13 +1241,13 @@ TR: dict[str, dict[str, str]] = {
         "en": "ℹ️ What does this mean? (purpose of the tab + columns)",
     },
     "put_twocrit": {
-        "de": "**Warum zwei Kriterien (ABC = A *und* niedrige Ebene)?** Das sind zwei **getrennte Wegkosten:**\n"
-              "- **ABC = A** = wegoptimaler **Ort** (horizontale Nähe zum I-Punkt/Wareneingang, im WMS gepflegt) → kurzer Fahrweg.\n"
-              "- **Niedrige Ebene** = Greifhöhe ohne Hochhub → kein Zeitverlust durch Heben/Stapler.\n"
+        "de": "**Warum gleich zwei Kriterien (A *und* niedrige Ebene)?** Weil das zwei verschiedene Wege sind:\n"
+              "- **A-Platz** = liegt nah am Wareneingang → kurzer Fahrweg.\n"
+              "- **Niedrige Ebene** = auf Greifhöhe → kein Heben mit dem Stapler.\n"
               "Erst beides zusammen macht einen Platz wirklich schnell.",
-        "en": "**Why two criteria (ABC = A *and* low level)?** These are two **separate travel costs:**\n"
-              "- **ABC = A** = path-optimal **location** (horizontal proximity to the I-point/goods-in, maintained in the WMS) → short drive.\n"
-              "- **Low level** = reach height without lifting → no time lost to a forklift.\n"
+        "en": "**Why two criteria (A *and* low level)?** Because they're two different distances:\n"
+              "- **A slot** = close to goods-in → short drive.\n"
+              "- **Low level** = at reach height → no lifting with a forklift.\n"
               "Only both together make a slot truly fast.",
     },
     "put_cols_head": {
@@ -1257,45 +1261,46 @@ TR: dict[str, dict[str, str]] = {
     "put_kpi_free": {"de": "Freie Plätze (nutzbar)", "en": "Free slots (usable)"},
     "put_kpi_blocked": {"de": "Frei, aber gesperrt", "en": "Free but locked"},
     "put_kpi_capacity": {
-        "de": "Freie Gesamt-Kapazität: **{n} LHM** (so viele Ladehilfsmittel passen über alle nutzbaren freien Plätze noch rein).",
-        "en": "Total free capacity: **{n} LHM** (load units that still fit across all usable free slots).",
+        "de": "Freie Gesamt-Kapazität: **{n} LHM** (so viele Paletten/Behälter passen über alle nutzbaren freien Plätze zusammen noch rein).",
+        "en": "Total free capacity: **{n} LU** (that many pallets/bins still fit across all usable free slots together).",
     },
     "put_glossary_b": {
-        "de": "- **ABC (Platz)** = im WMS hinterlegte **Güteklasse des Ortes** (A = wegoptimaler Premiumplatz). "
-              "Beschreibt den **Platz**, wird hier **nicht** aus Picks berechnet.\n"
-              "- **Kapazität (max. LHM)** = `MAX_LHM` = maximale Anzahl Ladehilfsmittel (Paletten/Behälter), die der "
-              "Platz fasst – kann > 1 sein.\n"
-              "- **Belegt (Ist-LHM)** = `IST_LHM` = wie viele Ladehilfsmittel aktuell schon dort stehen.\n"
-              "- **Frei (LHM)** = `MAX_LHM − IST_LHM` = wie viele LHM noch reinpassen. Hier zählt **frei = teilweise "
-              "ODER ganz frei** (alles mit Restkapazität > 0). **Ganz leere** Plätze (`IST_LHM = 0`) findest du im Tab "
-              "**Nachschub**.\n"
-              "- **Auslastung %** = `Ist-LHM / Kapazität × 100`. 0 % = ganz leer, 100 % = voll; ein freier Platz liegt < 100 %.",
-        "en": "- **ABC (slot)** = the **quality class of the location** stored in the WMS (A = path-optimal premium slot). "
-              "Describes the **slot**, **not** computed from picks here.\n"
-              "- **Capacity (max. LHM)** = `MAX_LHM` = max number of load units (pallets/bins) the slot holds – can be > 1.\n"
-              "- **Occupied (Ist-LHM)** = `IST_LHM` = how many load units are already there.\n"
-              "- **Free (LHM)** = `MAX_LHM − IST_LHM` = how many more units fit. Here **free = partially OR fully free** "
-              "(anything with spare capacity > 0). **Completely empty** slots (`IST_LHM = 0`) are in the **Replenishment** tab.\n"
-              "- **Utilization %** = `Ist-LHM / capacity × 100`. 0 % = empty, 100 % = full; a free slot is < 100 %.",
+        "de": "- **ABC (Platz)** = die Güteklasse des Ortes aus dem Lagersystem (A = bester Platz). Sie beschreibt "
+              "den Platz und wird hier nicht aus den Picks berechnet.\n"
+              "- **Kapazität (max. LHM)** = wie viele Paletten/Behälter auf den Platz passen – kann auch mehr als "
+              "einer sein.\n"
+              "- **Belegt (Ist-LHM)** = wie viele davon schon drauf stehen.\n"
+              "- **Frei (LHM)** = wie viele noch reinpassen. Hier zählt jeder Platz, auf den noch etwas draufgeht – "
+              "egal ob teilweise oder ganz frei. **Ganz leere** Plätze findest du im Tab **Nachschub**.\n"
+              "- **Auslastung %** = wie voll der Platz ist (0 % = leer, 100 % = voll). Ein freier Platz liegt immer "
+              "unter 100 %.",
+        "en": "- **ABC (slot)** = the quality class of the location from the warehouse system (A = best slot). It "
+              "describes the slot and is not computed from picks here.\n"
+              "- **Capacity (max. LU)** = how many pallets/bins fit on the slot – can be more than one.\n"
+              "- **Occupied (actual LU)** = how many are already on it.\n"
+              "- **Free (LU)** = how many more fit. Here every slot counts that still has room – whether partly or "
+              "fully free. **Completely empty** slots are in the **Replenishment** tab.\n"
+              "- **Utilization %** = how full the slot is (0 % = empty, 100 % = full). A free slot is always below "
+              "100 %.",
     },
     "put_rowhint": {
-        "de": "Jede Zeile = 1 **freier** Lagerplatz (Kandidat für eingehende Ware), sortiert nach freier Kapazität.",
-        "en": "Each row = 1 **free** slot (candidate for incoming goods), sorted by free capacity.",
+        "de": "Jede Zeile ist ein freier Platz, der für neue Ware infrage kommt – sortiert nach freier Kapazität.",
+        "en": "Each row is a free slot that could take new goods – sorted by free capacity.",
     },
     "put_blocked_rowhint": {
-        "de": "Jede Zeile = 1 Platz, der **frei wäre, aber gesperrt ist** – käme als Ziel infrage, darf aber **nicht** bestückt werden.",
-        "en": "Each row = 1 slot that **would be free but is locked** – a possible target, but must **not** be stocked.",
+        "de": "Jede Zeile ist ein Platz, der frei wäre, aber gesperrt ist – er käme als Ziel infrage, darf aber nicht bestückt werden.",
+        "en": "Each row is a slot that would be free but is locked – it could be a target, but must not be stocked.",
     },
     "sl_fastlevel": {"de": "Fast-Lane bis Ebene", "en": "Fast lane up to level"},
     "sl_fastlevel_h": {
-        "de": "Bis zu dieser Ebene gilt ein freier A-Platz als „Fast-Lane“ (kurze Wege). "
+        "de": "Bis zu dieser Ebene gilt ein freier A-Platz als Fast-Lane (kurze Wege). "
               "Höher = mehr Plätze, aber längere Greifwege.",
-        "en": "Up to this level a free A slot counts as ‘fast lane’ (short paths). "
-              "Higher = more slots but longer reach.",
+        "en": "Up to this level a free A slot counts as a fast lane (short paths). "
+              "Higher = more slots, but longer reach.",
     },
     "sl_reservelevel": {"de": "Reserve-Ebene ab", "en": "Reserve level from"},
     "sl_reservelevel_h": {
-        "de": "Ab dieser Ebene gelten freie Nicht-A-Plätze als Reserve für Langsamdreher.",
+        "de": "Ab dieser Ebene gelten freie Nicht-A-Plätze als Reserve für die Langsamdreher.",
         "en": "From this level free non-A slots count as reserve for slow movers.",
     },
     "put_logic_t": {
