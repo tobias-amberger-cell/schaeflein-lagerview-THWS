@@ -842,6 +842,12 @@ TR: dict[str, dict[str, str]] = {
               "Beschreibt die **tatsächliche Nutzung** (Details im ABC-Tab).\n"
               "- **ABC eines Artikels (SKU)** = nach **Bewegungen** (kumulierter Anteil): meistbewegte Artikel bis "
               "~80 % → A, bis ~95 % → B, Rest → C.\n\n"
+              "**Beispiele:**\n"
+              "- *Pick:* Ein Kommissionierauftrag enthält **3 verschiedene Artikel** → das sind **3 Picks** "
+              "(3 Auftragspositionen). 10 Stück desselben Artikels auf **einer** Position = **1 Pick**.\n"
+              "- *ABC berechnet:* 5 Plätze mit Picks **50, 30, 15, 4, 1** (Summe 100). Kumulierter Anteil: "
+              "50 % → 80 % → 95 % → 99 % → 100 %. Bei Schwellen 80/95 %: Platz 1+2 (≤ 80 %) = **A**, "
+              "Platz 3 (≤ 95 %) = **B**, Platz 4+5 = **C**.\n\n"
               "**Spalten dieser Tabelle:** *Plätze* = Anzahl Stellplätze · *Belegt/Frei* = wie viele davon · "
               "*Belegung %* = Belegt/Plätze · *Ø Auslastung %* = mittlere Füllung · *Picks gesamt* = alle Zugriffe · "
               "*A/B/C-Plätze* = Verteilung nach **berechneter** ABC.\n\n"
@@ -865,6 +871,12 @@ TR: dict[str, dict[str, str]] = {
               "the **actual usage** (details in the ABC tab).\n"
               "- **ABC of an article (SKU)** = by **movements** (cumulative share): most-moved articles up to ~80 % "
               "→ A, up to ~95 % → B, rest → C.\n\n"
+              "**Examples:**\n"
+              "- *Pick:* a picking order contains **3 different articles** → that's **3 picks** (3 order lines). "
+              "10 units of the same article on **one** line = **1 pick**.\n"
+              "- *ABC calculated:* 5 slots with picks **50, 30, 15, 4, 1** (sum 100). Cumulative share: "
+              "50 % → 80 % → 95 % → 99 % → 100 %. With thresholds 80/95 %: slots 1+2 (≤ 80 %) = **A**, "
+              "slot 3 (≤ 95 %) = **B**, slots 4+5 = **C**.\n\n"
               "**Columns of this table:** *Slots* = number of slots · *Occupied/Free* = how many · *Occupancy %* = "
               "occupied/slots · *Avg. utilization %* = mean fill · *Total picks* = all accesses · *A/B/C slots* = "
               "distribution by **calculated** ABC.\n\n"
@@ -901,7 +913,7 @@ TR: dict[str, dict[str, str]] = {
               "(`Q_PLATZ` = der Platz, aus dem entnommen wird) ausgehen – so siehst du das Pick-Muster gezielt für "
               "die ausgewählten Plätze.\n\n"
               "**Wozu?** Stoßzeiten erkennen → Personal- und Schichtplanung.\n\n"
-              "**Wochenende ausblenden** (Standard an): Sa/So haben kaum Picks und würden das Bild verwässern.",
+              "**Wochenende ist immer ausgeblendet:** Sa/So haben kaum Picks und würden das Bild verwässern.",
         "en": "The heatmap shows **when** picking happens: **one cell = one time window** (weekday × hour), the "
               "**colour = number of picks** in it (light = few, red = many).\n\n"
               "**What is a pick / a movement?** One pick = **one record in the TPA data** = **one order line** (a "
@@ -912,7 +924,7 @@ TR: dict[str, dict[str, str]] = {
               "slots** (`Q_PLATZ` = the slot picked from) are counted – so you see the pick pattern specifically for "
               "the selected slots.\n\n"
               "**Why?** Spot peak times → staff and shift planning.\n\n"
-              "**Hide weekend** (on by default): Sat/Sun have hardly any picks and would dilute the picture.",
+              "**Weekend is always excluded:** Sat/Sun have hardly any picks and would dilute the picture.",
     },
     "pick_peak": {
         "de": "Spitze: {wd} {h:02d}:00 Uhr mit {p} Picks.",
@@ -1585,8 +1597,8 @@ TR: dict[str, dict[str, str]] = {
               "siehst du, ob er über viele Plätze verstreut ist oder von wenigen kommt.\n\n"
               "**Was ist ein Pick / eine Bewegung?** = ein Datensatz in den TPA-Daten = eine Auftragsposition (eine "
               "Entnahme) – wie im Durchsatz-Tab.\n\n"
-              "**Bewegungen über Zeit** = Picks dieses Artikels je Tag (**ein Balken = ein Tag**); Wochenende "
-              "ausblendbar.",
+              "**Bewegungen über Zeit** = Picks dieses Artikels je Tag (**ein Balken = ein Tag**); Wochenende ist "
+              "immer ausgeblendet.",
         "en": "Pick an **article** above (from the list or by number). You then see **how often and where** it was "
               "moved.\n\n"
               "**KPIs:** **Total movements** = all picks of this article in the period · **Source slots** = from how "
@@ -1596,8 +1608,8 @@ TR: dict[str, dict[str, str]] = {
               "whether it is spread over many slots or comes from a few.\n\n"
               "**What is a pick / a movement?** = one record in the TPA data = one order line (a pick) – like the "
               "Throughput tab.\n\n"
-              "**Movements over time** = picks of this article per day (**one bar = one day**); weekend can be "
-              "hidden.",
+              "**Movements over time** = picks of this article per day (**one bar = one day**); weekend is always "
+              "excluded.",
     },
     "art_select": {"de": "Artikel (Top nach Bewegungen)", "en": "Article (top by movements)"},
     "art_input": {"de": "… oder ARTIKELNR direkt eingeben", "en": "… or enter article no. directly"},
@@ -1628,7 +1640,7 @@ TR: dict[str, dict[str, str]] = {
               "beim Betreiber bestätigt werden.*\n\n"
               "**Kennzahlen unter dem Diagramm:** **Ø pro Tag** = Durchschnitt über die angezeigten Tage · "
               "**Maximum** = stärkster Einzeltag · **Summe Zeitraum** = alle Bewegungen zusammen.\n\n"
-              "**Wochenende ausblenden** (Standard an): Sa/So haben kaum reguläre Bewegungen und würden den Verlauf "
+              "**Wochenende ist immer ausgeblendet:** Sa/So haben kaum reguläre Bewegungen und würden den Verlauf "
               "mit Tief-/Null-Tagen verzerren – ohne sie ist der Arbeitstag-Verlauf klarer.",
         "en": "This tab counts **warehouse movements per day** and shows them as bars (**one bar = one day**).\n\n"
               "**What counts as one movement?** One movement = **one record in the TPA data** = **one order line** "
@@ -1637,7 +1649,7 @@ TR: dict[str, dict[str, str]] = {
               "warehouse system (WMS) and should be confirmed with the operator.*\n\n"
               "**KPIs below the chart:** **Avg. per day** = mean over the shown days · **Maximum** = strongest "
               "single day · **Sum (period)** = all movements together.\n\n"
-              "**Hide weekend** (on by default): Sat/Sun have hardly any regular movements and would distort the "
+              "**Weekend is always excluded:** Sat/Sun have hardly any regular movements and would distort the "
               "trend with low/zero days – without them the working-day trend is clearer.",
     },
     "tp_chart": {"de": "Bewegungen letzte {n} Tage", "en": "Movements last {n} days"},
@@ -1807,7 +1819,10 @@ TR: dict[str, dict[str, str]] = {
     # --- Erklaerungen/Beschriftungen (Lehrer-Feedback) ---
     "active_filters": {"de": "Aktive Filter", "en": "Active filters"},
     "filter_none": {"de": "keine (ganzes Lager)", "en": "none (whole warehouse)"},
-    "hide_weekend": {"de": "Wochenende ausblenden", "en": "Hide weekend"},
+    "weekend_hidden": {
+        "de": "ℹ️ Samstag & Sonntag sind ausgeblendet (am Wochenende kaum Lagerbewegung).",
+        "en": "ℹ️ Saturday & Sunday are excluded (hardly any warehouse activity on weekends).",
+    },
     "tab_reloc_retr": {"de": "🔄 Um-/Auslagern", "en": "🔄 Relocate / retrieve"},
     "massn_rowhint": {
         "de": "Jede Zeile = 1 Lagerplatz mit dem aktuell dort liegenden Artikel.",
@@ -2638,19 +2653,18 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
     with st.expander(t("pick_info_t")):
         st.markdown(t("pick_info_b"))
     mov_filter_note(movements_filtered, filtered)
-    hide_we = st.checkbox(t("hide_weekend"), value=True, key="pickheat_we")
+    st.caption(t("weekend_hidden"))
     ph = agg_pick_heatmap(tpa)
     if ph.empty:
         st.info(t("no_data_filters"))
     else:
         weekday_names = {
-            0: "So", 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa",
+            1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr",
         }
         ph = ph[(ph["weekday"].between(0, 6)) & (ph["hour"].between(0, 23))]
-        if hide_we:
-            # Sa (6) und So (0) raus -> klares Mo-Fr-Bild (Lager am WE kaum aktiv)
-            ph = ph[~ph["weekday"].isin([0, 6])]
-        day_order = range(1, 6) if hide_we else range(7)
+        # Wochenende IMMER ausblenden (Sa=6, So=0) -> klares Mo-Fr-Bild.
+        ph = ph[~ph["weekday"].isin([0, 6])]
+        day_order = range(1, 6)
         pivot = (
             ph.pivot_table(
                 index="weekday", columns="hour", values="picks", aggfunc="sum"
@@ -2681,7 +2695,8 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
         c1, c2 = st.columns(2)
         with c1:
             per_wd = (
-                ph.groupby("weekday")["picks"].sum().reindex(range(7), fill_value=0)
+                ph.groupby("weekday")["picks"].sum()
+                .reindex(range(1, 6), fill_value=0)
             )
             per_wd.index = [weekday_names[i] for i in per_wd.index]
             st.plotly_chart(
@@ -3257,11 +3272,8 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
     with st.expander(t("tp_info_t")):
         st.markdown(t("tp_info_b"))
     mov_filter_note(movements_filtered, filtered)
-    copt1, copt2 = st.columns(2)
-    with copt1:
-        use_range = st.checkbox(t("tp_use_range"), value=False)
-    with copt2:
-        hide_we = st.checkbox(t("hide_weekend"), value=True)
+    st.caption(t("weekend_hidden"))
+    use_range = st.checkbox(t("tp_use_range"), value=False)
     if use_range:
         all_days = agg_movements_by_day(tpa)
         if all_days.empty:
@@ -3282,8 +3294,8 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
             trend = trend.sort_values("day")
     else:
         trend = agg_throughput_trend(tpa, days)
-    if hide_we:
-        trend = drop_weekend(trend, "day")
+    # Wochenende IMMER ausblenden (kein Toggle mehr).
+    trend = drop_weekend(trend, "day")
     if trend.empty:
         st.info(t("no_data_filters"))
     else:
@@ -3386,9 +3398,9 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                       de_num(len(slots)))
             if not day_df.empty:
                 st.markdown(f"**{t('art_trend')}**")
-                hide_we = st.checkbox(t("hide_weekend"), value=True,
-                                      key="art_hide_we")
-                day_plot = drop_weekend(day_df, "day") if hide_we else day_df
+                st.caption(t("weekend_hidden"))
+                # Wochenende IMMER ausblenden (kein Toggle mehr).
+                day_plot = drop_weekend(day_df, "day")
                 # Balken (konsistent mit Durchsatz-Tab) statt Linie.
                 st.plotly_chart(
                     px.bar(day_plot, x="day", y="picks",
