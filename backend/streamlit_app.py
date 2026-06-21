@@ -1471,12 +1471,14 @@ TR: dict[str, dict[str, str]] = {
               "**By storage slots** shows which *slots* are visited most often.",
     },
     "abc_c_note": {
-        "de": "Hinweis: In **C** landen alle Plätze, die nie oder kaum gepickt werden – "
-              "auch die leere Reserve. Deshalb ist der C-Anteil bei „nach Lagerplätzen“ "
-              "so groß.",
-        "en": "Note: **C** holds every slot that is never or barely picked – including "
-              "the empty reserve. That's why the C share is so large for ‘by storage "
-              "slots’.",
+        "de": "Hinweis: Bei „nach Lagerplätzen“ sind die **leeren Plätze (0 Picks)** "
+              "im Diagramm als eigene Kategorie **„leer“** ausgewiesen – das ist die "
+              "freie Reserve (~88 % der Plätze) und kein echtes „C“. In den Tabellen "
+              "unten zählen sie rechnerisch weiter zu C.",
+        "en": "Note: for ‘by storage slots’ the **empty slots (0 picks)** are shown as "
+              "a separate **‘empty’** category in the chart – that's the free reserve "
+              "(~88 % of slots), not real ‘C’. In the tables below they still count "
+              "towards C.",
     },
     "abc_berech_global": {"de": "Berechnet (Lager gesamt)",
                           "en": "Calculated (whole warehouse)"},
@@ -2977,8 +2979,10 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
         & (empty_pick["ANZ_PICKS"] < pick_threshold)
     ].sort_values("ANZ_PICKS", ascending=False)
 
-    # Spaltenende je Liste: zwei Staleness-Signale + abgeleiteter Vorschlag.
-    replen_extra = ["DAYS_EMPTY", "DAYS_SINCE_PICK", t("col_vorschlag")]
+    # Spaltenende je Liste: EIN Staleness-Wert (Tage seit letztem Pick – das
+    # genutzte, verlaessliche Signal; "Tage leer" waere doppelt + unzuverlaessig)
+    # + abgeleiteter Vorschlag.
+    replen_extra = ["DAYS_SINCE_PICK", t("col_vorschlag")]
     render_massnahme_kategorie(
         t("replen_overdue_t"),
         t("replen_overdue_d").format(n=overdue_days),
@@ -3195,10 +3199,21 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     ent_label = (("Artikel" if _LANG == "de" else "Articles") if by_articles
                  else ("Plätze" if _LANG == "de" else "Slots"))
     # Verteilung: Balkendiagramm Anteil PLAETZE vs. Anteil PICKS je Klasse
-    # (Erklaerung dazu steht im eingeklappten Block oben).
-    counts = data["ABC"].value_counts().reindex(["A", "B", "C"]).fillna(0)
-    picks_sum = (data.groupby("ABC")[val_col].sum()
-                 .reindex(["A", "B", "C"]).fillna(0))
+    # (Erklaerung dazu steht im eingeklappten Block oben). Bei Plaetzen werden
+    # die LEEREN (0 Picks) als eigene Kategorie ausgewiesen, statt sie unsichtbar
+    # in C zu stecken -> sonst wirkt C kuenstlich riesig (freie Reserve).
+    if by_articles:
+        cats = ["A", "B", "C"]
+        cat_series = data["ABC"]
+    else:
+        empty_label = "leer (0 Picks)" if _LANG == "de" else "empty (0 picks)"
+        cats = ["A", "B", "C", empty_label]
+        cat_series = pd.Series(
+            np.where(data[val_col] == 0, empty_label, data["ABC"]),
+            index=data.index)
+    counts = cat_series.value_counts().reindex(cats).fillna(0)
+    picks_sum = (data.groupby(cat_series)[val_col].sum()
+                 .reindex(cats).fillna(0))
     total_picks = picks_sum.sum() or 1
     total_count = counts.sum() or 1
     share = (picks_sum / total_picks * 100).round(1)
@@ -3207,12 +3222,13 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         t("abc_col_count"): counts.astype(int).values,
         val_label: picks_sum.astype(int).values,
         t("abc_col_share"): share.values,
-    }, index=["A", "B", "C"])
+    }, index=cats)
     summary.index.name = t("abc")
     lbl_c, lbl_p = f"% {ent_label}", f"% {val_label}"
+    n = len(cats)
     bar_df = pd.DataFrame({
-        t("abc"): ["A", "B", "C", "A", "B", "C"],
-        "Kennzahl": [lbl_c] * 3 + [lbl_p] * 3,
+        t("abc"): cats * 2,
+        "Kennzahl": [lbl_c] * n + [lbl_p] * n,
         "Prozent": list(count_share.values) + list(share.values),
     })
     d1, d2 = st.columns([2, 1])
@@ -3220,6 +3236,7 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         st.plotly_chart(
             px.bar(bar_df, x=t("abc"), y="Prozent", color="Kennzahl",
                    barmode="group", title=t("abc_bar_title"),
+                   category_orders={t("abc"): cats},
                    color_discrete_map={lbl_c: "#90a4ae", lbl_p: "#1565c0"}),
             use_container_width=True,
         )
