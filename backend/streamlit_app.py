@@ -2245,11 +2245,15 @@ _FORMULA_BY_KEY = {f["key"]: f for f in FORMULAS}
 
 
 def fhelp(key: str) -> str:
-    """i-Icon-Tooltip-Text (Formel) je Kennzahl – aus der zentralen FORMULAS-Quelle."""
+    """i-Icon-Tooltip-Text (Formel) je Kennzahl – aus der zentralen FORMULAS-Quelle.
+
+    Formel als normaler Text (keine Backticks/Code-Box) – sonst faerbt Streamlit
+    sie ein und stellt sie in einem Kasten dar.
+    """
     f = _FORMULA_BY_KEY.get(key)
     if not f:
         return ""
-    return f"**{f['title'][_LANG]}**\n\n`{f['plain'][_LANG]}`"
+    return f"**{f['title'][_LANG]}**\n\n{f['plain'][_LANG]}"
 
 
 def render_formulas_popover() -> None:
