@@ -1099,19 +1099,17 @@ TR: dict[str, dict[str, str]] = {
     "replen_principle": {
         "de": "**Warum dieser Tab?** Ein leerer, aber häufig gepickter Platz bedeutet **Fehlmengen / Suchwege**: "
               "Der Kommissionierer steht vor einem leeren Fach. Je öfter der Platz sonst gepickt wird und je länger "
-              "er schon leer ist, desto dringender der Nachschub. Die wichtigen (häufig gepickten) Plätze werden "
-              "**nach Aktualität getrennt**: *Dringend (frisch)* = wichtig + kürzlich noch gepickt → akute Nachfrage; "
-              "*Überfällig (vernachlässigt)* = wichtig, aber schon länger kein Pick → vor dem Absterben auffüllen; "
-              "*Mittlere Frequenz* = leer, aber seltener gepickt. Gesperrte Plätze sind bewusst ausgeschlossen. "
+              "er schon leer ist, desto dringender der Nachschub. Es gibt zwei Listen: "
+              "*Überfällig (vernachlässigt)* = wichtiger Platz, leer und schon länger kein Pick → vor dem Absterben "
+              "auffüllen; *Mittlere Frequenz* = leer, aber seltener gepickt. Gesperrte Plätze sind bewusst ausgeschlossen. "
               "**Wichtig:** Über den Regler *„Aktiv …“* werden nur Plätze gezeigt, an denen **kürzlich** gepickt "
               "wurde – seit Monaten unberührte Fächer (hohe HISTORISCHE Picks, aber tot) werden ausgeblendet und "
               "oben als Hinweis gezählt.",
         "en": "**Why this tab?** An empty but frequently picked slot means **shortages / search time**: "
               "the picker faces an empty bin. The more often the slot is otherwise picked and the longer it has "
-              "been empty, the more urgent the replenishment. The three lists form an **escalation**: "
-              "the important (frequently picked) slots are **split by recency**: *Urgent (fresh)* = important + "
-              "picked recently → active demand; *Overdue (neglected)* = important but no pick for a while → refill "
-              "before it dies; *Medium frequency* = empty, but picked less often. Locked slots are deliberately excluded. "
+              "been empty, the more urgent the replenishment. There are two lists: "
+              "*Overdue (neglected)* = important slot, empty and no pick for a while → refill before it dies; "
+              "*Medium frequency* = empty, but picked less often. Locked slots are deliberately excluded. "
               "**Note:** the *‘Active …’* slider shows only slots picked **recently** – locations untouched for "
               "months (high HISTORICAL picks but dead) are hidden and counted as a note above.",
     },
@@ -1194,17 +1192,6 @@ TR: dict[str, dict[str, str]] = {
         "en": "ℹ️ **{n} empty slots hidden** because not picked for > {d} days (or no "
               "access date) – likely **dead locations**, not urgent replenishment. "
               "Increase the ‘Active …’ slider to include them.",
-    },
-    "replen_urgent_t": {"de": "Dringend leer (frisch)", "en": "Urgently empty (fresh)"},
-    "replen_urgent_d": {
-        "de": "Wichtiger Platz, leer, aber **kürzlich** noch gepickt (≤ {n} T) – "
-              "akute Nachfrage, sofort nachfüllen.",
-        "en": "Important slot, empty, but picked **recently** (≤ {n} d) – "
-              "active demand, refill now.",
-    },
-    "replen_urgent_v": {
-        "de": "Sofort auffüllen (Soll {x} LHM) – wichtiger Pickplatz leer",
-        "en": "Refill now (target {x} LU) – important pick slot empty",
     },
     "replen_overdue_t": {"de": "Überfällig (vernachlässigt)",
                          "en": "Overdue (neglected)"},
@@ -2876,7 +2863,7 @@ def render_umlagern(filtered: pd.DataFrame) -> None:
 def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
     """Fuegt eine ABGELEITETE Vorschlag-Spalte hinzu (1 Zeile = 1 konkrete
     Handlung). Die Empfehlung ist nicht fix, sondern entsteht aus:
-      - der Listenregel (kind: urgent/overdue/medium) -> Dringlichkeit/Wortlaut,
+      - der Listenregel (kind: overdue/medium) -> Dringlichkeit/Wortlaut,
       - x = Soll-LHM (MAX_LHM; Platz ist leer -> auf Soll auffuellen),
       - bei 'overdue' zusaetzlich d = Tage seit letztem Pick (DAYS_SINCE_PICK).
     So ist im Tab nachvollziehbar, WIE der Vorschlag zustande kommt."""
@@ -2889,7 +2876,7 @@ def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
         tmpl = t("replen_overdue_v")
         col = [tmpl.format(x=x, d=d) for x, d in zip(lhm, days)]
     else:
-        tmpl = t("replen_urgent_v") if kind == "urgent" else t("replen_medium_v")
+        tmpl = t("replen_medium_v")
         col = [tmpl.format(x=x) for x in lhm]
     out[t("col_vorschlag")] = col
     return out
@@ -2935,15 +2922,11 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
         st.warning(t("replen_inactive_note").format(n=de_num(inactive_n),
                                                      d=active_days))
     empty_pick = active_pick
-    # Wichtige (hochfrequente) leere Plaetze, aufgeteilt nach Aktualitaet des
-    # letzten Picks (DAYS_SINCE_PICK). DAYS_EMPTY taugt hier NICHT zur Trennung
-    # (Leer-Datum oft Jahre alt), DAYS_SINCE_PICK schon -> disjunkte Listen:
-    #   dringend    = wichtig + GERADE ERST ohne Pick (<= Schwelle) -> jetzt fuellen
-    #   ueberfaellig= wichtig + schon LAENGER ohne Pick (> Schwelle) -> vernachlaessigt
+    # Wichtige (hochfrequente) leere Plaetze. DAYS_EMPTY taugt hier NICHT zur
+    # Trennung (Leer-Datum oft Jahre alt), DAYS_SINCE_PICK schon:
+    #   ueberfaellig = wichtig + schon LAENGER ohne Pick (> Schwelle) -> vernachlaessigt
     important = empty_pick[empty_pick["ANZ_PICKS"] >= pick_threshold]
     days_since = important["DAYS_SINCE_PICK"].fillna(10**9)
-    urgent = important[days_since <= overdue_days] \
-        .sort_values("ANZ_PICKS", ascending=False)
     overdue = important[days_since > overdue_days] \
         .sort_values("DAYS_SINCE_PICK", ascending=False)
     # mittlere Frequenz = aktiv leer mit Picks unterhalb der Dringend-Schwelle (>0)
@@ -2954,11 +2937,6 @@ def render_nachschub(filtered: pd.DataFrame) -> None:
 
     # Spaltenende je Liste: zwei Staleness-Signale + abgeleiteter Vorschlag.
     replen_extra = ["DAYS_EMPTY", "DAYS_SINCE_PICK", t("col_vorschlag")]
-    render_massnahme_kategorie(
-        t("replen_urgent_t"), t("replen_urgent_d").format(n=overdue_days),
-        _replen_vorschlag_col(urgent, "urgent"),
-        cols=_REPLEN_COLS, extra_cols=replen_extra,
-        rename=_REPLEN_RENAME, col_help=_REPLEN_HELP)
     render_massnahme_kategorie(
         t("replen_overdue_t"),
         t("replen_overdue_d").format(n=overdue_days),
