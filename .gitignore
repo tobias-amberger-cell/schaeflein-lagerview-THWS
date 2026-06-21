@@ -88,3 +88,9 @@ venv/
 !.vscode/tasks.json
 # Local vendored Python deps for backend runtime
 backend/_pydeps/
+
+# Claude Code lokale Konfiguration (niemals committen)
+.claude/
+
+# Temporaere Diagnose-/Pruefskripte (Namensschema _*_tmp.py)
+_*_tmp.py
