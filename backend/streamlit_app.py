@@ -1308,98 +1308,97 @@ TR: dict[str, dict[str, str]] = {
         "en": "ℹ️ How is the suggestion derived?",
     },
     "put_logic_b": {
-        "de": "Der **Vorschlag** ist keine Einzelfall-Bewertung – er ergibt sich direkt daraus, in **welche "
-              "Kategorie** ein Platz fällt. Die Filterregel **ist** die Empfehlung. Alle Kriterien stehen als "
-              "Spalte in der Tabelle, der Vorschlag ist also nachprüfbar:\n\n"
+        "de": "Der **Vorschlag** ist keine Einzelbewertung – er ergibt sich einfach daraus, in welche Kategorie ein "
+              "Platz fällt. Die Regel ist also gleich die Empfehlung, und alle Kriterien stehen als Spalte in der "
+              "Tabelle. So kannst du jeden Vorschlag nachprüfen:\n\n"
               "1. **Schnelldreher-Plätze** → *„Schnelldreher hier einlagern“*\n"
-              "   Platz ist **frei** (`Frei > 0`) **und** ABC (Platz) = **A** **und** Ebene **≤** dem Regler "
-              "„Fast-Lane bis Ebene“ **und** nicht gesperrt. Sortiert nach **Frei** absteigend (größte Lücke zuerst).\n"
-              "2. **Reserve** → *„Langsamdreher/Reserve hier einlagern“*\n"
-              "   Platz ist **frei** **und** ABC (Platz) **≠ A** **und** Ebene **≥** dem Regler „Reserve-Ebene ab“ "
-              "**und** nicht gesperrt. Sortiert nach **Frei** absteigend.\n"
+              "   Der Platz ist frei, ein A-Platz, liegt bis zur Ebene aus dem Regler „Fast-Lane bis Ebene“ und ist "
+              "nicht gesperrt. Oben steht der Platz mit der größten freien Lücke.\n"
+              "2. **Reserve** → *„Langsamdreher / Reserve hier einlagern“*\n"
+              "   Der Platz ist frei, kein A-Platz, liegt ab der Ebene aus dem Regler „Reserve-Ebene ab“ und ist "
+              "nicht gesperrt. Auch hier oben die größte Lücke zuerst.\n"
               "3. **Gesperrt** → *„Nicht einlagern“*\n"
-              "   Platz wäre frei, ist aber **gesperrt** (Sperrkennzeichen gesetzt) – darf nicht bestückt werden.\n\n"
-              "Die beiden Ebenen-Schwellen stellst du **unten mit den Reglern** ein; die Listen aktualisieren sich sofort.",
-        "en": "The **suggestion** is not a case-by-case score – it follows directly from **which category** a slot "
-              "falls into. The filter rule **is** the recommendation, and every criterion is shown as a column, so "
-              "it is verifiable:\n\n"
+              "   Der Platz wäre frei, ist aber gesperrt – darf nicht bestückt werden.\n\n"
+              "Die beiden Ebenen-Grenzen stellst du unten mit den Reglern ein; die Listen passen sich sofort an.",
+        "en": "The **suggestion** isn't a case-by-case score – it simply follows from which category a slot falls "
+              "into. So the rule is the recommendation, and every criterion is shown as a column. That way you can "
+              "check any suggestion:\n\n"
               "1. **Fast-mover slots** → *“Store fast movers here”*\n"
-              "   Slot is **free** (`Free > 0`) **and** ABC (slot) = **A** **and** level **≤** the “Fast lane up to "
-              "level” slider **and** not locked. Sorted by **Free** descending (largest gap first).\n"
-              "2. **Reserve** → *“Store slow movers/reserve here”*\n"
-              "   Slot is **free** **and** ABC (slot) **≠ A** **and** level **≥** the “Reserve level from” slider "
-              "**and** not locked. Sorted by **Free** descending.\n"
+              "   The slot is free, an A slot, sits up to the level from the “Fast lane up to level” slider, and "
+              "isn't locked. The slot with the largest free gap is on top.\n"
+              "2. **Reserve** → *“Store slow movers / reserve here”*\n"
+              "   The slot is free, not an A slot, sits from the level in the “Reserve level from” slider, and isn't "
+              "locked. Again the largest gap first.\n"
               "3. **Locked** → *“Do not put away”*\n"
-              "   Slot would be free but is **locked** (lock flag set) – must not be stocked.\n\n"
-              "The two level thresholds are set **with the sliders below**; the lists update instantly.",
+              "   The slot would be free but is locked – it must not be stocked.\n\n"
+              "You set the two level limits with the sliders below; the lists update instantly.",
     },
     "put_fast_t": {"de": "Schnelldreher-Plätze", "en": "Fast-mover slots"},
     "put_fast_d": {
-        "de": "Freie **A-Plätze bis Ebene {n}**: wegoptimal und auf Greifhöhe → kürzeste Wege. Hier gehören "
-              "**Schnelldreher** hin, weil sie am häufigsten gepickt werden – kurze Wege sparen hier am meisten Zeit.",
-        "en": "Free **A slots up to level {n}**: path-optimal and at reach height → shortest paths. **Fast movers** "
-              "belong here because they are picked most often – short paths save the most time here.",
+        "de": "Freie A-Plätze bis Ebene {n}: nah dran und auf Greifhöhe, also kürzeste Wege. Hier gehören die "
+              "Schnelldreher hin – sie werden am häufigsten gepickt, da sparen kurze Wege am meisten Zeit.",
+        "en": "Free A slots up to level {n}: close by and at reach height, so the shortest paths. The fast movers "
+              "belong here – they're picked most often, so short paths save the most time.",
     },
     "put_fast_v": {
         "de": "Hier bis zu {x} LHM einlagern (Schnelldreher, kurze Wege)",
-        "en": "Store up to {x} LHM here (fast mover, short paths)",
+        "en": "Store up to {x} LU here (fast mover, short paths)",
     },
     "put_reserve_t": {"de": "Reserve (hohe Ebenen)", "en": "Reserve (high levels)"},
     "put_reserve_d": {
-        "de": "Freie **Nicht-A-Plätze ab Ebene {n}** (weiter oben/hinten): längere Wege, aber für **Langsamdreher / "
-              "Reserve** völlig ok – so bleiben die knappen A-Plätze für die Schnelldreher frei.",
-        "en": "Free **non-A slots from level {n}** (higher/further back): longer paths, but fine for **slow movers / "
-              "reserve** – this keeps the scarce A slots free for fast movers.",
+        "de": "Freie Nicht-A-Plätze ab Ebene {n} (weiter oben oder hinten): längere Wege, aber für Langsamdreher "
+              "und Reserve völlig in Ordnung. So bleiben die knappen A-Plätze für die Schnelldreher frei.",
+        "en": "Free non-A slots from level {n} (higher up or further back): longer paths, but perfectly fine for "
+              "slow movers and reserve. This keeps the scarce A slots free for the fast movers.",
     },
     "put_reserve_v": {
         "de": "Hier bis zu {x} LHM einlagern (Langsamdreher / Reserve)",
-        "en": "Store up to {x} LHM here (slow mover / reserve)",
+        "en": "Store up to {x} LU here (slow mover / reserve)",
     },
     "put_blocked_t": {"de": "Gesperrt – nicht bestücken", "en": "Locked – do not stock"},
     "put_blocked_d": {
-        "de": "Plätze, die **freie Kapazität haben, aber gesperrt sind** (Sperrkennzeichen, z. B. Inventur/Defekt/"
-              "reserviert) – sie *kämen als Ziel infrage*, dürfen aber **nicht** bestückt werden. Voll belegte "
-              "Sperrplätze sind hier bewusst ausgeblendet (kein Einlager-Ziel).",
-        "en": "Slots that **have free capacity but are locked** (lock flag, e.g. stocktake/defect/reserved) – they "
-              "*would be candidates* but must **not** be stocked. Fully occupied locked slots are deliberately hidden "
-              "(not a put-away target).",
+        "de": "Plätze, die zwar Platz frei hätten, aber gesperrt sind (z. B. Inventur, Defekt oder reserviert). Sie "
+              "kämen als Ziel infrage, dürfen aber nicht bestückt werden. Voll belegte Sperrplätze blenden wir hier "
+              "aus – die sind ohnehin kein Einlager-Ziel.",
+        "en": "Slots that would have room but are locked (e.g. stocktake, defect or reserved). They could be a "
+              "target, but must not be stocked. Fully occupied locked slots are hidden here – they're not a put-away "
+              "target anyway.",
     },
     "put_blocked_v": {
         "de": "Nicht einlagern – Sperre prüfen",
-        "en": "Do not store – check lock",
+        "en": "Do not store – check the lock",
     },
     "retr_head": {
-        "de": "### 📤 Auslagern / Retrieval\nLangsamdreher/Ladenhüter, die gute Plätze blockieren und ausgelagert werden sollten.",
-        "en": "### 📤 Retrieval\nSlow movers/dead stock blocking good slots that should be retrieved.",
+        "de": "### 📤 Auslagern\nWare, die kaum bewegt wird, aber gute Plätze blockiert und besser ausgelagert würde.",
+        "en": "### 📤 Retrieval\nGoods that barely move but block good slots and would be better retrieved.",
     },
     "retr_info_t": {
         "de": "ℹ️ Was bedeutet Auslagern? (Regeln + Spalten)",
         "en": "ℹ️ What is retrieval? (rules + columns)",
     },
     "retr_info_b": {
-        "de": "**Auslagern** = Ware, die einen **guten Platz blockiert, sich aber kaum/nicht bewegt**, aus der "
-              "Pickzone entfernen (ins Reserve-/Hochlager oder raus). So werden gute Plätze für Dreher frei.\n\n"
-              "Betrachtet werden nur **belegte** Plätze (`Belegt > 0`) in der **Pickzone** (bis zur eingestellten "
-              "Ebene).\n\n"
+        "de": "**Auslagern** heißt: Ware, die einen guten Platz blockiert, sich aber kaum bewegt, aus der Pickzone "
+              "rausnehmen – ins Reserve- oder Hochlager oder ganz raus. So werden die guten Plätze wieder für "
+              "Dreher frei.\n\n"
+              "Angeschaut werden nur belegte Plätze in der Pickzone (bis zur eingestellten Ebene).\n\n"
               "**Die drei Listen:**\n"
-              "1. **Kritisch** – **A**-Platz belegt, aber **0 Picks** → Premium-Platz von einem Ladenhüter "
-              "blockiert. Vorrangig auslagern.\n"
-              "2. **Abgestanden** – belegt, **0 Picks**, aber **kein** A-Platz → bewegt sich nicht, Auslagern "
-              "prüfen.\n"
-              "3. **Beobachten** – belegt, aber **sehr selten** gepickt (1 bis Regler-Wert) → im Auge behalten.\n\n"
-              "**Was heißt „belegt“?** `Ist-LHM > 0` (mind. ein Ladehilfsmittel steht drauf). Das **Signal "
-              "„blockiert ohne Nutzen“** ist hier: belegt **und 0 Picks** – der Platz trägt Ware, bewegt sie aber nie.",
-        "en": "**Retrieval** = remove goods that **block a good slot but barely move** from the pick zone (to "
-              "reserve/high-bay or out). This frees good slots for movers.\n\n"
-              "Only **occupied** slots (`Occupied > 0`) in the **pick zone** (up to the set level) are "
-              "considered.\n\n"
+              "1. **Kritisch** – ein A-Platz ist belegt, wird aber gar nicht gepickt. Ein Premiumplatz von einem "
+              "Ladenhüter blockiert → vorrangig auslagern.\n"
+              "2. **Abgestanden** – belegt, gar keine Picks, aber kein A-Platz. Bewegt sich nicht → Auslagern prüfen.\n"
+              "3. **Beobachten** – belegt, aber nur sehr selten gepickt (1 bis zum Regler-Wert) → im Auge behalten.\n\n"
+              "**Was heißt „belegt“?** Es steht mindestens eine Palette/ein Behälter drauf. Das Warnsignal "
+              "„blockiert ohne Nutzen“ ist hier: belegt und trotzdem null Picks – der Platz trägt Ware, bewegt sie "
+              "aber nie.",
+        "en": "**Retrieval** means taking goods that block a good slot but barely move out of the pick zone – into "
+              "reserve or the high-bay, or out entirely. This frees the good slots for movers again.\n\n"
+              "Only occupied slots in the pick zone (up to the set level) are looked at.\n\n"
               "**The three lists:**\n"
-              "1. **Critical** – **A** slot occupied but **0 picks** → premium slot blocked by dead stock. Retrieve "
-              "first.\n"
-              "2. **Stale** – occupied, **0 picks**, but **not** an A slot → not moving, consider retrieval.\n"
-              "3. **Observe** – occupied but **very rarely** picked (1 to slider value) → keep an eye on it.\n\n"
-              "**What does “occupied” mean?** `Ist-LHM > 0` (at least one load unit present). The **“blocked without "
-              "use” signal** here is: occupied **and 0 picks** – the slot holds goods but never moves them.",
+              "1. **Critical** – an A slot is occupied but not picked at all. A premium slot blocked by dead stock → "
+              "retrieve first.\n"
+              "2. **Stale** – occupied, no picks at all, but not an A slot. Not moving → consider retrieval.\n"
+              "3. **Observe** – occupied but picked only very rarely (1 up to the slider value) → keep an eye on it.\n\n"
+              "**What does “occupied” mean?** At least one pallet/bin is on it. The warning sign “blocked without "
+              "use” here is: occupied yet zero picks – the slot holds goods but never moves them.",
     },
     "sl_retrzone": {"de": "Pickzone bis Ebene", "en": "Pick zone up to level"},
     "sl_observe": {"de": "„Beobachten“ bis Picks", "en": "‘Observe’ up to picks"},
@@ -1419,31 +1418,33 @@ TR: dict[str, dict[str, str]] = {
         "en": "Occupied with very low frequency (1–{n} picks).",
     },
     "abc_intro": {
-        "de": "**ABC-Analyse** — kumulative Verteilung von `ANZ_PICKS`. "
-              "A = Plätze bis {a} % aller Picks, B = bis {b} %, C = Rest "
-              "(passt sich den Reglern oben an).",
-        "en": "**ABC analysis** — cumulative distribution of `ANZ_PICKS`. "
-              "A = slots up to {a}% of all picks, B = up to {b}%, C = rest "
+        "de": "**ABC-Analyse** — die Plätze nach Pick-Häufigkeit sortiert und "
+              "aufsummiert. A = Plätze bis {a} % aller Picks, B = bis {b} %, C = der "
+              "Rest (passt sich den Reglern oben an).",
+        "en": "**ABC analysis** — slots sorted by pick frequency and added up. "
+              "A = slots up to {a}% of all picks, B = up to {b}%, C = the rest "
               "(follows the sliders above).",
     },
     "abc_chart": {"de": "ABC-Verteilung (berechnet)", "en": "ABC distribution (calculated)"},
     "abc_cross_intro": {
-        "de": "**Stamm-ABC vs. berechnet** — Zeilen = hinterlegte `ABC_KLASSE`, "
-              "Spalten = aus Picks berechnete `ABC_CALC`. Werte abseits der "
-              "Diagonale sind Kandidaten für eine ABC-Anpassung.",
-        "en": "**Master ABC vs. calculated** — rows = stored `ABC_KLASSE`, "
-              "columns = `ABC_CALC` from picks. Off-diagonal values are "
-              "candidates for an ABC adjustment.",
+        "de": "**Stamm-ABC gegen berechnet** — Zeilen sind die hinterlegte Klasse, "
+              "Spalten die aus den Picks berechnete. Alles, was nicht auf der Diagonale "
+              "liegt, ist ein Kandidat für eine ABC-Anpassung.",
+        "en": "**Master ABC vs. calculated** — rows are the stored class, columns the "
+              "one calculated from picks. Anything off the diagonal is a candidate for "
+              "an ABC adjustment.",
     },
     "abc_byfreq": {"de": "**📋 Tabelle 2: Alle Einträge nach Pickhäufigkeit**",
                    "en": "**📋 Table 2: All entries by pick frequency**"},
     "abc_byfreq_note": {
-        "de": "Die **komplette** Liste, sortiert nach Picks (häufigste oben). "
-              "**Stamm** = im Lagersystem hinterlegte Klasse · **Berechnet** = aus "
-              "den Picks · **kumul. Pick-%** = Anteil aller Picks bis zu dieser Zeile.",
-        "en": "The **full** list, sorted by picks (most-picked on top). "
-              "**Master** = class stored in the warehouse system · **Calculated** = "
-              "from picks · **cum. pick %** = share of all picks down to this row.",
+        "de": "Die komplette Liste, sortiert nach Picks (die häufigsten oben). "
+              "*Stamm* = die im Lagersystem hinterlegte Klasse · *Berechnet* = die aus "
+              "den Picks · *kumul. Pick-%* = wie viel Prozent aller Picks bis zu dieser "
+              "Zeile zusammenkommen.",
+        "en": "The full list, sorted by picks (the most-picked on top). "
+              "*Master* = the class stored in the warehouse system · *Calculated* = the "
+              "one from picks · *cum. pick %* = what share of all picks adds up down to "
+              "this row.",
     },
     "abc_explain_head": {
         "de": "ℹ️ Was bedeutet das? (Wozu ABC, Modi, Klassen)",
@@ -1453,24 +1454,29 @@ TR: dict[str, dict[str, str]] = {
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
     "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
     "abc_purpose": {
-        "de": "**Wozu ABC?** Sortiert nach Wichtigkeit: **A** = Renner (häufig "
-              "gepickt) → gehören in gut erreichbare Plätze; **C** = Langsamdreher "
-              "→ ab in die Reserve. Ziel: kurze Wege für die wichtigen Artikel.",
-        "en": "**Why ABC?** Sorted by importance: **A** = fast movers (picked often) "
-              "→ belong in easy-reach slots; **C** = slow movers → into reserve. "
-              "Goal: short travel for the important items.",
+        "de": "**Wozu ABC?** Es teilt nach Wichtigkeit ein: **A** sind die Renner, die "
+              "oft gepickt werden – die gehören auf gut erreichbare Plätze. **C** sind "
+              "die Langsamdreher und können in die Reserve. Ziel: kurze Wege für die "
+              "wichtigen Artikel.",
+        "en": "**Why ABC?** It groups things by importance: **A** are the fast movers, "
+              "picked often – they belong in easy-reach slots. **C** are the slow "
+              "movers and can go into reserve. The goal: short travel for the important "
+              "items.",
     },
     "abc_mode_note": {
-        "de": "**Nach Artikeln** = klassische ABC (welche *Produkte* sind wichtig). "
-              "**Nach Lagerplätzen** = welche *Plätze* werden am häufigsten angefahren.",
-        "en": "**By articles** = classic ABC (which *products* matter). "
-              "**By storage slots** = which *slots* are visited most often.",
+        "de": "**Nach Artikeln** ist die klassische ABC: welche *Produkte* sind "
+              "wichtig. **Nach Lagerplätzen** zeigt, welche *Plätze* am häufigsten "
+              "angefahren werden.",
+        "en": "**By articles** is the classic ABC: which *products* matter. "
+              "**By storage slots** shows which *slots* are visited most often.",
     },
     "abc_c_note": {
-        "de": "Hinweis: **C** enthält alle nie/selten gepickten Plätze (inkl. leerer "
-              "Reserve) – deshalb ist der C-Anteil bei „nach Lagerplätzen“ so groß.",
-        "en": "Note: **C** contains all never/rarely picked slots (incl. empty "
-              "reserve) – that's why the C share is so large for ‘by storage slots’.",
+        "de": "Hinweis: In **C** landen alle Plätze, die nie oder kaum gepickt werden – "
+              "auch die leere Reserve. Deshalb ist der C-Anteil bei „nach Lagerplätzen“ "
+              "so groß.",
+        "en": "Note: **C** holds every slot that is never or barely picked – including "
+              "the empty reserve. That's why the C share is so large for ‘by storage "
+              "slots’.",
     },
     "abc_berech_global": {"de": "Berechnet (Lager gesamt)",
                           "en": "Calculated (whole warehouse)"},
@@ -1480,43 +1486,44 @@ TR: dict[str, dict[str, str]] = {
     "abc_a_thresh": {"de": "A bis % aller Picks", "en": "A up to % of all picks"},
     "abc_b_thresh": {"de": "B bis % aller Picks", "en": "B up to % of all picks"},
     "abc_thresh_note": {
-        "de": "A/B/C nach **kumuliertem Pick-Anteil** (Pareto): nach Picks "
-              "sortieren, A = die wenigen, die zusammen die ersten **{a} %** aller "
-              "Picks ausmachen, B = bis **{b} %**, Rest = C. Verschiebst du die "
-              "Regler, ändert sich die Einteilung sofort (Standard 80 / 95 %).",
-        "en": "A/B/C by **cumulative pick share** (Pareto): sort by picks, "
-              "A = the few accounting for the first **{a}%** of all picks, "
-              "B = up to **{b}%**, rest = C. Moving the sliders re-classifies "
-              "instantly (default 80 / 95 %).",
+        "de": "A/B/C nach dem aufsummierten Pick-Anteil (Pareto-Prinzip): erst nach "
+              "Picks sortieren, dann ist A die kleine Gruppe, die zusammen schon die "
+              "ersten **{a} %** aller Picks ausmacht, B geht bis **{b} %**, der Rest ist "
+              "C. Verschiebst du die Regler, ändert sich die Einteilung sofort "
+              "(Standard 80 / 95 %).",
+        "en": "A/B/C by the cumulative pick share (Pareto principle): sort by picks "
+              "first, then A is the small group that already makes up the first **{a}%** "
+              "of all picks, B goes up to **{b}%**, the rest is C. Moving the sliders "
+              "re-classifies instantly (default 80 / 95 %).",
     },
     "abc_dist_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
     "abc_dist_share": {"de": "Pick-Anteil je Klasse", "en": "Pick share per class"},
     "abc_bar_title": {"de": "Anteil je Klasse: Plätze vs. Picks",
                       "en": "Share per class: slots vs. picks"},
     "abc_dist_note": {
-        "de": "Balkendiagramm: je Klasse der **Anteil der Plätze** (grau) gegen den "
-              "**Anteil der Picks** (blau). Genau das ist der ABC-Effekt: wenige "
+        "de": "Das Balkendiagramm stellt je Klasse den Anteil der Plätze (grau) dem "
+              "Anteil der Picks (blau) gegenüber. Genau das ist der ABC-Effekt: wenige "
               "A-Plätze (kleiner grauer Balken) tragen den Großteil der Picks (großer "
-              "blauer Balken). Die exakten Zahlen stehen rechts.",
-        "en": "Bar chart: per class the **share of slots** (grey) vs. the **share of "
-              "picks** (blue). That's the ABC effect: a few A slots (small grey bar) "
-              "carry most of the picks (large blue bar). Exact figures on the right.",
+              "blauer Balken). Die genauen Zahlen stehen rechts.",
+        "en": "The bar chart puts the share of slots (grey) next to the share of picks "
+              "(blue) for each class. That's exactly the ABC effect: a few A slots "
+              "(small grey bar) carry most of the picks (large blue bar). The exact "
+              "figures are on the right.",
     },
     "abc_col_count": {"de": "Anzahl", "en": "Count"},
     "abc_col_share": {"de": "Anteil %", "en": "Share %"},
     "abc_stamm_note": {
-        "de": "**Stamm** = die im Lagersystem hinterlegte `ABC_KLASSE`. **Berechnet** = die "
-              "**globale** Klasse aus dem kumulierten Pick-Anteil im **ganzen Lager** "
-              "(Standard 80 / 95 %, wie in der 3D-Ansicht) – unabhängig von Filter & "
-              "Reglern. Der Filter beschränkt nur, welche Zeilen angezeigt werden. "
-              "Weichen Stamm und Berechnet ab, ist der Platz ein Kandidat für eine "
+        "de": "**Stamm** ist die im Lagersystem hinterlegte Klasse. **Berechnet** ist "
+              "die Klasse aus dem aufsummierten Pick-Anteil über das ganze Lager "
+              "(Standard 80 / 95 %, wie in der 3D-Ansicht) – unabhängig von Filter und "
+              "Reglern. Der Filter bestimmt nur, welche Zeilen angezeigt werden. Weichen "
+              "Stamm und Berechnet voneinander ab, ist der Platz ein Kandidat für eine "
               "ABC-Anpassung.",
-        "en": "**Master** = the `ABC_KLASSE` stored in the warehouse system. **Calculated** = the "
-              "**global** class from the cumulative pick share across the **whole "
-              "warehouse** (default 80 / 95 %, like the 3D view) – independent of "
-              "filters & sliders. The filter only limits which rows are shown. If "
-              "master and calculated differ, the slot is a candidate for an ABC "
-              "adjustment.",
+        "en": "**Master** is the class stored in the warehouse system. **Calculated** "
+              "is the class from the cumulative pick share across the whole warehouse "
+              "(default 80 / 95 %, like the 3D view) – independent of filters and "
+              "sliders. The filter only decides which rows are shown. If master and "
+              "calculated differ, the slot is a candidate for an ABC adjustment.",
     },
     "abc_cumcol": {"de": "kumul. Pick-%", "en": "cum. pick %"},
     "abc_pareto": {
@@ -1527,12 +1534,12 @@ TR: dict[str, dict[str, str]] = {
     "abc_px_articles": {"de": "Artikel (nach Bewegungen sortiert)", "en": "Articles (sorted by movements)"},
     "abc_py": {"de": "kumulativer Anteil %", "en": "cumulative share %"},
     "abc_intro_articles": {
-        "de": "**ABC nach Artikeln** — Artikel nach Bewegungen (TPA). "
-              "A = Top-Artikel bis {a} % aller Bewegungen, B = bis {b} %, Rest C "
+        "de": "**ABC nach Artikeln** — die Artikel nach Bewegungen sortiert. "
+              "A = Top-Artikel bis {a} % aller Bewegungen, B = bis {b} %, der Rest C "
               "(passt sich den Reglern oben an).",
-        "en": "**ABC by articles** — articles by movements (TPA). "
+        "en": "**ABC by articles** — articles sorted by movements. "
               "A = top articles up to {a}% of all movements, B = up to {b}%, "
-              "rest C (follows the sliders above).",
+              "the rest C (follows the sliders above).",
     },
     "abc_dist": {"de": "ABC-Verteilung", "en": "ABC distribution"},
     "abc_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
@@ -1541,14 +1548,12 @@ TR: dict[str, dict[str, str]] = {
         "en": "**🏷️ Table 1: Where doesn't the stored class fit? (recommendations)**",
     },
     "abc_adjust_intro": {
-        "de": "**Nur** Plätze, deren **Stamm** (im Lagersystem hinterlegte Klasse) "
-              "nicht zur **Berechnet**-Klasse (aus der Pickhäufigkeit) passt. "
-              "**⬆️ Hochstufen** = wird öfter gepickt als hinterlegt; "
-              "**⬇️ Herabstufen** = seltener.",
-        "en": "**Only** slots whose **master** (class stored in the warehouse system) "
-              "doesn't match the **calculated** class (from pick frequency). "
-              "**⬆️ Promote** = picked more often than recorded; **⬇️ Demote** = "
-              "less often.",
+        "de": "Hier stehen nur die Plätze, bei denen die hinterlegte Klasse nicht zur "
+              "berechneten passt. **⬆️ Hochstufen** heißt: wird öfter gepickt als "
+              "hinterlegt. **⬇️ Herabstufen** heißt: seltener.",
+        "en": "This shows only the slots where the stored class doesn't match the "
+              "calculated one. **⬆️ Promote** means: picked more often than recorded. "
+              "**⬇️ Demote** means: less often.",
     },
     "abc_promote": {"de": "⬆️ Hochstufen", "en": "⬆️ Promote"},
     "abc_demote": {"de": "⬇️ Herabstufen", "en": "⬇️ Demote"},
@@ -1564,36 +1569,36 @@ TR: dict[str, dict[str, str]] = {
     "tp_range": {"de": "Zeitraum", "en": "Date range"},
     "tab_article": {"de": "🔎 Artikel", "en": "🔎 Article"},
     "art_intro": {
-        "de": "**Artikel-Detail** — Bewegungen und Quellplätze eines Artikels.",
-        "en": "**Article detail** — movements and source slots of an article.",
+        "de": "**Artikel-Detail** — wie oft und von welchen Plätzen ein einzelner "
+              "Artikel bewegt wurde.",
+        "en": "**Article detail** — how often and from which slots a single article "
+              "was moved.",
     },
     "art_info_t": {
         "de": "ℹ️ Was bedeutet das? (Artikel-Detail + „Picks je Quellplatz“)",
         "en": "ℹ️ What does this mean? (article detail + “picks per source slot”)",
     },
     "art_info_b": {
-        "de": "Wähle oben einen **Artikel** (aus der Liste oder Nummer eingeben). Dann siehst du, **wie oft und wo** "
-              "er bewegt wurde.\n\n"
-              "**Kennzahlen:** **Bewegungen gesamt** = alle Picks dieses Artikels im Zeitraum · **Quellplätze** = von "
-              "wie vielen verschiedenen Plätzen er entnommen wurde.\n\n"
-              "**Was heißt „Picks je Quellplatz“?** Ein **Quellplatz** (`Q_PLATZ`) ist der Lagerplatz, *aus dem* "
-              "entnommen wird. Die Tabelle zeigt **je Platz**, wie oft dieser Artikel von dort gepickt wurde – so "
-              "siehst du, ob er über viele Plätze verstreut ist oder von wenigen kommt.\n\n"
-              "**Was ist ein Pick / eine Bewegung?** = ein Datensatz in den TPA-Daten = eine Auftragsposition (eine "
-              "Entnahme) – wie im Durchsatz-Tab.\n\n"
-              "**Bewegungen über Zeit** = Picks dieses Artikels je Tag (**ein Balken = ein Tag**); Wochenende ist "
+        "de": "Wähle oben einen Artikel (aus der Liste oder per Nummer). Dann siehst du, wie oft und wo er bewegt "
+              "wurde.\n\n"
+              "**Kennzahlen:** *Bewegungen gesamt* = alle Picks dieses Artikels im Zeitraum · *Quellplätze* = von wie "
+              "vielen verschiedenen Plätzen er entnommen wurde.\n\n"
+              "**Was heißt „Picks je Quellplatz“?** Ein Quellplatz ist der Platz, aus dem entnommen wird. Die Tabelle "
+              "zeigt je Platz, wie oft dieser Artikel von dort gepickt wurde – so siehst du, ob er über viele Plätze "
+              "verstreut ist oder nur von wenigen kommt.\n\n"
+              "**Was ist ein Pick?** Eine einzelne Entnahme – eine Position eines Auftrags, wie im Durchsatz-Tab.\n\n"
+              "**Bewegungen über Zeit** = die Picks dieses Artikels je Tag (ein Balken = ein Tag). Das Wochenende ist "
               "immer ausgeblendet.",
-        "en": "Pick an **article** above (from the list or by number). You then see **how often and where** it was "
+        "en": "Pick an article above (from the list or by number). You then see how often and where it was "
               "moved.\n\n"
-              "**KPIs:** **Total movements** = all picks of this article in the period · **Source slots** = from how "
-              "many different slots it was retrieved.\n\n"
-              "**What does “picks per source slot” mean?** A **source slot** (`Q_PLATZ`) is the slot goods are "
-              "*picked from*. The table shows **per slot** how often this article was picked there – so you see "
-              "whether it is spread over many slots or comes from a few.\n\n"
-              "**What is a pick / a movement?** = one record in the TPA data = one order line (a pick) – like the "
-              "Throughput tab.\n\n"
-              "**Movements over time** = picks of this article per day (**one bar = one day**); weekend is always "
-              "excluded.",
+              "**KPIs:** *Total movements* = all picks of this article in the period · *Source slots* = how many "
+              "different slots it was retrieved from.\n\n"
+              "**What does “picks per source slot” mean?** A source slot is the slot goods are picked from. The table "
+              "shows, per slot, how often this article was picked there – so you see whether it's spread over many "
+              "slots or comes from just a few.\n\n"
+              "**What is a pick?** A single retrieval – one line of an order, like in the Throughput tab.\n\n"
+              "**Movements over time** = the picks of this article per day (one bar = one day). The weekend is always "
+              "hidden.",
     },
     "art_select": {"de": "Artikel (Top nach Bewegungen)", "en": "Article (top by movements)"},
     "art_input": {"de": "… oder ARTIKELNR direkt eingeben", "en": "… or enter article no. directly"},
@@ -1606,45 +1611,42 @@ TR: dict[str, dict[str, str]] = {
         "en": "No movements found for this article.",
     },
     "tp_intro": {
-        "de": "**Durchsatz** — Anzahl Lagerbewegungen je Tag (aus den TPA-Daten). "
-              "Zeitraum über den Sidebar-Regler einstellbar.",
-        "en": "**Throughput** — number of warehouse movements per day (from TPA "
-              "data). Period adjustable via the sidebar slider.",
+        "de": "**Durchsatz** — wie viele Lagerbewegungen es pro Tag gab. Den Zeitraum "
+              "stellst du links mit dem Regler ein.",
+        "en": "**Throughput** — how many warehouse movements there were per day. Set "
+              "the period with the slider on the left.",
     },
     "tp_info_t": {
         "de": "ℹ️ Was bedeutet das? (Durchsatz + „eine Bewegung“ erklärt)",
         "en": "ℹ️ What does this mean? (throughput + “one movement”)",
     },
     "tp_info_b": {
-        "de": "Dieser Tab zählt **Lagerbewegungen je Tag** und zeigt sie als Balken (**ein Balken = ein Tag**).\n\n"
-              "**Was zählt als eine Bewegung?** Eine Bewegung = **ein Datensatz in den TPA-Daten** = **eine "
-              "Auftragsposition** (eine Position eines Kommissionier-/Transportauftrags, also i. d. R. eine "
-              "Entnahme / ein Pick). Mehrere Positionen desselben Auftrags zählen **einzeln**. *Ob eine Position "
-              "genau einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert und sollte "
-              "beim Betreiber bestätigt werden.*\n\n"
-              "**Kennzahlen unter dem Diagramm:** **Ø pro Tag** = Durchschnitt über die angezeigten Tage · "
-              "**Maximum** = stärkster Einzeltag · **Summe Zeitraum** = alle Bewegungen zusammen.\n\n"
-              "**Wochenende ist immer ausgeblendet:** Sa/So haben kaum reguläre Bewegungen und würden den Verlauf "
-              "mit Tief-/Null-Tagen verzerren – ohne sie ist der Arbeitstag-Verlauf klarer.",
-        "en": "This tab counts **warehouse movements per day** and shows them as bars (**one bar = one day**).\n\n"
-              "**What counts as one movement?** One movement = **one record in the TPA data** = **one order line** "
-              "(a line of a picking/transport order, i.e. usually one pick). Several lines of the same order count "
-              "**individually**. *Whether one line equals exactly one order row or one article is defined in the "
-              "warehouse system (WMS) and should be confirmed with the operator.*\n\n"
-              "**KPIs below the chart:** **Avg. per day** = mean over the shown days · **Maximum** = strongest "
-              "single day · **Sum (period)** = all movements together.\n\n"
-              "**Weekend is always excluded:** Sat/Sun have hardly any regular movements and would distort the "
-              "trend with low/zero days – without them the working-day trend is clearer.",
+        "de": "Dieser Tab zählt die Lagerbewegungen pro Tag und zeigt sie als Balken (ein Balken = ein Tag).\n\n"
+              "**Was zählt als eine Bewegung?** Eine Bewegung ist eine Position eines Auftrags – also in der Regel "
+              "eine Entnahme bzw. ein Pick. Hat ein Auftrag mehrere Positionen, zählt jede einzeln. *Ob eine "
+              "Position genau einer Orderzeile oder einem Artikel entspricht, legt das Lagersystem fest.*\n\n"
+              "**Kennzahlen unter dem Diagramm:** *Ø pro Tag* = Durchschnitt über die angezeigten Tage · *Maximum* = "
+              "der stärkste Einzeltag · *Summe Zeitraum* = alle Bewegungen zusammen.\n\n"
+              "**Das Wochenende ist immer ausgeblendet**, weil samstags und sonntags kaum regulär bewegt wird. Die "
+              "Null-Tage würden den Verlauf sonst nur verzerren; ohne sie ist der Arbeitstag-Verlauf klarer.",
+        "en": "This tab counts the warehouse movements per day and shows them as bars (one bar = one day).\n\n"
+              "**What counts as one movement?** A movement is one line of an order – usually one retrieval, i.e. one "
+              "pick. If an order has several lines, each one counts. *Whether one line equals exactly one order row "
+              "or one article is defined by the warehouse system.*\n\n"
+              "**KPIs below the chart:** *Avg. per day* = mean over the shown days · *Maximum* = the strongest single "
+              "day · *Sum (period)* = all movements together.\n\n"
+              "**The weekend is always hidden**, because there's hardly any regular activity on Saturdays and "
+              "Sundays. The zero days would only distort the trend; without them the working-day trend is clearer.",
     },
     "tp_chart": {"de": "Bewegungen letzte {n} Tage", "en": "Movements last {n} days"},
     "tp_avg": {"de": "Ø pro Tag", "en": "Avg. per day"},
     "tp_max": {"de": "Maximum", "en": "Maximum"},
     "tp_sum": {"de": "Summe Zeitraum", "en": "Sum (period)"},
     "top_intro": {
-        "de": "**Top-Artikel** — Artikel mit den meisten Bewegungen (aus den "
-              "TPA-Daten). Anzahl über den Sidebar-Regler einstellbar.",
-        "en": "**Top items** — items with the most movements (from TPA data). "
-              "Count adjustable via the sidebar slider.",
+        "de": "**Top-Artikel** — die Artikel mit den meisten Bewegungen. Wie viele "
+              "angezeigt werden, stellst du links mit dem Regler ein.",
+        "en": "**Top items** — the articles with the most movements. Set how many are "
+              "shown with the slider on the left.",
     },
     "top_chart": {"de": "Meistbewegte Artikel", "en": "Most-moved items"},
     "top_info_t": {
@@ -1652,23 +1654,23 @@ TR: dict[str, dict[str, str]] = {
         "en": "ℹ️ What does this mean? (top items + “one movement”)",
     },
     "top_info_b": {
-        "de": "Dieser Tab zeigt die **meistbewegten Artikel** – sortiert nach **Bewegungen** (absteigend); Anzahl "
-              "über den Sidebar-Regler einstellbar. So siehst du die echten **Dreher** im Sortiment.\n\n"
-              "**Was zählt als eine Bewegung?** Eine Bewegung = **ein Datensatz in den TPA-Daten** = **eine "
-              "Auftragsposition** (eine Entnahme / ein Pick) – identisch zum Durchsatz-Tab. *Ob eine Position genau "
-              "einer Orderzeile oder einem Artikel entspricht, ist im Lagersystem (WMS) definiert.*\n\n"
-              "**Spalten:** **Artikel-Nr** = die Artikelnummer · **Bezeichnung** = Klartext-Name · **Bewegungen** = "
-              "wie oft der Artikel im Zeitraum bewegt wurde.\n\n"
-              "*Hinweis:* Mit aktivem Sidebar-Platzfilter zählen nur Bewegungen, die von den ausgewählten Plätzen "
+        "de": "Dieser Tab zeigt die meistbewegten Artikel, sortiert nach Bewegungen (oben die stärksten). So siehst "
+              "du die echten Dreher im Sortiment. Wie viele angezeigt werden, stellst du links mit dem Regler ein.\n\n"
+              "**Was zählt als eine Bewegung?** Eine Bewegung ist eine Position eines Auftrags – eine Entnahme bzw. "
+              "ein Pick, genau wie im Durchsatz-Tab. *Ob eine Position genau einer Orderzeile oder einem Artikel "
+              "entspricht, legt das Lagersystem fest.*\n\n"
+              "**Spalten:** *Artikel-Nr* = die Artikelnummer · *Bezeichnung* = der Klartext-Name · *Bewegungen* = wie "
+              "oft der Artikel im Zeitraum bewegt wurde.\n\n"
+              "*Hinweis:* Mit einem aktiven Platzfilter links zählen nur Bewegungen, die von den ausgewählten Plätzen "
               "ausgehen.",
-        "en": "This tab shows the **most-moved articles** – sorted by **movements** (descending); count adjustable "
-              "via the sidebar slider. This reveals the real **movers** in the assortment.\n\n"
-              "**What counts as one movement?** One movement = **one record in the TPA data** = **one order line** "
-              "(a pick) – same as the Throughput tab. *Whether one line equals exactly one order row or one article "
-              "is defined in the warehouse system (WMS).*\n\n"
-              "**Columns:** **Article no.** = the article number · **Description** = plain name · **Movements** = how "
+        "en": "This tab shows the most-moved articles, sorted by movements (the busiest on top). This reveals the "
+              "real movers in the assortment. Set how many are shown with the slider on the left.\n\n"
+              "**What counts as one movement?** A movement is one line of an order – a retrieval, i.e. a pick, just "
+              "like in the Throughput tab. *Whether one line equals exactly one order row or one article is defined "
+              "by the warehouse system.*\n\n"
+              "**Columns:** *Article no.* = the article number · *Description* = the plain name · *Movements* = how "
               "often the article was moved in the period.\n\n"
-              "*Note:* With an active sidebar slot filter, only movements originating from the selected slots are "
+              "*Note:* With an active slot filter on the left, only movements originating from the selected slots are "
               "counted.",
     },
     "no_data_filters": {
@@ -1676,10 +1678,10 @@ TR: dict[str, dict[str, str]] = {
         "en": "No data with current filters.",
     },
     "mov_filtered": {
-        "de": "🔗 Live gefiltert: nur Bewegungen aus den {n} aktuell gewählten Plätzen "
-              "(Q_PLATZ). Filter leeren = ganzes Lager.",
-        "en": "🔗 Live-filtered: only movements from the {n} currently selected slots "
-              "(Q_PLATZ). Clear filters = whole warehouse.",
+        "de": "🔗 Gefiltert: nur Bewegungen aus den {n} aktuell gewählten Plätzen. "
+              "Filter leeren zeigt wieder das ganze Lager.",
+        "en": "🔗 Filtered: only movements from the {n} currently selected slots. "
+              "Clear the filters to see the whole warehouse again.",
     },
     "d3_autorotate": {"de": "Auto-Rotation", "en": "Auto-rotate"},
     "d3_brightness": {"de": "Helligkeit", "en": "Brightness"},
@@ -1722,12 +1724,11 @@ TR: dict[str, dict[str, str]] = {
     "fach_label": {"de": "Fach", "en": "Bin"},
     # --- klickbarer 3D-Viewer ---
     "d3_click_intro": {
-        "de": "**Klickbares 3D-Modell** — auf einen Lagerplatz im Modell klicken, "
-              "um seine Kennzahlen rechts zu sehen. Die Plätze sind nach `PLATZ_ID` "
-              "benannt und direkt mit der Datenbank verknüpft.",
-        "en": "**Clickable 3D model** — click a storage slot in the model to see its "
-              "metrics on the right. Slots are named by `PLATZ_ID` and linked "
-              "directly to the database.",
+        "de": "**Klickbares 3D-Modell** — klick einen Lagerplatz im Modell an, dann "
+              "siehst du rechts seine Kennzahlen. Jeder Platz ist mit der Datenbank "
+              "verknüpft.",
+        "en": "**Clickable 3D model** — click a storage slot in the model and you'll "
+              "see its metrics on the right. Every slot is linked to the database.",
     },
     "d3_color_abc": {"de": "Nach ABC einfärben", "en": "Color by ABC"},
     "d3_colormode": {"de": "Färben nach", "en": "Color by"},
@@ -1765,13 +1766,13 @@ TR: dict[str, dict[str, str]] = {
     "d3_view_cad": {"de": "CAD-Modell (Teildaten)", "en": "CAD model (partial)"},
     "d3_view_schema": {"de": "Daten-Modell (alle Plätze)", "en": "Data model (all slots)"},
     "d3_schema_intro": {
-        "de": "**Daten-Modell** — jeder Lagerplatz der Datenbank als Box, "
-              "positioniert nach Regal/Fach/Ebene. Zeigt **alle 22.429 Plätze** "
-              "(kein Grau, keine fehlenden Regale), wahlweise eingefärbt nach "
-              "Auslastung, Belegung oder ABC.",
-        "en": "**Data model** — every database slot as a box, placed by "
-              "rack/bin/level. Shows **all 22,429 slots** (no grey, no missing "
-              "racks), colored by utilization, occupancy or ABC.",
+        "de": "**Daten-Modell** — jeder Lagerplatz aus der Datenbank als Box, "
+              "angeordnet nach Regal, Fach und Ebene. Hier sind **alle 22.429 Plätze** "
+              "dabei (keine grauen Lücken), wahlweise eingefärbt nach Auslastung, "
+              "Belegung oder ABC.",
+        "en": "**Data model** — every storage slot from the database as a box, arranged "
+              "by rack, bin and level. **All 22,429 slots** are here (no grey gaps), "
+              "colored by utilization, occupancy or ABC as you like.",
     },
     "d3_schema_caption": {
         "de": "Steuerung: Ziehen = drehen, Scrollen = zoomen, **WASD = fliegen** "
@@ -1783,9 +1784,9 @@ TR: dict[str, dict[str, str]] = {
     },
     "search_platz": {"de": "🔎 Lagerplatz suchen (PLATZ_ID)", "en": "🔎 Find slot (PLATZ_ID)"},
     "search_platz_help": {
-        "de": "9-stellige PLATZ_ID eingeben und Enter – die Karte fliegt zu "
-              "diesem Platz und markiert ihn.",
-        "en": "Enter a 9-digit PLATZ_ID and press Enter – the map flies to that "
+        "de": "Die 9-stellige Platz-Nummer eingeben und Enter drücken – die Ansicht "
+              "fliegt zu diesem Platz und markiert ihn.",
+        "en": "Enter the 9-digit slot number and press Enter – the view flies to that "
               "slot and highlights it.",
     },
     "d3_notfound": {
@@ -1794,10 +1795,10 @@ TR: dict[str, dict[str, str]] = {
     },
     "d3_perf": {"de": "Plätze ohne Daten ausblenden", "en": "Hide slots without data"},
     "d3_perf_help": {
-        "de": "Blendet die grauen Plätze aus, für die es keinen DB-Datensatz "
-              "gibt (Modell-Luftplätze). Standardmäßig an – sauberer und "
+        "de": "Blendet die grauen Plätze aus, zu denen es keinen Datensatz gibt (reine "
+              "Modell-Plätze). Standardmäßig an – das ist übersichtlicher und läuft "
               "flüssiger. Es gehen keine Daten verloren.",
-        "en": "Hides the grey slots that have no DB record (model-only). On by "
+        "en": "Hides the grey slots that have no data record (model-only). On by "
               "default – cleaner and smoother. No data is lost.",
     },
     # --- Erklaerungen/Beschriftungen (Lehrer-Feedback) ---
@@ -2369,20 +2370,21 @@ _MASSNAHME_RENAME = {
     "MAX_LHM": "Kapazität (max. LHM)", "IST_LHM": "Belegt (Ist-LHM)",
 }
 _MASSNAHME_HELP = {
-    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im Lagersystem.",
+    "Platz": "Die eindeutige Nummer des Lagerplatzes.",
     "Regal": "Regalnummer im Lager.",
     "Fach": "Fach innerhalb des Regals.",
-    "Ebene": "Höhe/Ebene des Platzes – niedrig = Pickzone (kurze Greifwege).",
-    "Picks": "ANZ_PICKS – wie oft an diesem Platz gepickt wird "
-             "(Zugriffshäufigkeit im Lagersystem).",
-    "ABC (Platz)": "Güteklasse des ORTES aus dem Lagersystem (A = wegoptimaler "
-                   "Premiumplatz). Beschreibt den Platz, nicht den Artikel.",
-    "Kapazität (max. LHM)": "MAX_LHM – wie viele Ladehilfsmittel der Platz "
-                            "maximal fasst (kann > 1 sein).",
-    "Belegt (Ist-LHM)": "IST_LHM – wie viele Ladehilfsmittel aktuell dort stehen.",
-    "Vorschlag": "Abgeleitete Handlungsempfehlung für diese Zeile.",
-    "Zielplatz-Vorschlag": "Konkreter freier Zielplatz (1:1 nach freier "
-                           "Kapazität), wohin der Inhalt umgelagert werden kann.",
+    "Ebene": "Wie hoch der Platz liegt – niedrig heißt Pickzone mit kurzen "
+             "Greifwegen.",
+    "Picks": "Wie oft an diesem Platz gepickt wird (Häufigkeit aus dem "
+             "Lagersystem).",
+    "ABC (Platz)": "Die Güteklasse des Ortes aus dem Lagersystem (A = bester "
+                   "Platz). Beschreibt den Platz, nicht den Artikel.",
+    "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
+                            "(kann auch mehr als einer sein).",
+    "Belegt (Ist-LHM)": "Wie viele Paletten/Behälter aktuell drauf stehen.",
+    "Vorschlag": "Die empfohlene Handlung für diese Zeile.",
+    "Zielplatz-Vorschlag": "Ein konkreter freier Platz, auf den der Inhalt "
+                           "umgelagert werden kann (nach freier Kapazität zugeordnet).",
 }
 
 # Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
@@ -2409,25 +2411,22 @@ _PUTAWAY_RENAME = {
 
 # Hilfetexte je (umbenannter) Spalte – als ℹ️ am Tabellenkopf (col_help).
 _PUTAWAY_HELP = {
-    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im WMS.",
+    "Platz": "Die eindeutige Nummer des Lagerplatzes.",
     "Regal": "Regalnummer im Lager.",
     "Fach": "Fach innerhalb des Regals.",
-    "Ebene": "Höhe/Ebene – niedrig = wegoptimale Pickzone (kurze Greifwege). "
-             "Kriterium für Schnelldreher (≤ Regler) vs. Reserve (≥ Regler).",
-    "ABC (Platz)": "Güteklasse des ORTES aus dem WMS (A = wegoptimaler "
-                   "Premiumplatz). Beschreibt den Platz, nicht den Artikel; "
-                   "entscheidet Schnelldreher-Platz (A) vs. Reserve (kein A).",
-    "Kapazität (max. LHM)": "MAX_LHM – wie viele Ladehilfsmittel "
-                            "(Paletten/Behälter) der Platz maximal fasst.",
-    "Belegt (Ist-LHM)": "IST_LHM – wie viele Ladehilfsmittel aktuell schon "
-                        "dort stehen.",
-    "Frei (LHM)": "Kapazität − Belegt – wie viele LHM noch reinpassen. "
-                  "Sortierkriterium der Liste (größte Lücke zuerst).",
-    "Auslastung %": "Belegt / Kapazität × 100. 0 % = ganz leer, < 100 % = "
-                    "noch Platz.",
-    "Sperrgrund (Kennz.)": "Sperrkennzeichen (SPERR_KNZ) aus dem WMS – warum "
-                           "der Platz gesperrt ist (z. B. Inventur/Defekt). "
-                           "Gesetzt = hier nicht einlagern.",
+    "Ebene": "Wie hoch der Platz liegt – niedrig ist die Pickzone mit kurzen "
+             "Wegen. Entscheidet, ob ein Platz Schnelldreher oder Reserve ist.",
+    "ABC (Platz)": "Die Güteklasse des Ortes aus dem Lagersystem (A = bester "
+                   "Platz). Beschreibt den Platz, nicht den Artikel; A wird zum "
+                   "Schnelldreher-Platz, alles andere zur Reserve.",
+    "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen.",
+    "Belegt (Ist-LHM)": "Wie viele davon schon drauf stehen.",
+    "Frei (LHM)": "Wie viele noch reinpassen. Danach ist die Liste sortiert "
+                  "(größte Lücke zuerst).",
+    "Auslastung %": "Wie voll der Platz ist. 0 % = ganz leer, unter 100 % = noch "
+                    "Platz.",
+    "Sperrgrund (Kennz.)": "Warum der Platz gesperrt ist (z. B. Inventur oder "
+                           "Defekt). Ist er gesetzt, hier nicht einlagern.",
 }
 
 # Gesperrt-Liste: Kapazitaet/Frei sind hier irrelevant (egal ob frei, der Platz
@@ -2468,26 +2467,25 @@ _REPLEN_RENAME = {
 
 # Hilfetexte je (umbenannter) Spalte – als ℹ️ am Tabellenkopf (col_help).
 _REPLEN_HELP = {
-    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im WMS.",
+    "Platz": "Die eindeutige Nummer des Lagerplatzes.",
     "Regal": "Regalnummer im Lager.",
     "Fach": "Fach innerhalb des Regals.",
-    "Ebene": "Höhe/Ebene des Platzes – niedrig = Pickzone (kurze Greifwege).",
-    "ABC (Platz)": "Im WMS hinterlegte Güteklasse des ORTES (A = wegoptimaler "
-                   "Premiumplatz). Beschreibt den Platz, nicht den Artikel; "
-                   "wird hier nicht aus Picks berechnet.",
-    "Picks (Häufigkeit)": "ANZ_PICKS – wie oft an diesem Platz gepickt wird "
-                          "(WMS-Zugriffszähler). Treiber der Dringlichkeit.",
-    "Soll-LHM": "MAX_LHM – auf so viele Ladehilfsmittel (Paletten/Behälter) "
-                "sollte der Platz aufgefüllt werden.",
-    "Tage leer": "Tage seit dem Leer-Datum (LEER_DATUM) – wie lange der Platz "
-                 "schon ohne Ware ist. Bei manchen Plätzen unbekannt (leer).",
-    "Tage seit letztem Pick": "Tage seit dem letzten Zugriff (ZUGRIFF_DATUM). "
-                              "Zweites Staleness-Signal: kürzlich gepickt + leer "
-                              "= vergessener Nachschub; lange kein Pick = evtl. "
-                              "totes Fach. Besser gefüllt als „Tage leer“.",
-    "Vorschlag": "Abgeleitete Handlung: Dringlichkeit aus der Listenregel "
-                 "(Picks/Tage), Menge = Soll-LHM (Platz ist leer → auf Soll "
-                 "auffüllen).",
+    "Ebene": "Wie hoch der Platz liegt – niedrig heißt Pickzone mit kurzen "
+             "Greifwegen.",
+    "ABC (Platz)": "Die Güteklasse des Ortes aus dem Lagersystem (A = bester "
+                   "Platz). Beschreibt den Platz, nicht den Artikel, und wird hier "
+                   "nicht aus den Picks berechnet.",
+    "Picks (Häufigkeit)": "Wie oft an diesem Platz gepickt wird. Je mehr, desto "
+                          "dringender der Nachschub.",
+    "Soll-LHM": "Auf so viele Paletten/Behälter sollte der Platz aufgefüllt "
+                "werden.",
+    "Tage leer": "Wie lange der Platz schon ohne Ware ist. Bei manchen Plätzen "
+                 "nicht bekannt.",
+    "Tage seit letztem Pick": "Wie lange hier nichts mehr entnommen wurde. "
+                              "Kürzlich gepickt und trotzdem leer heißt: Nachschub "
+                              "vergessen. Lange kein Pick: vielleicht ein totes Fach.",
+    "Vorschlag": "Die empfohlene Handlung: wie dringend kommt aus der Liste, die "
+                 "Menge ist das Soll (Platz ist leer, also auffüllen).",
 }
 
 
@@ -2611,15 +2609,14 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
     })
     halls_help = {
         "Plätze": "Anzahl Stellplätze im (gefilterten) Lager.",
-        "Belegt": "Plätze mit mindestens einem Ladehilfsmittel (Ist-LHM > 0).",
-        "Frei": "Plätze mit freier Kapazität (es passt noch etwas rein).",
-        "Belegung %": "Belegt / Plätze × 100.",
-        "Ø Auslastung %": "Mittlere Auslastung (Ist-LHM / Kapazität × 100) über "
-                          "alle Plätze.",
-        "Picks gesamt": "Summe aller Zugriffe (ANZ_PICKS) im gefilterten Lager.",
+        "Belegt": "Plätze, auf denen mindestens eine Palette/ein Behälter steht.",
+        "Frei": "Plätze, auf die noch etwas draufpasst.",
+        "Belegung %": "Anteil der belegten Plätze.",
+        "Ø Auslastung %": "Wie voll die Plätze im Schnitt sind.",
+        "Picks gesamt": "Alle Zugriffe im gefilterten Lager zusammen.",
         "A-Plätze": "Plätze mit berechneter Klasse A (viel gepickt).",
         "B-Plätze": "Plätze mit berechneter Klasse B.",
-        "C-Plätze": "Plätze mit berechneter Klasse C (wenig/nicht gepickt).",
+        "C-Plätze": "Plätze mit berechneter Klasse C (wenig oder gar nicht gepickt).",
     }
     col_cfg = {c: st.column_config.Column(help=h)
                for c, h in halls_help.items() if c in show.columns}
@@ -2712,20 +2709,20 @@ _HF_RENAME = {
     "UTILIZATION": "Auslastung %",
 }
 _HF_HELP = {
-    "Platz": "Eindeutige Platz-Kennung (PLATZ_ID) im Lagersystem.",
+    "Platz": "Die eindeutige Nummer des Lagerplatzes.",
     "Regal": "Regalnummer im Lager.",
     "Fach": "Fach innerhalb des Regals.",
-    "Ebene": "Höhe/Ebene des Platzes.",
-    "Picks (Stamm)": "ANZ_PICKS – die im Lagersystem hinterlegte "
-                     "Zugriffshäufigkeit dieses Platzes.",
-    "Picks gesamt": "ANZ_PICKS + zusätzliche Anfahrten aus den Fahrpos-Daten "
-                    "(Q_PLATZ). Gleich wie „Picks (Stamm)“ = keine zusätzlichen "
-                    "Fahrpos-Anfahrten (kein Fehler).",
-    "Kapazität (max. LHM)": "MAX_LHM – wie viele Ladehilfsmittel der Platz "
-                            "maximal fasst (kann > 1 sein).",
-    "Belegt (Ist-LHM)": "IST_LHM – wie viele Ladehilfsmittel aktuell dort stehen.",
-    "Auslastung %": "Ist-LHM / Kapazität × 100. 0 % = oft angefahren, aber "
-                    "gerade leer (Nachschub nötig); 100 % = voll.",
+    "Ebene": "Wie hoch der Platz liegt.",
+    "Picks (Stamm)": "Die im Lagersystem hinterlegte Zugriffshäufigkeit dieses "
+                     "Platzes.",
+    "Picks gesamt": "Stamm-Picks plus die tatsächlichen Anfahrten aus den "
+                    "Bewegungsdaten. Gleich wie „Picks (Stamm)“ heißt: keine "
+                    "zusätzlichen Anfahrten (kein Fehler).",
+    "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
+                            "(kann auch mehr als einer sein).",
+    "Belegt (Ist-LHM)": "Wie viele davon aktuell drauf stehen.",
+    "Auslastung %": "Wie voll der Platz ist. 0 % = oft angefahren, aber gerade "
+                    "leer (Nachschub nötig); 100 % = voll.",
 }
 
 
@@ -3296,11 +3293,10 @@ _TOP_RENAME = {
     "bewegungen": "Bewegungen",
 }
 _TOP_HELP = {
-    "Artikel-Nr": "Artikelnummer (ARTIKELNR) aus den TPA-Daten.",
-    "Bezeichnung": "Klartext-Name des Artikels.",
-    "Bewegungen": "Anzahl TPA-Datensätze (Auftragspositionen) für diesen "
-                  "Artikel im Zeitraum – wie oft er bewegt/gepickt wurde. "
-                  "Mehr = wichtigerer Dreher.",
+    "Artikel-Nr": "Die Artikelnummer.",
+    "Bezeichnung": "Der Klartext-Name des Artikels.",
+    "Bewegungen": "Wie oft der Artikel im Zeitraum bewegt bzw. gepickt wurde. "
+                  "Mehr Bewegungen = wichtigerer Dreher.",
 }
 
 
@@ -3380,7 +3376,7 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                 slot_tbl = slots.rename(columns={"platz": "Quellplatz",
                                                  "picks": "Picks (von hier)"})
                 slot_help = {
-                    "Quellplatz": "Lagerplatz (Q_PLATZ), aus dem dieser Artikel "
+                    "Quellplatz": "Der Lagerplatz, aus dem dieser Artikel "
                                   "entnommen wurde.",
                     "Picks (von hier)": "Wie oft der Artikel im Zeitraum von "
                                         "genau diesem Platz gepickt wurde.",
