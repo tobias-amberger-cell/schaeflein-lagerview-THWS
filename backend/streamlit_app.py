@@ -2170,74 +2170,104 @@ FORMULAS: list[dict] = [
     {
         "key": "auslastung",
         "title": {"de": "Auslastung (%)", "en": "Utilization (%)"},
-        "latex": r"\text{Auslastung}\,[\%] = \frac{\mathrm{IST\_LHM}}{\mathrm{MAX\_LHM}} \times 100",
-        "plain": {"de": "IST_LHM / MAX_LHM × 100",
-                  "en": "IST_LHM / MAX_LHM × 100"},
-        "note": {"de": "0 = leer, 100 = voll, ≥ 200 % = Stammdaten-Artefakt (MAX_LHM zu klein).",
-                 "en": "0 = empty, 100 = full, ≥ 200 % = master-data artefact (MAX_LHM too low)."},
+        "latex": r"\text{Auslastung}\,[\%] = \frac{\text{Belegt}}{\text{Kapazität}} \times 100",
+        "plain": {"de": "Belegt ÷ Kapazität × 100",
+                  "en": "Occupied ÷ capacity × 100"},
+        "note": {"de": "Wie voll ein Platz ist: belegte Menge geteilt durch Kapazität. "
+                       "0 % = leer, 100 % = voll. Werte über 100 % heißen nur, dass die "
+                       "Kapazität zu niedrig gepflegt ist.",
+                 "en": "How full a slot is: amount stored divided by capacity. 0 % = "
+                       "empty, 100 % = full. Values above 100 % just mean the capacity "
+                       "is set too low."},
     },
     {
         "key": "avg_util",
         "title": {"de": "Ø Auslastung", "en": "Avg. utilization"},
-        "latex": r"\varnothing\,\text{Auslastung} = \frac{1}{n}\sum_{i=1}^{n} \frac{\mathrm{IST\_LHM}_i}{\mathrm{MAX\_LHM}_i} \times 100",
-        "plain": {"de": "Mittelwert von IST_LHM / MAX_LHM × 100 über die Auswahl",
-                  "en": "Mean of IST_LHM / MAX_LHM × 100 over the selection"},
+        "latex": r"\varnothing\,\text{Auslastung} = \frac{1}{n}\sum_{i=1}^{n} \frac{\text{Belegt}_i}{\text{Kapazität}_i} \times 100",
+        "plain": {"de": "Durchschnitt der Auslastung über alle Plätze",
+                  "en": "Average utilization across all slots"},
+        "note": {"de": "Der Durchschnitt der Auslastung über alle Plätze in der "
+                       "aktuellen Auswahl.",
+                 "en": "The average utilization across all slots in the current "
+                       "selection."},
     },
     {
         "key": "frei",
-        "title": {"de": "Freie Kapazität (LHM)", "en": "Free capacity (LHM)"},
-        "latex": r"\mathrm{FREE\_CAPACITY} = \mathrm{MAX\_LHM} - \mathrm{IST\_LHM}",
-        "plain": {"de": "MAX_LHM − IST_LHM", "en": "MAX_LHM − IST_LHM"},
+        "title": {"de": "Freie Kapazität", "en": "Free capacity"},
+        "latex": r"\text{Frei} = \text{Kapazität} - \text{Belegt}",
+        "plain": {"de": "Kapazität − Belegt", "en": "Capacity − occupied"},
+        "note": {"de": "Wie viele Paletten/Behälter noch auf den Platz passen: "
+                       "Kapazität minus Belegt.",
+                 "en": "How many pallets/bins still fit on the slot: capacity minus "
+                       "occupied."},
     },
     {
         "key": "belegt",
         "title": {"de": "Belegt", "en": "Occupied"},
-        "latex": r"\mathrm{BELEGT} = (\mathrm{IST\_LHM} > 0)",
-        "plain": {"de": "IST_LHM > 0", "en": "IST_LHM > 0"},
+        "latex": r"\text{Belegt} = (\text{Ist-Menge} > 0)",
+        "plain": {"de": "mindestens eine Palette/ein Behälter steht drauf",
+                  "en": "at least one pallet/bin is on it"},
+        "note": {"de": "Ein Platz gilt als belegt, sobald mindestens eine Palette oder "
+                       "ein Behälter darauf steht – auch bei nur teilweiser Füllung.",
+                 "en": "A slot counts as occupied as soon as at least one pallet or bin "
+                       "is on it – even when only partly filled."},
     },
     {
         "key": "gesperrt",
         "title": {"de": "Gesperrt", "en": "Locked"},
-        "latex": r"\mathrm{GESPERRT} = \big(\mathrm{SPERR\_KNZ} \notin \{\varnothing, 0\}\big)",
-        "plain": {"de": "SPERR_KNZ gesetzt (≠ leer/0)", "en": "SPERR_KNZ set (≠ empty/0)"},
+        "latex": r"\text{Gesperrt} = \text{Sperrkennzeichen ist gesetzt}",
+        "plain": {"de": "Sperrkennzeichen ist gesetzt",
+                  "en": "a lock flag is set"},
+        "note": {"de": "Ein Platz ist gesperrt, wenn ein Sperrkennzeichen gesetzt ist "
+                       "(z. B. Inventur oder Defekt). Dann nicht einlagern.",
+                 "en": "A slot is locked when a lock flag is set (e.g. stocktake or "
+                       "defect). Don't store there."},
     },
     {
         "key": "tage_leer",
         "title": {"de": "Tage leer", "en": "Days empty"},
-        "latex": r"\mathrm{DAYS\_EMPTY} = \text{heute} - \mathrm{LEER\_DATUM}",
-        "plain": {"de": "heute − LEER_DATUM (Tage)", "en": "today − LEER_DATUM (days)"},
+        "latex": r"\text{Tage leer} = \text{heute} - \text{Leer-Datum}",
+        "plain": {"de": "heute − Leer-Datum (in Tagen)",
+                  "en": "today − empty date (in days)"},
+        "note": {"de": "Wie viele Tage der Platz schon leer ist – von heute zurück bis "
+                       "zum Leer-Datum.",
+                 "en": "How many days the slot has been empty – from today back to the "
+                       "empty date."},
     },
     {
         "key": "abc_calc",
-        "title": {"de": "ABC berechnet (ABC_CALC)", "en": "ABC calculated (ABC_CALC)"},
-        "latex": r"\text{kum. Pick-Anteil} \le 80\% \Rightarrow A,\quad \le 95\% \Rightarrow B,\quad \text{sonst } C",
-        "plain": {"de": "Sortiert nach Picks; kum. Anteil ≤ 80 %→A, ≤ 95 %→B, sonst C",
-                  "en": "Sorted by picks; cum. share ≤ 80 %→A, ≤ 95 %→B, else C"},
-        "note": {"de": "Plätze/Artikel nach ANZ_PICKS absteigend, kumulativer Anteil.",
-                 "en": "Slots/items by ANZ_PICKS desc., cumulative share."},
+        "title": {"de": "ABC (berechnet)", "en": "ABC (calculated)"},
+        "latex": r"\text{kumulierter Pick-Anteil} \le 80\% \Rightarrow A,\quad \le 95\% \Rightarrow B,\quad \text{sonst } C",
+        "plain": {"de": "kumulierter Pick-Anteil ≤ 80 % → A, ≤ 95 % → B, sonst C",
+                  "en": "cumulative pick share ≤ 80 % → A, ≤ 95 % → B, else C"},
+        "note": {"de": "Erst nach Picks sortieren, dann aufsummieren: bis 80 % = A, bis "
+                       "95 % = B, der Rest = C.",
+                 "en": "Sort by picks first, then add up: up to 80 % = A, up to 95 % = "
+                       "B, the rest = C."},
     },
     {
         "key": "pick_total",
-        "title": {"de": "Pick-Total", "en": "Pick total"},
-        "latex": r"\mathrm{PICK\_TOTAL} = \mathrm{ANZ\_PICKS} + \mathrm{Q\_PLATZ\text{-}Count}",
-        "plain": {"de": "ANZ_PICKS + Q_PLATZ-Count (Fahrpos)",
-                  "en": "ANZ_PICKS + Q_PLATZ count (Fahrpos)"},
-    },
-    {
-        "key": "ampel",
-        "title": {"de": "Heatmap-Ampel", "en": "Heatmap colour"},
-        "latex": r"\text{grün} < 40\,\% \le \text{gelb} < 80\,\% \le \text{rot}",
-        "plain": {"de": "grün < 40 %, gelb 40–79 %, rot ≥ 80 %",
-                  "en": "green < 40 %, yellow 40–79 %, red ≥ 80 %"},
+        "title": {"de": "Picks gesamt", "en": "Total picks"},
+        "latex": r"\text{Picks gesamt} = \text{Picks (Stamm)} + \text{Anfahrten (Bewegungsdaten)}",
+        "plain": {"de": "Picks (Stamm) + zusätzliche Anfahrten",
+                  "en": "Picks (master) + extra visits"},
+        "note": {"de": "Die im Lagersystem hinterlegten Picks plus die zusätzlichen "
+                       "Anfahrten aus den Bewegungsdaten.",
+                 "en": "The picks stored in the warehouse system plus the extra visits "
+                       "from the movement data."},
     },
     {
         "key": "ebene_max",
-        "title": {"de": "Ebene-Regler Obergrenze", "en": "Level slider upper bound"},
-        "latex": r"\max\{\,e : \#\{\text{Plätze mit EBENE}=e\} \ge 20\,\}",
-        "plain": {"de": "höchste Ebene mit ≥ 20 Plätzen",
-                  "en": "highest level with ≥ 20 slots"},
-        "note": {"de": "Verhindert, dass Einzel-Ausreißer (EBENE 14–24) die Skala aufblähen.",
-                 "en": "Prevents single outliers (EBENE 14–24) from inflating the scale."},
+        "title": {"de": "Obergrenze Ebenen-Regler", "en": "Level slider upper bound"},
+        "latex": r"\text{höchste Ebene mit mindestens 20 Plätzen}",
+        "plain": {"de": "höchste Ebene mit mindestens 20 Plätzen",
+                  "en": "highest level with at least 20 slots"},
+        "note": {"de": "Der Ebenen-Regler endet bei der höchsten Ebene mit mindestens "
+                       "20 Plätzen, damit einzelne Ausreißer ganz oben die Skala nicht "
+                       "aufblähen.",
+                 "en": "The level slider stops at the highest level with at least 20 "
+                       "slots, so single outliers at the very top don't inflate the "
+                       "scale."},
     },
 ]
 
@@ -2257,17 +2287,23 @@ def fhelp(key: str) -> str:
 
 
 def render_formulas_popover() -> None:
-    """ℹ️-Button mit ALLEN exakten Formeln (LaTeX) – komplette Referenz."""
+    """ℹ️-Button mit ALLEN Formeln + Klartext-Erklaerung je Kennzahl.
+
+    Pro Eintrag: Titel, die Formel als gerenderte Mathematik (st.latex) und eine
+    Erklaerung in einem Satz – getrennt durch eine duenne Linie.
+    """
     label = "ℹ️ Formeln" if _LANG == "de" else "ℹ️ Formulas"
     with st.popover(label):
-        st.markdown("**Formeln & Definitionen**" if _LANG == "de"
-                    else "**Formulas & definitions**")
-        for f in FORMULAS:
+        st.markdown("**Formeln & Erklärungen**" if _LANG == "de"
+                    else "**Formulas & explanations**")
+        for i, f in enumerate(FORMULAS):
+            if i:
+                st.divider()
             st.markdown(f"**{f['title'][_LANG]}**")
             st.latex(f["latex"])
             note = f.get("note")
             if note:
-                st.caption(note[_LANG])
+                st.write(note[_LANG])
 
 
 def _logo_path() -> Path | None:
