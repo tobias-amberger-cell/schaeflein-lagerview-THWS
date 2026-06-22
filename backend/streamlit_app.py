@@ -1136,7 +1136,7 @@ TR: dict[str, dict[str, str]] = {
               "einem leeren Fach – er muss suchen, oder die Ware fehlt. Je öfter der Platz normalerweise gepickt "
               "wird und je länger er schon leer ist, desto dringender der Nachschub.\n\n"
               "Es gibt zwei Listen:\n"
-              "- **Überfällig (vernachlässigt)** – wichtiger Platz, leer und schon länger kein Pick. Auffüllen, bevor "
+              "- **Überfällig** – wichtiger Platz, leer und schon länger kein Pick. Auffüllen, bevor "
               "das Fach ganz einschläft.\n"
               "- **Mittlere Frequenz** – leer, aber seltener gebraucht.\n\n"
               "Gesperrte Plätze lassen wir bewusst weg. Über den Regler **„Aktiv …“** zeigen wir außerdem nur Plätze, "
@@ -1223,19 +1223,17 @@ TR: dict[str, dict[str, str]] = {
     },
     "replen_inactive_note": {
         "de": "ℹ️ **{n} leere Plätze ausgeblendet**, weil seit über {d} Tagen kein Pick "
-              "mehr (oder kein Datum bekannt). Das sind wahrscheinlich tote Fächer, kein "
-              "akuter Nachschub. Über den Regler „Aktiv …“ kannst du sie einblenden.",
+              "mehr (oder kein Datum bekannt). Die werden zurzeit kaum gebraucht – also "
+              "kein akuter Nachschub. Über den Regler „Aktiv …“ kannst du sie einblenden.",
         "en": "ℹ️ **{n} empty slots hidden** because there's been no pick for over {d} "
-              "days (or no date known). These are likely dead bins, not urgent "
+              "days (or no date known). They're barely in use right now – so not urgent "
               "replenishment. Use the ‘Active …’ slider to include them.",
     },
-    "replen_overdue_t": {"de": "Überfällig (vernachlässigt)",
-                         "en": "Overdue (neglected)"},
+    "replen_overdue_t": {"de": "Überfällig",
+                         "en": "Overdue"},
     "replen_overdue_d": {
-        "de": "Wichtiger Platz, leer und seit über {n} Tagen nicht mehr gepickt. "
-              "Vernachlässigt – auffüllen, bevor das Fach ganz einschläft.",
-        "en": "Important slot, empty and not picked for over {n} days. Neglected – "
-              "refill before the bin goes dormant.",
+        "de": "Wichtiger Platz, leer und seit über {n} Tagen nicht mehr gepickt.",
+        "en": "Important slot, empty and not picked for over {n} days.",
     },
     "replen_overdue_v": {
         "de": "Bevorzugt auffüllen (Soll {x} LHM) – seit {d} Tagen kein Pick, Ursache prüfen",
