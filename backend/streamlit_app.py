@@ -1357,16 +1357,6 @@ TR: dict[str, dict[str, str]] = {
         "en": "Do not store – check the lock",
     },
     "sl_retrzone": {"de": "Pickzone bis Ebene", "en": "Pick zone up to level"},
-    "sl_observe": {"de": "„Beobachten“ bis Picks", "en": "‘Observe’ up to picks"},
-    "retr_stale_d": {
-        "de": "Belegt mit 0 Picks – bewegt sich nicht, Auslagern prüfen.",
-        "en": "Occupied with 0 picks – not moving, consider retrieval.",
-    },
-    "retr_observe_t": {"de": "Beobachten", "en": "Observe"},
-    "retr_observe_d": {
-        "de": "Belegt mit sehr geringer Frequenz (1–{n} Picks).",
-        "en": "Occupied with very low frequency (1–{n} picks).",
-    },
     # --- Verschmolzener Tab 'Um-/Auslagern' (loest reloc_*/retr_* ab) ---
     "ua_head": {
         "de": "### 🔄 Um- & Auslagern\n**Steht die richtige Ware auf dem richtigen "
@@ -1385,15 +1375,14 @@ TR: dict[str, dict[str, str]] = {
         "de": "Beide Maßnahmen haben dasselbe Ziel: die guten Pickplätze (A, niedrige Ebene) für die "
               "Schnelldreher frei halten. Sie unterscheiden sich nur in der Richtung:\n\n"
               "**🟥 Platz freimachen (auslagern)** – belegte Plätze, deren Ware sich kaum bewegt:\n"
-              "1. **Premiumplatz blockiert** – ein A-Platz ist belegt, wird aber gar nicht gepickt. Ein "
-              "Ladenhüter sitzt auf einem Premiumplatz → Ware in die Reserve umlagern oder ganz auslagern.\n"
-              "2. **Pickplatz blockiert** – belegt, 0 Picks, aber kein A-Platz. Bewegt sich nicht → Auslagern prüfen.\n"
-              "3. **Selten gebraucht** – belegt, aber nur sehr selten gepickt (bis zum Regler-Wert) → im Auge behalten.\n\n"
+              "- **Premiumplatz blockiert** – ein A-Platz ist belegt, wird aber gar nicht gepickt. Ein "
+              "Ladenhüter sitzt auf einem Premiumplatz → Ware in die Reserve umlagern oder ganz auslagern.\n\n"
               "**🟦 Besser platzieren (umlagern)** – Schnelldreher auf schlechtem Platz:\n"
-              "4. **Heißer C-Platz** – ein C-Platz, der trotzdem oft gepickt wird (ab dem Regler-Wert). Falsch "
+              "1. **Heißer C-Platz** – ein C-Platz, der trotzdem oft gepickt wird (ab dem Regler-Wert). Falsch "
               "eingestuft oder am falschen Ort → auf einen guten Pickplatz unten holen und die Klasse hochstufen.\n"
-              "5. **A-Ware zu hoch** – ein aktiver A-Platz, der weit oben liegt (ab dem Regler-Wert). Hochhub kostet "
-              "Zeit → nach unten holen.\n\n"
+              "2. **A-Ware zu hoch** – ein aktiver A-Platz, der weit oben liegt (ab dem Regler-Wert). Hochhub kostet "
+              "Zeit → nach unten holen. *Gilt nur für die echten Ebenen 1–6; höhere Code-Werte im Feld Ebene sind "
+              "keine Stockwerke und bleiben außen vor.*\n\n"
               "**Zielplatz-Vorschlag:** ein konkreter freier, passender Platz – für blockierte Premiumplätze oben "
               "in der Reserve, für heiße oder zu hohe Plätze unten in der Pickzone. Zugeordnet wird 1:1 nach freier "
               "Kapazität.\n\n"
@@ -1407,10 +1396,11 @@ TR: dict[str, dict[str, str]] = {
               "2. **Pick slot blocked** – occupied, 0 picks, but not an A slot. Not moving → consider retrieval.\n"
               "3. **Rarely used** – occupied but picked only rarely (up to the slider value) → keep an eye on it.\n\n"
               "**🟦 Place better (relocate)** – fast movers on a bad slot:\n"
-              "4. **Hot C slot** – a C slot picked often anyway (from the slider value up). Misclassified or in the "
+              "1. **Hot C slot** – a C slot picked often anyway (from the slider value up). Misclassified or in the "
               "wrong place → bring it to a good pick slot down low and promote the class.\n"
-              "5. **A goods too high** – an active A slot sitting high up (from the slider value up). Lifting costs "
-              "time → bring it down.\n\n"
+              "2. **A goods too high** – an active A slot sitting high up (from the slider value up). Lifting costs "
+              "time → bring it down. *Applies only to real levels 1–6; higher code values in the Level field are not "
+              "floors and are excluded.*\n\n"
               "**Suggested target slot:** a concrete free, fitting slot – up in reserve for blocked premium slots, "
               "down in the pick zone for hot or too-high slots. Matched 1:1 by free capacity.\n\n"
               "*Empty A slots deliberately don't appear here – where nothing stands, there's nothing to relocate or "
@@ -1426,10 +1416,10 @@ TR: dict[str, dict[str, str]] = {
     },
     "ua_kpi_free": {"de": "Plätze freimachen", "en": "Slots to free up"},
     "ua_kpi_free_h": {
-        "de": "Belegte Plätze ohne Picks (Premium + normal) – hier blockiert Ware "
-              "einen guten Platz, ohne bewegt zu werden.",
-        "en": "Occupied slots without picks (premium + normal) – goods block a good "
-              "slot here without ever moving.",
+        "de": "Belegte A-Plätze ohne Picks – ein Ladenhüter blockiert hier einen "
+              "Premiumplatz, ohne bewegt zu werden.",
+        "en": "Occupied A slots without picks – dead stock blocks a premium slot "
+              "here without ever moving.",
     },
     "ua_kpi_place": {"de": "Besser platzieren", "en": "To place better"},
     "ua_kpi_place_h": {
@@ -1437,13 +1427,6 @@ TR: dict[str, dict[str, str]] = {
               "A-Plätze) – die gehören woanders hin.",
         "en": "Fast movers on a bad slot (hot C slots + too-high A slots) – these "
               "belong elsewhere.",
-    },
-    "ua_kpi_observe": {"de": "Beobachten", "en": "Observe"},
-    "ua_kpi_observe_h": {
-        "de": "Belegte Plätze, die nur selten gepickt werden – noch kein Handlungs"
-              "bedarf, aber im Blick behalten.",
-        "en": "Occupied slots picked only rarely – no action needed yet, but keep "
-              "an eye on them.",
     },
     "ua_crit_t": {"de": "Premiumplatz blockiert", "en": "Premium slot blocked"},
     "ua_crit_d": {
@@ -1455,7 +1438,12 @@ TR: dict[str, dict[str, str]] = {
         "de": "Ware in die Reserve umlagern oder auslagern – Premiumplatz freimachen",
         "en": "Move goods to reserve or retrieve them – free up the premium spot",
     },
-    "ua_stale_t": {"de": "Pickplatz blockiert", "en": "Pick slot blocked"},
+    "sl_highlevel_h": {
+        "de": "Ab dieser Ebene gilt ein aktiver A-Platz als „zu hoch“ (Hochhub). "
+              "Gilt nur für die echten Ebenen 1–6.",
+        "en": "From this level an active A slot counts as ‘too high’ (lifting). "
+              "Applies only to real levels 1–6.",
+    },
     "sl_retrzone_h": {
         "de": "Bis zu dieser Ebene gilt als Pickzone. Sie bestimmt, welche belegten "
               "Plätze auf „blockiert“ geprüft werden – und welche freien Plätze als "
