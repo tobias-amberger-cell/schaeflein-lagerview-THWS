@@ -3425,10 +3425,12 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
     with st.expander(t("top_info_t")):
         st.markdown(t("top_info_b"))
     mov_filter_note(movements_filtered, filtered)
-    top = agg_articles(tpa, article_limit)
-    if top.empty:
+    # ALLE Artikel laden (fuer den CSV-Export); Diagramm/Tabelle zeigen nur Top-N.
+    top_all = agg_articles(tpa)
+    if top_all.empty:
         st.info(t("no_data_filters"))
     else:
+        top = top_all.head(article_limit)
         chart_df = top.head(min(article_limit, 25)).sort_values("bewegungen")
         st.plotly_chart(
             px.bar(
@@ -3443,7 +3445,9 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
                    for c, h in _TOP_HELP.items() if c in show.columns}
         st.dataframe(show, use_container_width=True, hide_index=True,
                      column_config=col_cfg)
-        _csv_download(show, "top_artikel")
+        st.caption(t("top_dl_all").format(n=de_num(len(top_all))))
+        # Download enthaelt ALLE Artikel, nicht nur die angezeigten Top-N.
+        _csv_download(top_all.rename(columns=_TOP_RENAME), "top_artikel")
 
 
 def render_article(tpa: pd.DataFrame, movements_filtered: bool,
