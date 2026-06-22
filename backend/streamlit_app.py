@@ -2917,49 +2917,42 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     # Gemeinsame Regler statt zwei getrennter Bloecke. Die Pickzonen-Ebene
     # steuert sowohl die "blockiert"-Pruefung als auch die Trennung der freien
     # Zielplaetze in unten (Pickzone) / oben (Reserve).
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
         pick_zone = st.slider(t("sl_retrzone"), 1, 6, 2, key="ua_zone",
                               help=t("sl_retrzone_h"))
     with c2:
-        observe_max = st.slider(t("sl_observe"), 1, 50, 5, key="ua_observe")
-    with c3:
         hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10,
                                     key="ua_hotc")
-    with c4:
-        high_level = st.slider(t("sl_highlevel"), 2, 6, 4, key="ua_high")
+    with c3:
+        high_level = st.slider(t("sl_highlevel"), 2, 6, 4, key="ua_high",
+                               help=t("sl_highlevel_h"))
 
     notgesperrt = ~filtered["GESPERRT"]
-    # Basis Gruppe 1: belegte, nicht gesperrte Plaetze in der Pickzone.
-    belegt_zone = filtered[
+    # Gruppe 1: Premiumplatz blockiert – A-Platz, belegt, 0 Picks, in der
+    # Pickzone, nicht gesperrt (Ladenhueter sitzt auf einem Premiumplatz).
+    critical = filtered[
         filtered["BELEGT"] & (filtered["EBENE"] <= pick_zone) & notgesperrt
-    ]
-    # 1. Premiumplatz blockiert: A-Platz, belegt, 0 Picks (Merge aus frueher
-    #    'Kritisch' + dem belegten Teil von 'Premium ungenutzt').
-    critical = belegt_zone[
-        (belegt_zone["ABC_KLASSE"] == "A") & (belegt_zone["ANZ_PICKS"] == 0)
+        & (filtered["ABC_KLASSE"] == "A") & (filtered["ANZ_PICKS"] == 0)
     ].sort_values(["REGAL", "EBENE", "FACH"])
-    # 2. Pickplatz blockiert: belegt, 0 Picks, aber kein A-Platz.
-    stale = belegt_zone[
-        (belegt_zone["ABC_KLASSE"] != "A") & (belegt_zone["ANZ_PICKS"] == 0)
-    ].sort_values(["REGAL", "EBENE", "FACH"])
-    # 3. Selten gebraucht: belegt, 1..observe_max Picks.
-    observe = belegt_zone[
-        (belegt_zone["ANZ_PICKS"] > 0)
-        & (belegt_zone["ANZ_PICKS"] <= observe_max)
-    ].sort_values("ANZ_PICKS")
 
     # Gruppe 2: Schnelldreher auf schlechtem Platz (ueber das ganze Lager).
-    # 4. Heisser C-Platz: C-Klasse, viele Picks -> auf guten Pickplatz.
+    # Heisser C-Platz: C-Klasse, viele Picks -> auf guten Pickplatz.
     hot_c = filtered[
         (filtered["ABC_KLASSE"] == "C")
         & (filtered["ANZ_PICKS"] >= hot_c_threshold)
         & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
-    # 5. A-Ware zu hoch: A-Klasse, aktiv, weit oben -> ergonomisch runter holen.
+    # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> ergonomisch runter holen.
+    # WICHTIG: EBENE ist KEIN sauberer 1-6-Level. Das Feld enthaelt codierte
+    # Cluster (0-6 = echte Ebenen, 10-13 = eigener Block mit ~2200 Plaetzen,
+    # 14-24 Ausreisser). Die "zu hoch"-Logik gilt nur fuer die echten
+    # physischen Ebenen (<=6) - sonst landen ~1600 codierte "Ebene 10"-Plaetze
+    # faelschlich in der Liste.
     high_a = filtered[
         (filtered["ABC_KLASSE"] == "A")
         & (filtered["EBENE"] >= high_level)
+        & (filtered["EBENE"] <= 6)
         & (filtered["ANZ_PICKS"] > 0)
         & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
@@ -2987,13 +2980,11 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         return src.assign(**{t("col_ziel"): col})
 
     # KPI-Zeile: Zusammenfassung nach Absicht (statt der Zahlen erst weit unten).
-    k1, k2, k3 = st.columns(3)
-    k1.metric(t("ua_kpi_free"), de_num(len(critical) + len(stale)),
+    k1, k2 = st.columns(2)
+    k1.metric(t("ua_kpi_free"), de_num(len(critical)),
               help=t("ua_kpi_free_h"))
     k2.metric(t("ua_kpi_place"), de_num(len(hot_c) + len(high_a)),
               help=t("ua_kpi_place_h"))
-    k3.metric(t("ua_kpi_observe"), de_num(len(observe)),
-              help=t("ua_kpi_observe_h"))
 
     # --- Gruppe 1: Platz freimachen (auslagern) ---
     st.markdown(t("ua_group_free"))
@@ -3001,10 +2992,6 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         t("ua_crit_t"), t("ua_crit_d"),
         _add_ziel(critical, free_high),
         extra_cols=[t("col_ziel")], vorschlag=t("ua_crit_v"))
-    render_massnahme_kategorie(
-        t("ua_stale_t"), t("retr_stale_d"), stale)
-    render_massnahme_kategorie(
-        t("retr_observe_t"), t("retr_observe_d").format(n=observe_max), observe)
 
     # --- Gruppe 2: besser platzieren (umlagern) ---
     st.markdown(t("ua_group_place"))
