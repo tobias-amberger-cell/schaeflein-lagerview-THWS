@@ -2369,6 +2369,26 @@ def render_formulas_popover() -> None:
                 st.write(note[_LANG])
 
 
+def render_formel_popover(keys: list[str], label: str | None = None) -> None:
+    """Kleiner ℹ️-Button, der gezielt NUR die Formel(n) zu bestimmten Kennzahlen
+    zeigt (Titel, gerenderte Formel via st.latex, Klartext-Erklaerung) – aus
+    derselben zentralen FORMULAS-Quelle wie die volle Referenz. Gedacht direkt
+    neben einer Tabelle/CSV, wo eine berechnete Spalte erklaert werden soll."""
+    items = [_FORMULA_BY_KEY[k] for k in keys if k in _FORMULA_BY_KEY]
+    if not items:
+        return
+    lbl = label or ("ℹ️ Formel" if _LANG == "de" else "ℹ️ Formula")
+    with st.popover(lbl):
+        for i, f in enumerate(items):
+            if i:
+                st.divider()
+            st.markdown(f"**{f['title'][_LANG]}**")
+            st.latex(f["latex"])
+            note = f.get("note")
+            if note:
+                st.write(note[_LANG])
+
+
 def _logo_path() -> Path | None:
     """Sucht das Schaeflein-Logo unabhaengig vom Arbeitsverzeichnis."""
     candidates = [
@@ -2598,7 +2618,8 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                                cols: list[str] | None = None,
                                rename: dict[str, str] | None = None,
                                rowhint: str | None = None,
-                               col_help: dict[str, str] | None = None) -> None:
+                               col_help: dict[str, str] | None = None,
+                               formel_keys: list[str] | None = None) -> None:
     """Rendert eine Massnahmen-Kategorie einheitlich (Titel + Tabelle + CSV).
 
     `vorschlag`: optionaler Text, der als zusaetzliche Spalte "Vorschlag"
@@ -2650,7 +2671,16 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
             column_config=col_cfg,
         )
         key = "".join(c if c.isalnum() else "_" for c in titel.lower())
-        _csv_download(show, f"massnahme_{key}")
+        # CSV-Download; optional direkt daneben ein ℹ️-Button mit der/den
+        # Formel(n) zu berechneten Spalten dieser Liste (z. B. berechnete ABC).
+        if formel_keys:
+            dl_col, info_col, _sp = st.columns([2, 2, 6])
+            with dl_col:
+                _csv_download(show, f"massnahme_{key}")
+            with info_col:
+                render_formel_popover(formel_keys)
+        else:
+            _csv_download(show, f"massnahme_{key}")
     st.divider()
 
 
@@ -3036,7 +3066,8 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     render_massnahme_kategorie(
         t("reloc_hotC_t"), t("reloc_hotC_d"),
         _add_ziel(hot_c, free_low),
-        extra_cols=[t("col_ziel")], vorschlag=_hotc_vorschlag(hot_c))
+        extra_cols=[t("col_ziel")], vorschlag=_hotc_vorschlag(hot_c),
+        formel_keys=["abc_calc"])
     render_massnahme_kategorie(
         t("reloc_highA_t"), t("reloc_highA_d"),
         _add_ziel(high_a, free_low),
