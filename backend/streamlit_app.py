@@ -3414,18 +3414,23 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     }, index=cats)
     summary.index.name = t("abc")
     lbl_c, lbl_p = f"% {ent_label}", f"% {val_label}"
-    n = len(cats)
+    # Diagramm OHNE die 'leer'-Kategorie (nur A/B/C) -> sonst dominiert der
+    # 88%-Leer-Balken alles. Die Tabelle daneben zeigt 'leer' weiterhin.
+    # %-Werte bleiben auf ALLE Plaetze bezogen (zeigt den ABC-Effekt).
+    bar_cats = ["A", "B", "C"]
+    nb = len(bar_cats)
     bar_df = pd.DataFrame({
-        t("abc"): cats * 2,
-        "Kennzahl": [lbl_c] * n + [lbl_p] * n,
-        "Prozent": list(count_share.values) + list(share.values),
+        t("abc"): bar_cats * 2,
+        "Kennzahl": [lbl_c] * nb + [lbl_p] * nb,
+        "Prozent": list(count_share.reindex(bar_cats).values)
+        + list(share.reindex(bar_cats).values),
     })
     d1, d2 = st.columns([2, 1])
     with d1:
         st.plotly_chart(
             px.bar(bar_df, x=t("abc"), y="Prozent", color="Kennzahl",
                    barmode="group", title=t("abc_bar_title"),
-                   category_orders={t("abc"): cats},
+                   category_orders={t("abc"): bar_cats},
                    color_discrete_map={lbl_c: "#90a4ae", lbl_p: "#1565c0"}),
             use_container_width=True,
         )
