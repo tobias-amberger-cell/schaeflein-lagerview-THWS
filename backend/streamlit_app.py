@@ -2099,6 +2099,31 @@ def load_tpa_raw() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_slot_artikel() -> pd.DataFrame:
+    """Platz -> vermuteter Artikel (Nr + Bezeichnung), abgeleitet aus den
+    TPA-Bewegungen: der HAEUFIGSTE ARTIKELNR je Quellplatz (Q_PLATZ).
+
+    Achtung Naeherung: Die DB hat keinen Bestand-je-Platz mit Artikel; die
+    einzige Artikel-Quelle sind die 6-Monats-Bewegungen. Nur ~1/3 der Plaetze
+    haben darin ueberhaupt eine Bewegung -> der Rest bleibt leer. Plaetze mit
+    mehreren Artikeln in 6 Mon. bekommen den meistbewegten. Bewusst als
+    'aus Bewegungsdaten, ggf. unvollstaendig' gekennzeichnet (siehe col_help)."""
+    tpa = load_tpa_raw()
+    df = tpa[(tpa["q_platz"] != "") & (tpa["artikel"] != "")]
+    if df.empty:
+        return pd.DataFrame(columns=["PLATZ_ID", "ARTIKELNR", "ARTBEZ1"])
+    grp = (
+        df.groupby(["q_platz", "artikel", "bezeichnung"])
+        .size().reset_index(name="n")
+        .sort_values("n", ascending=False)
+        .drop_duplicates("q_platz")
+    )
+    return grp.rename(columns={
+        "q_platz": "PLATZ_ID", "artikel": "ARTIKELNR", "bezeichnung": "ARTBEZ1",
+    })[["PLATZ_ID", "ARTIKELNR", "ARTBEZ1"]]
+
+
 def filter_tpa(tpa: pd.DataFrame, allowed_pids: set[str] | None) -> pd.DataFrame:
     """Bewegungen auf erlaubte Quellplaetze einschraenken (None = alle Plaetze)."""
     if allowed_pids is None:
@@ -2514,6 +2539,7 @@ _MASSNAHME_RENAME = {
     "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
     "ANZ_PICKS": "Picks", "ABC_KLASSE": "ABC (Platz)",
     "MAX_LHM": "Kapazität (max. LHM)", "IST_LHM": "Belegt (Ist-LHM)",
+    "ARTIKELNR": "Artikel-Nr.", "ARTBEZ1": "Artikel-Bezeichnung",
 }
 _MASSNAHME_HELP = {
     "Platz": "Die eindeutige Nummer des Lagerplatzes.",
@@ -2528,6 +2554,11 @@ _MASSNAHME_HELP = {
     "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
                             "(kann auch mehr als einer sein).",
     "Belegt (Ist-LHM)": "Wie viele Paletten/Behälter aktuell drauf stehen.",
+    "Artikel-Nr.": "Vermuteter Artikel auf diesem Platz – der meistbewegte aus "
+                   "den Bewegungsdaten (6 Mon.). Leer = keine Bewegung erfasst; "
+                   "die Angabe ist daher näherungsweise und ggf. unvollständig.",
+    "Artikel-Bezeichnung": "Bezeichnung zum vermuteten Artikel (aus den "
+                           "Bewegungsdaten, ggf. unvollständig).",
     "Vorschlag": "Die empfohlene Handlung für diese Zeile.",
     "Zielplatz-Vorschlag": "Ein konkreter freier Platz, auf den der Inhalt "
                            "umgelagert werden kann (nach freier Kapazität zugeordnet).",
@@ -3054,6 +3085,19 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
                for i in range(len(src))]
         return src.assign(**{t("col_ziel"): col})
 
+    # Vermuteten Artikel (Nr + Bezeichnung) je Platz aus den Bewegungsdaten
+    # anhaengen, damit man sieht, WELCHE Ware umzulagern ist. Nur ~1/3 der
+    # Plaetze haben eine Bewegung -> Rest leer (im Spalten-Tooltip erklaert).
+    art_map = load_slot_artikel().rename(columns={"PLATZ_ID": "_pid"})
+
+    def _add_artikel(src: pd.DataFrame) -> pd.DataFrame:
+        out = src.copy()
+        out["_pid"] = out["PLATZ_ID"].astype(str).str.strip()
+        out = out.merge(art_map, on="_pid", how="left").drop(columns="_pid")
+        out["ARTIKELNR"] = out["ARTIKELNR"].fillna("")
+        out["ARTBEZ1"] = out["ARTBEZ1"].fillna("")
+        return out
+
     def _hotc_vorschlag(df: pd.DataFrame) -> list:
         """Konkrete Ziel-Klasse je heissem C-Platz statt nur 'hochstufen': die
         berechnete ABC-Klasse (ABC_CALC) aus der tatsaechlichen Pick-Haeufigkeit,
@@ -3076,20 +3120,22 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     st.markdown(t("ua_group_free"))
     render_massnahme_kategorie(
         t("ua_crit_t"), t("ua_crit_d"),
-        _add_ziel(critical, free_high),
-        extra_cols=[t("col_ziel")], vorschlag=t("ua_crit_v"))
+        _add_artikel(_add_ziel(critical, free_high)),
+        extra_cols=["ARTIKELNR", "ARTBEZ1", t("col_ziel")],
+        vorschlag=t("ua_crit_v"))
 
     # --- Gruppe 2: besser platzieren (umlagern) ---
     st.markdown(t("ua_group_place"))
     render_massnahme_kategorie(
         t("reloc_hotC_t"), t("reloc_hotC_d"),
-        _add_ziel(hot_c, free_low),
-        extra_cols=[t("col_ziel")], vorschlag=_hotc_vorschlag(hot_c),
-        formel_keys=["abc_calc"])
+        _add_artikel(_add_ziel(hot_c, free_low)),
+        extra_cols=["ARTIKELNR", "ARTBEZ1", t("col_ziel")],
+        vorschlag=_hotc_vorschlag(hot_c), formel_keys=["abc_calc"])
     render_massnahme_kategorie(
         t("reloc_highA_t"), t("reloc_highA_d"),
-        _add_ziel(high_a, free_low),
-        extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
+        _add_artikel(_add_ziel(high_a, free_low)),
+        extra_cols=["ARTIKELNR", "ARTBEZ1", t("col_ziel")],
+        vorschlag=t("reloc_highA_v"))
 
 
 def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
