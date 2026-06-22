@@ -779,6 +779,7 @@ TR: dict[str, dict[str, str]] = {
     "m_slots": {"de": "Stellplaetze", "en": "Slots"},
     "m_occupied": {"de": "Belegt", "en": "Occupied"},
     "m_avg_util": {"de": "Ø Auslastung", "en": "Avg. utilization"},
+    "m_avg_stock": {"de": "Ø Bestand / Platz", "en": "Avg. stock / slot"},
     # KPI-Hilfetexte (Tooltip am ?-Symbol der Kacheln)
     "m_slots_help": {
         "de": "So viele Stellplaetze sind aktuell ausgewaehlt (nach den Filtern).",
@@ -793,6 +794,14 @@ TR: dict[str, dict[str, str]] = {
     "m_avg_util_help": {
         "de": "Durchschnittliche Fuellung ueber alle ausgewaehlten Plaetze.",
         "en": "Average fill level across all selected slots.",
+    },
+    "m_avg_stock_help": {
+        "de": "Wie viele Ladehilfsmittel (Paletten/Behaelter) im Schnitt auf einem "
+              "Platz stehen – Summe Bestand geteilt durch Anzahl Plaetze. Leere "
+              "Plaetze zaehlen mit (ziehen den Schnitt nach unten).",
+        "en": "Average number of load units (pallets/bins) per slot – total stock "
+              "divided by number of slots. Empty slots are included (they lower the "
+              "average).",
     },
     # Tab-Titel
     "tab_halls": {"de": "Übersicht", "en": "Overview"},
@@ -3716,15 +3725,22 @@ def main() -> None:
     total = len(filtered) or 1
     occupied = int(filtered["BELEGT"].sum())
     avg_util = filtered["UTILIZATION"].mean()
+    # Durchschnittlicher Bestand je Platz = mittlere belegte Ladehilfsmittel
+    # (IST_LHM) ueber alle Plaetze. Konkreter/greifbarer als die Ø Auslastung %
+    # (User-Wunsch). Ø Auslastung bleibt als Zusatzinfo im Tooltip erhalten.
+    avg_stock = filtered["IST_LHM"].mean()
 
     c1, c2, c3 = st.columns(3)
     c1.metric(t("m_slots"), de_num(len(filtered)),
               help=t("m_slots_help"))
     c2.metric(t("m_occupied"), de_num(occupied),
               f"{occupied/total*100:.1f}%", help=t("m_occupied_help"))
-    c3.metric(t("m_avg_util"),
-              f"{avg_util:.1f} %" if not pd.isna(avg_util) else "—",
-              help=fhelp("avg_util"))
+    util_hint = (f" · Ø Auslastung {avg_util:.1f} %"
+                 if not pd.isna(avg_util) else "")
+    c3.metric(t("m_avg_stock"),
+              f"{avg_stock:.1f}".replace(".", ",") + " LHM"
+              if not pd.isna(avg_stock) else "—",
+              help=t("m_avg_stock_help") + util_hint)
 
     # --- Register/Tabs ---------------------------------------------------
     # Reihenfolge der Variablen MUSS zur Reihenfolge der Titel-Liste passen.
