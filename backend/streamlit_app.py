@@ -1070,8 +1070,8 @@ TR: dict[str, dict[str, str]] = {
               "class {cls}. Relocate to a good pick slot (low level).",
     },
     "reloc_highA_v": {
-        "de": "Auf niedrige Ebene umlagern – kürzere Wege",
-        "en": "Move down to a low level – shorter travel",
+        "de": "Ware auf den freien Platz weiter unten umlagern – kürzere Greifwege",
+        "en": "Relocate the goods to the free slot lower down – shorter travel",
     },
     "sl_highlevel": {"de": "Hohe Ebene ab", "en": "High level from"},
     "reloc_hotC_t": {"de": "Heiße C-Plätze", "en": "Hot C slots"},
@@ -1079,10 +1079,12 @@ TR: dict[str, dict[str, str]] = {
         "de": "Stamm-Klasse C, aber nach den Picks berechnet A/B – hochstufen.",
         "en": "Master class C, but computes to A/B by picks – reclassify.",
     },
-    "reloc_highA_t": {"de": "A-Plätze auf hoher Ebene", "en": "A slots on high level"},
+    "reloc_highA_t": {"de": "A-Ware zu hoch gelagert", "en": "A goods stored too high"},
     "reloc_highA_d": {
-        "de": "A-Klasse weit oben & aktiv – nach unten holen.",
-        "en": "A class high up & active – bring down.",
+        "de": "Aktiver A-Platz weit oben – die Ware auf einen freien Platz weiter "
+              "unten umlagern (der Platz bleibt, nur der Inhalt zieht um).",
+        "en": "Active A slot high up – relocate the goods to a free slot lower down "
+              "(the slot stays, only its contents move).",
     },
     "replen_head": {
         "de": "### ⬆️ Nachschub\n**Welche Pickplätze sind leer und sollten nachgefüllt werden?** "
@@ -1385,8 +1387,9 @@ TR: dict[str, dict[str, str]] = {
               "die **berechnete Klasse (A oder B)** hochstufen. Welche Klasse genau und warum, steht je Zeile im "
               "Vorschlag.\n"
               "2. **A-Ware zu hoch** – ein aktiver A-Platz, der weit oben liegt (ab dem Regler-Wert). Hochhub kostet "
-              "Zeit → nach unten holen. *Gilt nur für die echten Ebenen 1–6; höhere Code-Werte im Feld Ebene sind "
-              "keine Stockwerke und bleiben außen vor.*\n\n"
+              "Zeit → die **Ware** auf einen freien Platz weiter unten umlagern (der Platz bleibt natürlich, wo er "
+              "ist – nur sein Inhalt zieht um, siehe Zielplatz-Vorschlag). *Gilt nur für die echten Ebenen 1–6; "
+              "höhere Code-Werte im Feld Ebene sind keine Stockwerke und bleiben außen vor.*\n\n"
               "**Zielplatz-Vorschlag:** ein konkreter freier, passender Platz – für blockierte Premiumplätze oben "
               "in der Reserve, für heiße oder zu hohe Plätze unten in der Pickzone. Zugeordnet wird 1:1 nach freier "
               "Kapazität.\n\n"
@@ -1402,8 +1405,9 @@ TR: dict[str, dict[str, str]] = {
               "Misclassified → bring it to a good pick slot down low and promote to the **calculated class (A or B)**. "
               "Which class exactly and why is shown per row in the suggestion.\n"
               "2. **A goods too high** – an active A slot sitting high up (from the slider value up). Lifting costs "
-              "time → bring it down. *Applies only to real levels 1–6; higher code values in the Level field are not "
-              "floors and are excluded.*\n\n"
+              "time → relocate the **goods** to a free slot lower down (the slot itself stays put – only its "
+              "contents move, see suggested target slot). *Applies only to real levels 1–6; higher code values in "
+              "the Level field are not floors and are excluded.*\n\n"
               "**Suggested target slot:** a concrete free, fitting slot – up in reserve for blocked premium slots, "
               "down in the pick zone for hot or too-high slots. Matched 1:1 by free capacity.\n\n"
               "*Empty A slots deliberately don't appear here – where nothing stands, there's nothing to relocate or "
@@ -3013,7 +3017,8 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         & (filtered["ABC_CALC"].isin(["A", "B"]))
         & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
-    # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> ergonomisch runter holen.
+    # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> Ware ergonomisch auf einen
+    # freien Platz weiter unten umlagern (Platz bleibt, nur Inhalt zieht um).
     # WICHTIG: EBENE ist KEIN sauberer 1-6-Level. Das Feld enthaelt codierte
     # Cluster (0-6 = echte Ebenen, 10-13 = eigener Block mit ~2200 Plaetzen,
     # 14-24 Ausreisser). Die "zu hoch"-Logik gilt nur fuer die echten
