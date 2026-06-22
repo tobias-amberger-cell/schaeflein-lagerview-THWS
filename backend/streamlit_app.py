@@ -1069,22 +1069,15 @@ TR: dict[str, dict[str, str]] = {
         "en": "Promote to class {cls} – {picks} picks, matching the calculated "
               "class {cls}. Relocate to a good pick slot (low level).",
     },
-    "reloc_hotC_v_keep": {
-        "de": "Noch nicht hochstufen – {picks} Picks ergeben rechnerisch weiter "
-              "Klasse C. Einstufung beobachten.",
-        "en": "Don't promote yet – {picks} picks still compute to class C. Keep "
-              "watching the classification.",
-    },
     "reloc_highA_v": {
         "de": "Auf niedrige Ebene umlagern – kürzere Wege",
         "en": "Move down to a low level – shorter travel",
     },
-    "sl_hotc": {"de": "Heiße C-Plätze ab Picks", "en": "Hot C slots from picks"},
     "sl_highlevel": {"de": "Hohe Ebene ab", "en": "High level from"},
     "reloc_hotC_t": {"de": "Heiße C-Plätze", "en": "Hot C slots"},
     "reloc_hotC_d": {
-        "de": "C-Klasse mit hoher Pickfrequenz – Klasse anpassen.",
-        "en": "C class with high pick frequency – reclassify.",
+        "de": "Stamm-Klasse C, aber nach den Picks berechnet A/B – hochstufen.",
+        "en": "Master class C, but computes to A/B by picks – reclassify.",
     },
     "reloc_highA_t": {"de": "A-Plätze auf hoher Ebene", "en": "A slots on high level"},
     "reloc_highA_d": {
@@ -1387,9 +1380,10 @@ TR: dict[str, dict[str, str]] = {
               "- **Premiumplatz blockiert** – ein A-Platz ist belegt, wird aber gar nicht gepickt. Ein "
               "Ladenhüter sitzt auf einem Premiumplatz → Ware in die Reserve umlagern oder ganz auslagern.\n\n"
               "**🟦 Besser platzieren (umlagern)** – Schnelldreher auf schlechtem Platz:\n"
-              "1. **Heißer C-Platz** – ein C-Platz, der trotzdem oft gepickt wird (ab dem Regler-Wert). Falsch "
-              "eingestuft oder am falschen Ort → auf einen guten Pickplatz unten holen und auf die **berechnete "
-              "Klasse (A oder B)** hochstufen. Welche Klasse genau und warum, steht je Zeile im Vorschlag.\n"
+              "1. **Heißer C-Platz** – ein Platz, der als C geführt wird, aber nach seinen tatsächlichen Picks "
+              "rechnerisch in **A oder B** gehört. Falsch eingestuft → auf einen guten Pickplatz unten holen und auf "
+              "die **berechnete Klasse (A oder B)** hochstufen. Welche Klasse genau und warum, steht je Zeile im "
+              "Vorschlag.\n"
               "2. **A-Ware zu hoch** – ein aktiver A-Platz, der weit oben liegt (ab dem Regler-Wert). Hochhub kostet "
               "Zeit → nach unten holen. *Gilt nur für die echten Ebenen 1–6; höhere Code-Werte im Feld Ebene sind "
               "keine Stockwerke und bleiben außen vor.*\n\n"
@@ -1404,8 +1398,8 @@ TR: dict[str, dict[str, str]] = {
               "- **Premium slot blocked** – an A slot is occupied but not picked at all. Dead stock on a premium "
               "spot → move the goods to reserve or retrieve them.\n\n"
               "**🟦 Place better (relocate)** – fast movers on a bad slot:\n"
-              "1. **Hot C slot** – a C slot picked often anyway (from the slider value up). Misclassified or in the "
-              "wrong place → bring it to a good pick slot down low and promote to the **calculated class (A or B)**. "
+              "1. **Hot C slot** – a slot listed as C that, by its actual picks, computes to **A or B**. "
+              "Misclassified → bring it to a good pick slot down low and promote to the **calculated class (A or B)**. "
               "Which class exactly and why is shown per row in the suggestion.\n"
               "2. **A goods too high** – an active A slot sitting high up (from the slider value up). Lifting costs "
               "time → bring it down. *Applies only to real levels 1–6; higher code values in the Level field are not "
@@ -2994,14 +2988,11 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     # Gemeinsame Regler statt zwei getrennter Bloecke. Die Pickzonen-Ebene
     # steuert sowohl die "blockiert"-Pruefung als auch die Trennung der freien
     # Zielplaetze in unten (Pickzone) / oben (Reserve).
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     with c1:
         pick_zone = st.slider(t("sl_retrzone"), 1, 6, 2, key="ua_zone",
                               help=t("sl_retrzone_h"))
     with c2:
-        hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10,
-                                    key="ua_hotc")
-    with c3:
         high_level = st.slider(t("sl_highlevel"), 2, 6, 4, key="ua_high",
                                help=t("sl_highlevel_h"))
 
@@ -3014,10 +3005,12 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     ].sort_values(["REGAL", "EBENE", "FACH"])
 
     # Gruppe 2: Schnelldreher auf schlechtem Platz (ueber das ganze Lager).
-    # Heisser C-Platz: C-Klasse, viele Picks -> auf guten Pickplatz.
+    # Heisser C-Platz: als C gefuehrt, aber nach den tatsaechlichen Picks
+    # rechnerisch A oder B (ABC_CALC). Diese Fehlklassifikation IST das Signal -
+    # kein willkuerlicher Pick-Schwellen-Regler mehr noetig.
     hot_c = filtered[
         (filtered["ABC_KLASSE"] == "C")
-        & (filtered["ANZ_PICKS"] >= hot_c_threshold)
+        & (filtered["ABC_CALC"].isin(["A", "B"]))
         & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
     # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> ergonomisch runter holen.
@@ -3057,20 +3050,15 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         return src.assign(**{t("col_ziel"): col})
 
     def _hotc_vorschlag(df: pd.DataFrame) -> list:
-        """Konkrete Ziel-Klasse je heissem C-Platz statt nur 'hochstufen':
-        die berechnete ABC-Klasse (ABC_CALC) aus der tatsaechlichen Pick-
-        Haeufigkeit, mit Picks als Begruendung. ABC_CALC ist hier praktisch
-        immer A oder B (C-Master mit vielen Picks); falls die Berechnung doch
-        C ergibt (sehr niedrige Schwelle), wird bewusst nicht hochgestuft."""
-        out = []
-        for r in df.itertuples(index=False):
-            calc = str(getattr(r, "ABC_CALC", "") or "").upper()
-            picks = de_num(int(getattr(r, "ANZ_PICKS", 0)))
-            if calc in ("A", "B"):
-                out.append(t("reloc_hotC_v_to").format(cls=calc, picks=picks))
-            else:
-                out.append(t("reloc_hotC_v_keep").format(picks=picks))
-        return out
+        """Konkrete Ziel-Klasse je heissem C-Platz statt nur 'hochstufen': die
+        berechnete ABC-Klasse (ABC_CALC) aus der tatsaechlichen Pick-Haeufigkeit,
+        mit Picks als Begruendung. ABC_CALC ist hier per Filter immer A oder B."""
+        return [
+            t("reloc_hotC_v_to").format(
+                cls=str(getattr(r, "ABC_CALC", "") or "").upper(),
+                picks=de_num(int(getattr(r, "ANZ_PICKS", 0))))
+            for r in df.itertuples(index=False)
+        ]
 
     # KPI-Zeile: Zusammenfassung nach Absicht (statt der Zahlen erst weit unten).
     k1, k2 = st.columns(2)
