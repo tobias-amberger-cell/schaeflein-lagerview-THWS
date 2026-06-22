@@ -1604,6 +1604,23 @@ TR: dict[str, dict[str, str]] = {
     "abc_promote": {"de": "⬆️ Hochstufen", "en": "⬆️ Promote"},
     "abc_demote": {"de": "⬇️ Herabstufen", "en": "⬇️ Demote"},
     "abc_rec": {"de": "Empfehlung", "en": "Recommendation"},
+    "abc_promote_note": {
+        "de": "Hinterlegte Klasse zu **niedrig** – wird häufiger gepickt als "
+              "gedacht. Auf einen besseren Platz / höhere Klasse hochstufen "
+              "(meistgepickte oben).",
+        "en": "Stored class too **low** – picked more often than recorded. Promote "
+              "to a better slot / higher class (most-picked on top).",
+    },
+    "abc_demote_note": {
+        "de": "Hinterlegte Klasse zu **hoch** – kaum gepickt. Guten Platz freimachen "
+              "und Klasse senken (am wenigsten gepickte oben).",
+        "en": "Stored class too **high** – barely picked. Free up the good slot and "
+              "lower the class (least-picked on top).",
+    },
+    "abc_none_cat": {
+        "de": "Keine Plätze in dieser Kategorie (mit aktuellen Filtern).",
+        "en": "No slots in this category (with current filters).",
+    },
     "abc_no_dev": {
         "de": "Keine Abweichungen mit aktuellen Filtern – Stamm-ABC passt.",
         "en": "No deviations with current filters – master ABC matches.",
@@ -3334,22 +3351,33 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         else:
             dev["_m"] = dev["ABC_KLASSE"].map(rank)
             dev["_c"] = dev["ABC"].map(rank)
-            dev[t("abc_rec")] = dev.apply(
-                lambda r: t("abc_promote") if r["_c"] > r["_m"]
-                else t("abc_demote"), axis=1,
-            )
-            n_prom = int((dev["_c"] > dev["_m"]).sum())
-            n_dem = int((dev["_c"] < dev["_m"]).sum())
+            # Zwei getrennte Listen: hochstufen (mehr Picks als hinterlegt,
+            # meiste oben) und herabstufen (kaum Picks, wenigste oben).
+            promote = dev[dev["_c"] > dev["_m"]].sort_values(
+                "ANZ_PICKS", ascending=False)
+            demote = dev[dev["_c"] < dev["_m"]].sort_values(
+                "ANZ_PICKS", ascending=True)
             mcols = st.columns(2)
-            mcols[0].metric(t("abc_promote"), de_num(n_prom))
-            mcols[1].metric(t("abc_demote"), de_num(n_dem))
-            dev_tbl = dev.sort_values("ANZ_PICKS", ascending=False)[
-                ["PLATZ_ID", "REGAL", "FACH", "EBENE", "ANZ_PICKS",
-                 "CUM_%", "ABC_KLASSE", "ABC", t("abc_rec")]
-            ].rename(columns=colmap)
-            st.dataframe(dev_tbl.head(200), use_container_width=True,
-                         hide_index=True)
-            _csv_download(dev_tbl, "abc_anpassung")
+            mcols[0].metric(t("abc_promote"), de_num(len(promote)))
+            mcols[1].metric(t("abc_demote"), de_num(len(demote)))
+            _dev_cols = ["PLATZ_ID", "REGAL", "FACH", "EBENE", "ANZ_PICKS",
+                         "CUM_%", "ABC_KLASSE", "ABC"]
+
+            def _dev_table(sub: pd.DataFrame, key: str) -> None:
+                if sub.empty:
+                    st.info(t("abc_none_cat"))
+                    return
+                tbl = sub[_dev_cols].rename(columns=colmap)
+                st.dataframe(tbl.head(200), use_container_width=True,
+                             hide_index=True)
+                _csv_download(tbl, key)
+
+            st.markdown(f"**{t('abc_promote')}**")
+            st.caption(t("abc_promote_note"))
+            _dev_table(promote, "abc_hochstufen")
+            st.markdown(f"**{t('abc_demote')}**")
+            st.caption(t("abc_demote_note"))
+            _dev_table(demote, "abc_herabstufen")
 
     # --- Tabelle 2: ALLE Eintraege, sortiert nach Pickhaeufigkeit ----------
     st.markdown(t("abc_byfreq"))
