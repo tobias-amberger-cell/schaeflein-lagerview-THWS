@@ -3548,14 +3548,14 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
     else:
         top = top_all if show_all else top_all.head(article_limit)
         chart_df = top.head(min(article_limit, 25)).sort_values("bewegungen")
-        st.plotly_chart(
-            px.bar(
-                chart_df, x="bewegungen", y="artikel", orientation="h",
-                title=t("top_chart"),
-                labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
-            ),
-            use_container_width=True,
+        fig_top = px.bar(
+            chart_df, x="bewegungen", y="artikel", orientation="h",
+            title=t("top_chart"), text="artikel",
+            labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
         )
+        # Artikelnummer als Beschriftung an jedem Balken.
+        fig_top.update_traces(textposition="outside", cliponaxis=False)
+        st.plotly_chart(fig_top, use_container_width=True)
         show = top.rename(columns=_TOP_RENAME)
         col_cfg = {c: st.column_config.Column(help=h)
                    for c, h in _TOP_HELP.items() if c in show.columns}
