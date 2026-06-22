@@ -1042,62 +1042,11 @@ TR: dict[str, dict[str, str]] = {
     "free_avg": {"de": "Ø freie LHM/Platz", "en": "Avg. free LHM/slot"},
     "free_byhall": {"de": "Freie Kapazität (LHM) je Halle", "en": "Free capacity (LHM) per hall"},
     # Maßnahmen
-    "reloc_head": {
-        "de": "### 🔄 Umlagern\nVorschläge, welche Ware auf einen besseren Platz "
-              "sollte – direkt aus den Lagerdaten.",
-        "en": "### 🔄 Relocate\nSuggestions for which goods should move to a better "
-              "slot – straight from the warehouse data.",
-    },
-    "reloc_info_t": {
-        "de": "ℹ️ Was bedeutet Umlagern? (Regeln + Spalten)",
-        "en": "ℹ️ What is relocation? (rules + columns)",
-    },
-    "reloc_info_b": {
-        "de": "**Umlagern** heißt: einen Artikel von einem schlechteren auf einen besseren Platz bringen, ohne dass "
-              "neue Ware reinkommt. Ziel ist, die besten Plätze (A, niedrige Ebene) für die Schnelldreher frei zu "
-              "halten.\n\n"
-              "**So entstehen die Listen** – jede Regel steht auch als Spalte in der Tabelle, du kannst sie also "
-              "nachprüfen:\n"
-              "1. **Premium ungenutzt** – ein A-Platz, der aber gar nicht gepickt wird. Ein wertvoller Platz steht "
-              "brach → seinen Inhalt auf einen Reserveplatz weiter oben umlagern.\n"
-              "2. **Heiße C-Plätze** – ein C-Platz, der trotzdem oft gepickt wird (ab dem Regler-Wert). Er ist falsch "
-              "eingestuft oder steht am falschen Ort → auf einen guten Pickplatz unten holen.\n"
-              "3. **A weit oben** – ein A-Platz mit Picks, der aber weit oben liegt (ab dem Regler-Wert). Das heißt "
-              "Hochhub und kostet Zeit → nach unten holen.\n\n"
-              "**Der Zielplatz-Vorschlag** ist jeweils ein konkreter freier Platz, der passt: unten für heiße oder "
-              "hoch liegende A-Plätze, oben in der Reserve für die ungenutzten A-Plätze. Zugeordnet wird 1:1 nach "
-              "freier Kapazität.",
-        "en": "**Relocation** means moving an article from a worse to a better slot, without any new goods coming "
-              "in. The goal is to keep the best slots (A, low level) free for the fast movers.\n\n"
-              "**How the lists are built** – every rule is also shown as a column, so you can check it:\n"
-              "1. **Premium unused** – an A slot that isn't picked at all. A valuable slot lies idle → move its "
-              "content to a reserve slot higher up.\n"
-              "2. **Hot C slots** – a C slot that is picked often anyway (from the slider value up). It's "
-              "misclassified or in the wrong place → bring it to a good pick slot down low.\n"
-              "3. **A high up** – an A slot with picks that sits high up (from the slider value up). That means "
-              "lifting and costs time → bring it down.\n\n"
-              "**The suggested target slot** is always a concrete free slot that fits: low for hot or high-up A "
-              "slots, up in the reserve for the unused A slots. Matched 1:1 by free capacity.",
-    },
-    "reloc_abc_help": {
-        "de": "Welche Klassen anzeigen: A blendet „Premium ungenutzt“ + „A weit "
-              "oben“ ein, C die „Heißen C-Plätze“.",
-        "en": "Which classes to show: A reveals ‘premium unused’ + ‘A high up’, "
-              "C the ‘hot C slots’.",
-    },
-    "reloc_pick_abc": {
-        "de": "Mindestens eine ABC-Klasse auswählen.",
-        "en": "Select at least one ABC class.",
-    },
     "col_vorschlag": {"de": "Vorschlag", "en": "Suggestion"},
     "col_ziel": {"de": "Zielplatz-Vorschlag", "en": "Suggested target slot"},
     "ziel_none": {
         "de": "kein freier Zielplatz in Auswahl",
         "en": "no free target slot in selection",
-    },
-    "reloc_unusedA_v": {
-        "de": "Ware auf C-/Reserveplatz umlagern – Premiumplatz freimachen",
-        "en": "Move goods to a C/reserve slot – free up the premium spot",
     },
     "reloc_hotC_v": {
         "de": "Auf A-Platz / niedrige Ebene hochlagern + ABC hochstufen",
@@ -1109,11 +1058,6 @@ TR: dict[str, dict[str, str]] = {
     },
     "sl_hotc": {"de": "Heiße C-Plätze ab Picks", "en": "Hot C slots from picks"},
     "sl_highlevel": {"de": "Hohe Ebene ab", "en": "High level from"},
-    "reloc_unusedA_t": {"de": "Premium-Plätze ungenutzt", "en": "Premium slots unused"},
-    "reloc_unusedA_d": {
-        "de": "A-Klasse, aber 0 Picks – Premium-Platz nicht genutzt.",
-        "en": "A class but 0 picks – premium slot unused.",
-    },
     "reloc_hotC_t": {"de": "Heiße C-Plätze", "en": "Hot C slots"},
     "reloc_hotC_d": {
         "de": "C-Klasse mit hoher Pickfrequenz – Klasse anpassen.",
@@ -1398,46 +1342,8 @@ TR: dict[str, dict[str, str]] = {
         "de": "Nicht einlagern – Sperre prüfen",
         "en": "Do not store – check the lock",
     },
-    "retr_head": {
-        "de": "### 📤 Auslagern\nWare, die kaum bewegt wird, aber gute Plätze blockiert und besser ausgelagert würde.",
-        "en": "### 📤 Retrieval\nGoods that barely move but block good slots and would be better retrieved.",
-    },
-    "retr_info_t": {
-        "de": "ℹ️ Was bedeutet Auslagern? (Regeln + Spalten)",
-        "en": "ℹ️ What is retrieval? (rules + columns)",
-    },
-    "retr_info_b": {
-        "de": "**Auslagern** heißt: Ware, die einen guten Platz blockiert, sich aber kaum bewegt, aus der Pickzone "
-              "rausnehmen – ins Reserve- oder Hochlager oder ganz raus. So werden die guten Plätze wieder für "
-              "Dreher frei.\n\n"
-              "Angeschaut werden nur belegte Plätze in der Pickzone (bis zur eingestellten Ebene).\n\n"
-              "**Die drei Listen:**\n"
-              "1. **Kritisch** – ein A-Platz ist belegt, wird aber gar nicht gepickt. Ein Premiumplatz von einem "
-              "Ladenhüter blockiert → vorrangig auslagern.\n"
-              "2. **Abgestanden** – belegt, gar keine Picks, aber kein A-Platz. Bewegt sich nicht → Auslagern prüfen.\n"
-              "3. **Beobachten** – belegt, aber nur sehr selten gepickt (1 bis zum Regler-Wert) → im Auge behalten.\n\n"
-              "**Was heißt „belegt“?** Es steht mindestens eine Palette/ein Behälter drauf. Das Warnsignal "
-              "„blockiert ohne Nutzen“ ist hier: belegt und trotzdem null Picks – der Platz trägt Ware, bewegt sie "
-              "aber nie.",
-        "en": "**Retrieval** means taking goods that block a good slot but barely move out of the pick zone – into "
-              "reserve or the high-bay, or out entirely. This frees the good slots for movers again.\n\n"
-              "Only occupied slots in the pick zone (up to the set level) are looked at.\n\n"
-              "**The three lists:**\n"
-              "1. **Critical** – an A slot is occupied but not picked at all. A premium slot blocked by dead stock → "
-              "retrieve first.\n"
-              "2. **Stale** – occupied, no picks at all, but not an A slot. Not moving → consider retrieval.\n"
-              "3. **Observe** – occupied but picked only very rarely (1 up to the slider value) → keep an eye on it.\n\n"
-              "**What does “occupied” mean?** At least one pallet/bin is on it. The warning sign “blocked without "
-              "use” here is: occupied yet zero picks – the slot holds goods but never moves them.",
-    },
     "sl_retrzone": {"de": "Pickzone bis Ebene", "en": "Pick zone up to level"},
     "sl_observe": {"de": "„Beobachten“ bis Picks", "en": "‘Observe’ up to picks"},
-    "retr_crit_t": {"de": "Kritisch", "en": "Critical"},
-    "retr_crit_d": {
-        "de": "A-Platz belegt, aber 0 Picks – Premium-Platz von Ladenhüter blockiert.",
-        "en": "A slot occupied but 0 picks – premium slot blocked by dead stock.",
-    },
-    "retr_stale_t": {"de": "Abgestanden", "en": "Stale"},
     "retr_stale_d": {
         "de": "Belegt mit 0 Picks – bewegt sich nicht, Auslagern prüfen.",
         "en": "Occupied with 0 picks – not moving, consider retrieval.",
