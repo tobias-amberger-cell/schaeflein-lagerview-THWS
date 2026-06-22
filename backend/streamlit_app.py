@@ -786,10 +786,16 @@ TR: dict[str, dict[str, str]] = {
         "en": "How many slots are currently selected (after the filters).",
     },
     "m_occupied_help": {
-        "de": "Plaetze, auf denen Ware steht. Der kleine Wert darunter ist ihr Anteil "
-              "an allen Plaetzen.",
-        "en": "Slots that hold goods. The small value below is their share of all "
-              "slots.",
+        "de": "Plaetze, auf denen mindestens 1 Ladehilfsmittel steht (auch teilweise "
+              "gefuellte zaehlen mit). Der Prozentwert ist ihr Anteil an allen "
+              "Plaetzen; die Zeile darunter teilt sie in voll und noch-mit-Platz auf.",
+        "en": "Slots holding at least 1 load unit (partially filled ones count too). "
+              "The percentage is their share of all slots; the line below splits them "
+              "into full and room-left.",
+    },
+    "m_occupied_split": {
+        "de": "davon voll: {full} · noch Platz: {partial}",
+        "en": "of which full: {full} · room left: {partial}",
     },
     "m_avg_util_help": {
         "de": "Durchschnittliche Fuellung ueber alle ausgewaehlten Plaetze.",
@@ -2671,6 +2677,15 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
     state_counts = (
         df_h.groupby(["HALLE", "_state"]).size().rename("Plaetze").reset_index()
     )
+    # Voll/Teilbelegt je Halle fuer die Kennzahlen-Tabelle (voll + noch Platz +
+    # leer = alle Plaetze, konsistent zum Diagramm und zur KPI-Kachel oben).
+    state_pivot = (
+        state_counts.pivot(index="HALLE", columns="_state", values="Plaetze")
+        .reindex(columns=[s_full, s_part], fill_value=0)
+        .reset_index()
+        .rename(columns={s_full: "voll", s_part: "teil"})
+    )
+    zones = zones.merge(state_pivot, on="HALLE", how="left")
     fig = px.bar(
         state_counts,
         x="HALLE", y="Plaetze", color="_state", barmode="stack",
@@ -2688,16 +2703,20 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
 
     st.markdown(t("halls_kpis"))
     show = zones[[
-        "HALLE", "total_slots", "occupied", "frei", "Belegung_%",
+        "HALLE", "total_slots", "voll", "teil", "frei", "Belegung_%",
         "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
     ]].rename(columns={
-        "HALLE": "Lager", "total_slots": "Plätze", "occupied": "Belegt",
+        "HALLE": "Lager", "total_slots": "Plätze",
+        "voll": "Voll belegt", "teil": "Belegt – noch Platz",
         "frei": "Aktuell leer", "Belegung_%": "Belegung %",
         "Ø_Auslastung_%": "Ø Auslastung %", "picks": "Picks gesamt",
     })
     halls_help = {
         "Plätze": "Anzahl Stellplätze im (gefilterten) Lager.",
-        "Belegt": "Plätze, auf denen mindestens eine Palette/ein Behälter steht.",
+        "Voll belegt": "Plätze, die belegt sind und keine Restkapazität mehr "
+                       "haben – da passt nichts mehr drauf.",
+        "Belegt – noch Platz": "Plätze, auf denen schon Ware steht, aber noch "
+                               "etwas draufpasst (teilweise gefüllt).",
         "Aktuell leer": "Plätze, auf denen gerade gar nichts steht – eine "
                         "Momentaufnahme aus den Daten. Das ist keine dauerhaft "
                         "freie Reserve: jeder dieser Plätze kann jederzeit wieder "
@@ -3724,6 +3743,12 @@ def main() -> None:
     # --- KPI-Kacheln oben (beziehen sich auf die gefilterte Auswahl) ---
     total = len(filtered) or 1
     occupied = int(filtered["BELEGT"].sum())
+    # "Belegt" = mind. 1 LHM drauf. Aufschluesseln in voll (keine Restkapazitaet)
+    # und teilbelegt (noch Platz), damit teilweise gefuellte Plaetze nicht als
+    # "voll belegt" missverstanden werden (User-Feedback) - konsistent zum
+    # Uebersichts-Diagramm.
+    full_occ = int((filtered["BELEGT"] & filtered["FREE_CAPACITY"].le(0)).sum())
+    partial_occ = occupied - full_occ
     avg_util = filtered["UTILIZATION"].mean()
     # Durchschnittlicher Bestand je Platz = mittlere belegte Ladehilfsmittel
     # (IST_LHM) ueber alle Plaetze. Konkreter/greifbarer als die Ø Auslastung %
@@ -3735,6 +3760,8 @@ def main() -> None:
               help=t("m_slots_help"))
     c2.metric(t("m_occupied"), de_num(occupied),
               f"{occupied/total*100:.1f}%", help=t("m_occupied_help"))
+    c2.caption(t("m_occupied_split").format(
+        full=de_num(full_occ), partial=de_num(partial_occ)))
     util_hint = (f" · Ø Auslastung {avg_util:.1f} %"
                  if not pd.isna(avg_util) else "")
     c3.metric(t("m_avg_stock"),
