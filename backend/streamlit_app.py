@@ -776,6 +776,12 @@ TR: dict[str, dict[str, str]] = {
     "lock_without": {"de": "Ohne gesperrte", "en": "Exclude locked"},
     "tp_period": {"de": "Durchsatz-Zeitraum (Tage)", "en": "Throughput period (days)"},
     "top_count": {"de": "Top-Artikel anzeigen", "en": "Show top items"},
+    "top_dl_all": {
+        "de": "Diagramm/Tabelle zeigen die Top-N (Regler). Der **CSV-Download "
+              "enthält ALLE {n} Artikel**, unabhängig vom Regler.",
+        "en": "Chart/table show the top N (slider). The **CSV download contains ALL "
+              "{n} articles**, regardless of the slider.",
+    },
     "m_slots": {"de": "Stellplaetze", "en": "Slots"},
     "m_occupied": {"de": "Belegt", "en": "Occupied"},
     "m_avg_util": {"de": "Ø Auslastung", "en": "Avg. utilization"},
@@ -3693,7 +3699,7 @@ def main() -> None:
             ]
         st.divider()
         days = st.slider(t("tp_period"), 7, 180, 30, step=7)
-        article_limit = st.slider(t("top_count"), 5, 100, 25, step=5)
+        article_limit = st.slider(t("top_count"), 5, 500, 25, step=5)
         st.divider()
         st.caption(f"DB: `{get_db_path()}`")
 
