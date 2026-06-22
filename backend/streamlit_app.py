@@ -890,6 +890,23 @@ TR: dict[str, dict[str, str]] = {
         "de": "Belegung Lager gesamt (gefiltert)",
         "en": "Occupancy whole warehouse (filtered)",
     },
+    "halls_state_legend": {"de": "Zustand", "en": "State"},
+    "halls_state_full": {"de": "Voll belegt", "en": "Fully occupied"},
+    "halls_state_partial": {
+        "de": "Belegt – noch Platz", "en": "Occupied – room left",
+    },
+    "halls_state_empty": {"de": "Aktuell leer", "en": "Currently empty"},
+    "halls_free_now_note": {
+        "de": "Drei Zustände: **Voll belegt** (kein Platz mehr) · **Belegt – noch "
+              "Platz** (es passt noch etwas drauf) · **Aktuell leer** = eine "
+              "Momentaufnahme: gerade gar nichts drauf. „Aktuell leer“ heißt nicht "
+              "dauerhaft frei – jeder dieser Plätze kann jederzeit wieder belegt "
+              "werden.",
+        "en": "Three states: **Fully occupied** (no room left) · **Occupied – room "
+              "left** (something still fits) · **Currently empty** = a snapshot: "
+              "nothing on it right now. “Currently empty” does not mean permanently "
+              "free – any of these slots can be filled again at any time.",
+    },
     "pick_chart": {
         "de": "Pick-Aktivität je Wochentag/Stunde",
         "en": "Pick activity per weekday/hour",
@@ -2627,18 +2644,38 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
     )
     zones = zones.merge(abc_pivot, on="HALLE", how="left")
 
-    fig = px.bar(
-        zones.melt(
-            id_vars="HALLE",
-            value_vars=["occupied", "frei"],
-            var_name="Status",
-            value_name="Plaetze",
-        ),
-        x="HALLE", y="Plaetze", color="Status", barmode="stack",
-        color_discrete_map={"occupied": "#ef6c00", "frei": "#bdbdbd"},
-        title=t("halls_chart"),
+    # Drei Zustaende statt nur Belegt/Frei, damit "frei" nicht ueberschaetzt
+    # wird (User-Feedback: man denkt sonst, die sind immer/dauerhaft frei):
+    #   - voll        = belegt, keine Restkapazitaet
+    #   - noch Platz  = belegt, aber es passt noch etwas drauf
+    #   - aktuell leer= gerade gar nichts drauf (Momentaufnahme, kann jederzeit
+    #                   wieder belegt werden)
+    s_full, s_part, s_empty = (
+        t("halls_state_full"), t("halls_state_partial"), t("halls_state_empty"),
     )
+    belegt = df_h["BELEGT"].astype(bool)
+    df_h["_state"] = np.select(
+        [~belegt, df_h["FREE_CAPACITY"].gt(0)],
+        [s_empty, s_part],
+        default=s_full,
+    )
+    state_counts = (
+        df_h.groupby(["HALLE", "_state"]).size().rename("Plaetze").reset_index()
+    )
+    fig = px.bar(
+        state_counts,
+        x="HALLE", y="Plaetze", color="_state", barmode="stack",
+        category_orders={"_state": [s_full, s_part, s_empty]},
+        color_discrete_map={
+            s_full: "#ef6c00", s_part: "#ffb74d", s_empty: "#bdbdbd",
+        },
+        labels={"_state": t("halls_state_legend")},
+        title=t("halls_chart"),
+        text="Plaetze",
+    )
+    fig.update_traces(textposition="inside", textfont_size=13)
     st.plotly_chart(fig, use_container_width=True)
+    st.caption(t("halls_free_now_note"))
 
     st.markdown(t("halls_kpis"))
     show = zones[[
@@ -2646,13 +2683,16 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
         "Ø_Auslastung_%", "picks", "A-Plätze", "B-Plätze", "C-Plätze",
     ]].rename(columns={
         "HALLE": "Lager", "total_slots": "Plätze", "occupied": "Belegt",
-        "frei": "Frei", "Belegung_%": "Belegung %",
+        "frei": "Aktuell leer", "Belegung_%": "Belegung %",
         "Ø_Auslastung_%": "Ø Auslastung %", "picks": "Picks gesamt",
     })
     halls_help = {
         "Plätze": "Anzahl Stellplätze im (gefilterten) Lager.",
         "Belegt": "Plätze, auf denen mindestens eine Palette/ein Behälter steht.",
-        "Frei": "Plätze, auf die noch etwas draufpasst.",
+        "Aktuell leer": "Plätze, auf denen gerade gar nichts steht – eine "
+                        "Momentaufnahme aus den Daten. Das ist keine dauerhaft "
+                        "freie Reserve: jeder dieser Plätze kann jederzeit wieder "
+                        "belegt werden.",
         "Belegung %": "Anteil der belegten Plätze.",
         "Ø Auslastung %": "Wie voll die Plätze im Schnitt sind.",
         "Picks gesamt": "Alle Zugriffe im gefilterten Lager zusammen.",
