@@ -1494,6 +1494,31 @@ TR: dict[str, dict[str, str]] = {
         "de": "ℹ️ Was bedeutet das? (Wozu ABC, Modi, Klassen)",
         "en": "ℹ️ What does this mean? (purpose, modes, classes)",
     },
+    "abc_calc_head": {
+        "de": "🧮 Rechenweg: Wie kommt ein Platz auf A / B / C?",
+        "en": "🧮 Calculation: how does a slot become A / B / C?",
+    },
+    "abc_calc_steps": {
+        "de": "**So entsteht die Klasse (Pareto-Rechnung):**\n\n"
+              "1. Alle {e} nach **Picks absteigend sortieren**.\n"
+              "2. Von oben den **kumulierten Pick-Anteil** aufsummieren.\n"
+              "3. Kumuliert ≤ **{a} %** → **A**, ≤ **{b} %** → **B**, Rest → **C**.\n\n"
+              "Heißt: A bekommt man **nicht** ab einer festen Pick-Zahl, sondern weil "
+              "man zu den wenigen Top-{e} gehört, die zusammen die ersten {a} % aller "
+              "Picks ausmachen.",
+        "en": "**How the class is derived (Pareto):**\n\n"
+              "1. Sort all {e} by **picks, descending**.\n"
+              "2. From the top, accumulate the **cumulative pick share**.\n"
+              "3. Cumulative ≤ **{a} %** → **A**, ≤ **{b} %** → **B**, rest → **C**.\n\n"
+              "So A is **not** a fixed pick count – you get A by being among the few "
+              "top {e} that together make up the first {a} % of all picks.",
+    },
+    "abc_calc_concrete": {
+        "de": "In der aktuellen Auswahl ergibt das: **A** ab **{amin}** Picks · "
+              "**B** **{bmin}–{amin1}** · **C** darunter.",
+        "en": "In the current selection: **A** from **{amin}** picks · "
+              "**B** **{bmin}–{amin1}** · **C** below.",
+    },
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
     "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
@@ -3368,6 +3393,18 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     with d2:
         st.markdown(f"**{t('abc_count')}**")
         st.dataframe(summary, use_container_width=True)
+
+    # Rechenweg-Button: Schritt-fuer-Schritt, wie die Klasse entsteht, plus die
+    # konkreten Pick-Grenzen aus der aktuellen Auswahl (macht "warum A" greifbar).
+    with st.expander(t("abc_calc_head")):
+        st.markdown(t("abc_calc_steps").format(a=a_thr, b=b_thr, e=ent_label))
+        a_vals = data[data["ABC"] == "A"][val_col]
+        b_vals = data[data["ABC"] == "B"][val_col]
+        if not a_vals.empty and not b_vals.empty:
+            st.markdown(t("abc_calc_concrete").format(
+                amin=de_num(int(a_vals.min())),
+                bmin=de_num(int(b_vals.min())),
+                amin1=de_num(int(a_vals.min()) - 1)))
 
     # --- Tabelle 1: nur Abweichungen Stamm vs. Berechnet + Empfehlung -------
     # (nur Platz-Sicht; Artikel haben kein Stamm-ABC). Gleiche Klasse wie unten.
