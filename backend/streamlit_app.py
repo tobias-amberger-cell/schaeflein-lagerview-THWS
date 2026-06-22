@@ -1447,6 +1447,103 @@ TR: dict[str, dict[str, str]] = {
         "de": "Belegt mit sehr geringer Frequenz (1–{n} Picks).",
         "en": "Occupied with very low frequency (1–{n} picks).",
     },
+    # --- Verschmolzener Tab 'Um-/Auslagern' (loest reloc_*/retr_* ab) ---
+    "ua_head": {
+        "de": "### 🔄 Um- & Auslagern\n**Steht die richtige Ware auf dem richtigen "
+              "Platz?** Zwei Stoßrichtungen: gute Plätze von Ladenhütern *freimachen* "
+              "und Schnelldreher auf bessere Plätze *umlagern* – direkt aus den "
+              "Lagerdaten.",
+        "en": "### 🔄 Relocate & retrieve\n**Are the right goods on the right slot?** "
+              "Two directions: *free up* good slots from dead stock and *relocate* fast "
+              "movers to better slots – straight from the warehouse data.",
+    },
+    "ua_info_t": {
+        "de": "ℹ️ Was heißt um- und auslagern? (Regeln + Spalten)",
+        "en": "ℹ️ What do relocate and retrieve mean? (rules + columns)",
+    },
+    "ua_info_b": {
+        "de": "Beide Maßnahmen haben dasselbe Ziel: die guten Pickplätze (A, niedrige Ebene) für die "
+              "Schnelldreher frei halten. Sie unterscheiden sich nur in der Richtung:\n\n"
+              "**🟥 Platz freimachen (auslagern)** – belegte Plätze, deren Ware sich kaum bewegt:\n"
+              "1. **Premiumplatz blockiert** – ein A-Platz ist belegt, wird aber gar nicht gepickt. Ein "
+              "Ladenhüter sitzt auf einem Premiumplatz → Ware in die Reserve umlagern oder ganz auslagern.\n"
+              "2. **Pickplatz blockiert** – belegt, 0 Picks, aber kein A-Platz. Bewegt sich nicht → Auslagern prüfen.\n"
+              "3. **Selten gebraucht** – belegt, aber nur sehr selten gepickt (bis zum Regler-Wert) → im Auge behalten.\n\n"
+              "**🟦 Besser platzieren (umlagern)** – Schnelldreher auf schlechtem Platz:\n"
+              "4. **Heißer C-Platz** – ein C-Platz, der trotzdem oft gepickt wird (ab dem Regler-Wert). Falsch "
+              "eingestuft oder am falschen Ort → auf einen guten Pickplatz unten holen und die Klasse hochstufen.\n"
+              "5. **A-Ware zu hoch** – ein aktiver A-Platz, der weit oben liegt (ab dem Regler-Wert). Hochhub kostet "
+              "Zeit → nach unten holen.\n\n"
+              "**Zielplatz-Vorschlag:** ein konkreter freier, passender Platz – für blockierte Premiumplätze oben "
+              "in der Reserve, für heiße oder zu hohe Plätze unten in der Pickzone. Zugeordnet wird 1:1 nach freier "
+              "Kapazität.\n\n"
+              "*Leere A-Plätze tauchen hier bewusst nicht auf – wo nichts steht, gibt es nichts um- oder "
+              "auszulagern.*",
+        "en": "Both actions share one goal: keep the good pick slots (A, low level) free for the fast movers. They "
+              "only differ in direction:\n\n"
+              "**🟥 Free up a slot (retrieve)** – occupied slots whose goods barely move:\n"
+              "1. **Premium slot blocked** – an A slot is occupied but not picked at all. Dead stock on a premium "
+              "spot → move the goods to reserve or retrieve them.\n"
+              "2. **Pick slot blocked** – occupied, 0 picks, but not an A slot. Not moving → consider retrieval.\n"
+              "3. **Rarely used** – occupied but picked only rarely (up to the slider value) → keep an eye on it.\n\n"
+              "**🟦 Place better (relocate)** – fast movers on a bad slot:\n"
+              "4. **Hot C slot** – a C slot picked often anyway (from the slider value up). Misclassified or in the "
+              "wrong place → bring it to a good pick slot down low and promote the class.\n"
+              "5. **A goods too high** – an active A slot sitting high up (from the slider value up). Lifting costs "
+              "time → bring it down.\n\n"
+              "**Suggested target slot:** a concrete free, fitting slot – up in reserve for blocked premium slots, "
+              "down in the pick zone for hot or too-high slots. Matched 1:1 by free capacity.\n\n"
+              "*Empty A slots deliberately don't appear here – where nothing stands, there's nothing to relocate or "
+              "retrieve.*",
+    },
+    "ua_group_free": {
+        "de": "#### 🟥 Platz freimachen (auslagern)",
+        "en": "#### 🟥 Free up a slot (retrieve)",
+    },
+    "ua_group_place": {
+        "de": "#### 🟦 Besser platzieren (umlagern)",
+        "en": "#### 🟦 Place better (relocate)",
+    },
+    "ua_kpi_free": {"de": "Plätze freimachen", "en": "Slots to free up"},
+    "ua_kpi_free_h": {
+        "de": "Belegte Plätze ohne Picks (Premium + normal) – hier blockiert Ware "
+              "einen guten Platz, ohne bewegt zu werden.",
+        "en": "Occupied slots without picks (premium + normal) – goods block a good "
+              "slot here without ever moving.",
+    },
+    "ua_kpi_place": {"de": "Besser platzieren", "en": "To place better"},
+    "ua_kpi_place_h": {
+        "de": "Schnelldreher auf schlechtem Platz (heiße C-Plätze + zu hohe "
+              "A-Plätze) – die gehören woanders hin.",
+        "en": "Fast movers on a bad slot (hot C slots + too-high A slots) – these "
+              "belong elsewhere.",
+    },
+    "ua_kpi_observe": {"de": "Beobachten", "en": "Observe"},
+    "ua_kpi_observe_h": {
+        "de": "Belegte Plätze, die nur selten gepickt werden – noch kein Handlungs"
+              "bedarf, aber im Blick behalten.",
+        "en": "Occupied slots picked only rarely – no action needed yet, but keep "
+              "an eye on them.",
+    },
+    "ua_crit_t": {"de": "Premiumplatz blockiert", "en": "Premium slot blocked"},
+    "ua_crit_d": {
+        "de": "A-Platz belegt, aber 0 Picks – ein Ladenhüter sitzt auf einem "
+              "Premiumplatz.",
+        "en": "A slot occupied but 0 picks – dead stock sits on a premium spot.",
+    },
+    "ua_crit_v": {
+        "de": "Ware in die Reserve umlagern oder auslagern – Premiumplatz freimachen",
+        "en": "Move goods to reserve or retrieve them – free up the premium spot",
+    },
+    "ua_stale_t": {"de": "Pickplatz blockiert", "en": "Pick slot blocked"},
+    "sl_retrzone_h": {
+        "de": "Bis zu dieser Ebene gilt als Pickzone. Sie bestimmt, welche belegten "
+              "Plätze auf „blockiert“ geprüft werden – und welche freien Plätze als "
+              "Ziel unten (Pickzone) bzw. oben (Reserve) gelten.",
+        "en": "Up to this level counts as the pick zone. It sets which occupied slots "
+              "are checked for ‘blocked’ – and which free slots count as a target down "
+              "low (pick zone) or up high (reserve).",
+    },
     "abc_intro": {
         "de": "**ABC-Analyse** — die Plätze nach Pick-Häufigkeit sortiert und "
               "aufsummiert. A = Plätze bis {a} % aller Picks, B = bis {b} %, C = der "
@@ -2891,51 +2988,77 @@ def render_free(filtered: pd.DataFrame) -> None:
     _csv_download(free_full, "free_capacity")
 
 
-def render_umlagern(filtered: pd.DataFrame) -> None:
-    """Tab 'Umlagern': datenbasierte Umlager-Vorschlaege (3 Regeln)."""
-    st.markdown(t("reloc_head"))
-    with st.expander(t("reloc_info_t")):
-        st.markdown(t("reloc_info_b"))
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        # A/B/C-Auswahl: blendet die Kategorien nach ihrer Ziel-Klasse ein.
-        # A -> "Premium ungenutzt" + "A weit oben", C -> "Heisse C-Plaetze".
-        reloc_abc = st.multiselect(
-            t("abc"), ["A", "B", "C"], default=["A", "B", "C"],
-            key="reloc_abc", help=t("reloc_abc_help"))
-    with c2:
-        hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10)
-    with c3:
-        high_level = st.slider(t("sl_highlevel"), 2, 6, 4)
+def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
+    """Tab 'Um-/Auslagern': EIN Diagnose-Modell 'richtige Ware auf richtigem
+    Platz', verschmolzen aus den frueheren getrennten render_umlagern() und
+    render_auslagern(). Zwei Absichten mit ueberschneidungsfreien Kategorien:
+      - Platz freimachen (auslagern): belegte Plaetze, deren Ware kaum bewegt;
+      - besser platzieren (umlagern): Schnelldreher auf schlechtem Platz.
+    Der frueher DOPPELTE Fall 'A-Platz mit 0 Picks' (steckte sowohl in
+    'Premium ungenutzt' als auch in 'Kritisch') liegt jetzt nur noch in
+    'Premiumplatz blockiert'. Leere A-Plaetze entfallen ganz (kein Inhalt ->
+    nichts um-/auszulagern)."""
+    st.markdown(t("ua_head"))
+    with st.expander(t("ua_info_t")):
+        st.markdown(t("ua_info_b"))
 
-    # Regel 1: A-Platz (Premium) ohne Picks -> Premiumplatz verschwendet.
-    unused_a = filtered[
-        (filtered["ABC_KLASSE"] == "A")
-        & (filtered["ANZ_PICKS"] == 0)
-        & (~filtered["GESPERRT"])
+    # Gemeinsame Regler statt zwei getrennter Bloecke. Die Pickzonen-Ebene
+    # steuert sowohl die "blockiert"-Pruefung als auch die Trennung der freien
+    # Zielplaetze in unten (Pickzone) / oben (Reserve).
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        pick_zone = st.slider(t("sl_retrzone"), 1, 6, 2, key="ua_zone",
+                              help=t("sl_retrzone_h"))
+    with c2:
+        observe_max = st.slider(t("sl_observe"), 1, 50, 5, key="ua_observe")
+    with c3:
+        hot_c_threshold = st.slider(t("sl_hotc"), 10, 300, 100, step=10,
+                                    key="ua_hotc")
+    with c4:
+        high_level = st.slider(t("sl_highlevel"), 2, 6, 4, key="ua_high")
+
+    notgesperrt = ~filtered["GESPERRT"]
+    # Basis Gruppe 1: belegte, nicht gesperrte Plaetze in der Pickzone.
+    belegt_zone = filtered[
+        filtered["BELEGT"] & (filtered["EBENE"] <= pick_zone) & notgesperrt
+    ]
+    # 1. Premiumplatz blockiert: A-Platz, belegt, 0 Picks (Merge aus frueher
+    #    'Kritisch' + dem belegten Teil von 'Premium ungenutzt').
+    critical = belegt_zone[
+        (belegt_zone["ABC_KLASSE"] == "A") & (belegt_zone["ANZ_PICKS"] == 0)
     ].sort_values(["REGAL", "EBENE", "FACH"])
-    # Regel 2: C-Platz mit vielen Picks -> falsch klassifiziert, hochstufen.
+    # 2. Pickplatz blockiert: belegt, 0 Picks, aber kein A-Platz.
+    stale = belegt_zone[
+        (belegt_zone["ABC_KLASSE"] != "A") & (belegt_zone["ANZ_PICKS"] == 0)
+    ].sort_values(["REGAL", "EBENE", "FACH"])
+    # 3. Selten gebraucht: belegt, 1..observe_max Picks.
+    observe = belegt_zone[
+        (belegt_zone["ANZ_PICKS"] > 0)
+        & (belegt_zone["ANZ_PICKS"] <= observe_max)
+    ].sort_values("ANZ_PICKS")
+
+    # Gruppe 2: Schnelldreher auf schlechtem Platz (ueber das ganze Lager).
+    # 4. Heisser C-Platz: C-Klasse, viele Picks -> auf guten Pickplatz.
     hot_c = filtered[
         (filtered["ABC_KLASSE"] == "C")
         & (filtered["ANZ_PICKS"] >= hot_c_threshold)
+        & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
-    # Regel 3: aktiver A-Artikel weit oben -> ergonomisch nach unten holen.
-    high_level_a = filtered[
+    # 5. A-Ware zu hoch: A-Klasse, aktiv, weit oben -> ergonomisch runter holen.
+    high_a = filtered[
         (filtered["ABC_KLASSE"] == "A")
         & (filtered["EBENE"] >= high_level)
         & (filtered["ANZ_PICKS"] > 0)
+        & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
 
-    # Konkrete Zielplatz-Vorschlaege aus den freien (nicht gesperrten)
-    # Plaetzen der aktuellen Auswahl. Niedrige Ebenen (<=2) = gute Pick-
-    # plaetze -> Ziel fuer heisse C-Plaetze und A-Plaetze von oben; hohe
-    # Ebenen (>=3) = Reserve -> Ziel fuer ungenutzte Premiumplaetze.
-    free_pool = filtered[
-        (filtered["FREE_CAPACITY"] > 0) & (~filtered["GESPERRT"])
-    ]
-    free_low = free_pool[free_pool["EBENE"] <= 2] \
+    # Zielplatz-Pool: freie, nicht gesperrte Plaetze. Unten (<= Pickzone) sind
+    # gute Pickplaetze (Ziel fuer heisse/zu hohe Ware), oben (> Pickzone) ist
+    # Reserve (Ziel fuer Ladenhueter vom Premiumplatz).
+    free_pool = filtered[(filtered["FREE_CAPACITY"] > 0) & notgesperrt]
+    free_low = free_pool[free_pool["EBENE"] <= pick_zone] \
         .sort_values("FREE_CAPACITY", ascending=False)
-    free_high = free_pool[free_pool["EBENE"] >= 3] \
+    free_high = free_pool[free_pool["EBENE"] > pick_zone] \
         .sort_values("FREE_CAPACITY", ascending=False)
 
     def _add_ziel(src: pd.DataFrame, targets: pd.DataFrame) -> pd.DataFrame:
@@ -2951,23 +3074,36 @@ def render_umlagern(filtered: pd.DataFrame) -> None:
                for i in range(len(src))]
         return src.assign(**{t("col_ziel"): col})
 
-    if "A" in reloc_abc:
-        render_massnahme_kategorie(
-            t("reloc_unusedA_t"), t("reloc_unusedA_d"),
-            _add_ziel(unused_a, free_high),
-            extra_cols=[t("col_ziel")], vorschlag=t("reloc_unusedA_v"))
-    if "C" in reloc_abc:
-        render_massnahme_kategorie(
-            t("reloc_hotC_t"), t("reloc_hotC_d"),
-            _add_ziel(hot_c, free_low),
-            extra_cols=[t("col_ziel")], vorschlag=t("reloc_hotC_v"))
-    if "A" in reloc_abc:
-        render_massnahme_kategorie(
-            t("reloc_highA_t"), t("reloc_highA_d"),
-            _add_ziel(high_level_a, free_low),
-            extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
-    if not reloc_abc:
-        st.info(t("reloc_pick_abc"))
+    # KPI-Zeile: Zusammenfassung nach Absicht (statt der Zahlen erst weit unten).
+    k1, k2, k3 = st.columns(3)
+    k1.metric(t("ua_kpi_free"), de_num(len(critical) + len(stale)),
+              help=t("ua_kpi_free_h"))
+    k2.metric(t("ua_kpi_place"), de_num(len(hot_c) + len(high_a)),
+              help=t("ua_kpi_place_h"))
+    k3.metric(t("ua_kpi_observe"), de_num(len(observe)),
+              help=t("ua_kpi_observe_h"))
+
+    # --- Gruppe 1: Platz freimachen (auslagern) ---
+    st.markdown(t("ua_group_free"))
+    render_massnahme_kategorie(
+        t("ua_crit_t"), t("ua_crit_d"),
+        _add_ziel(critical, free_high),
+        extra_cols=[t("col_ziel")], vorschlag=t("ua_crit_v"))
+    render_massnahme_kategorie(
+        t("ua_stale_t"), t("retr_stale_d"), stale)
+    render_massnahme_kategorie(
+        t("retr_observe_t"), t("retr_observe_d").format(n=observe_max), observe)
+
+    # --- Gruppe 2: besser platzieren (umlagern) ---
+    st.markdown(t("ua_group_place"))
+    render_massnahme_kategorie(
+        t("reloc_hotC_t"), t("reloc_hotC_d"),
+        _add_ziel(hot_c, free_low),
+        extra_cols=[t("col_ziel")], vorschlag=t("reloc_hotC_v"))
+    render_massnahme_kategorie(
+        t("reloc_highA_t"), t("reloc_highA_d"),
+        _add_ziel(high_a, free_low),
+        extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
 
 
 def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
@@ -3151,51 +3287,6 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
         cols=_PUTAWAY_BLOCKED_COLS, extra_cols=put_extra,
         rename=_PUTAWAY_BLOCKED_RENAME,
         rowhint=t("put_blocked_rowhint"), col_help=_PUTAWAY_HELP)
-
-
-def render_auslagern(filtered: pd.DataFrame) -> None:
-    """Tab 'Auslagern': Langsamdreher/Ladenhueter in der Pickzone."""
-    st.markdown(t("retr_head"))
-    with st.expander(t("retr_info_t")):
-        st.markdown(t("retr_info_b"))
-    c1, c2 = st.columns(2)
-    with c1:
-        # Pickzone: nur niedrige Ebenen betrachten. 88% aller Plaetze haben
-        # 0 Picks (v.a. Reserve weit oben) -> ohne diese Grenze waeren die
-        # 0-Pick-Listen unbrauchbar gross. Standard: bis Ebene 2.
-        retr_zone = st.slider(t("sl_retrzone"), 1, 6, 2)
-    with c2:
-        observe_max = st.slider(t("sl_observe"), 1, 50, 5)
-    # belegt = physisch Ware vorhanden (IST_LHM>0, siehe BELEGT) in der
-    # Pickzone. KEIN ZUSTAND<150-Filter mehr (ZUSTAND ist hier nur 0/150 und
-    # kein Sperr-Indikator -> hat zuvor alle belegten Plaetze ausgeschlossen,
-    # darum war der Tab leer). Gesperrte ueber den Sidebar-Filter ausblenden.
-    belegt = filtered[
-        (filtered["BELEGT"])
-        & (filtered["EBENE"] <= retr_zone)
-    ]
-
-    # kritisch: belegter A-Platz mit 0 Picks -> Premiumplatz von Ladenhueter
-    # blockiert, vorrangig auslagern.
-    critical = belegt[
-        (belegt["ABC_KLASSE"] == "A") & (belegt["ANZ_PICKS"] == 0)
-    ].sort_values(["REGAL", "EBENE", "FACH"])
-    # abgestanden: belegt, 0 Picks, aber kein A-Platz.
-    stale = belegt[
-        (belegt["ABC_KLASSE"] != "A") & (belegt["ANZ_PICKS"] == 0)
-    ].sort_values(["REGAL", "EBENE", "FACH"])
-    # beobachten: laeuft, aber nur sehr selten (1..observe_max Picks).
-    observe = belegt[
-        (belegt["ANZ_PICKS"] > 0) & (belegt["ANZ_PICKS"] <= observe_max)
-    ].sort_values("ANZ_PICKS")
-
-    render_massnahme_kategorie(
-        t("retr_crit_t"), t("retr_crit_d"), critical)
-    render_massnahme_kategorie(
-        t("retr_stale_t"), t("retr_stale_d"), stale)
-    render_massnahme_kategorie(
-        t("retr_observe_t"),
-        t("retr_observe_d").format(n=observe_max), observe)
 
 
 def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
@@ -3819,9 +3910,7 @@ def main() -> None:
     # Titel, Anzahl-Kennzahl, Tabelle und CSV-Download. Die Regeln (welche
     # Plaetze in welche Kategorie fallen) entsprechen der Logik der Flutter-App.
     with tab_umlagern:
-        render_umlagern(filtered)
-        st.divider()
-        render_auslagern(filtered)
+        render_umlagern_auslagern(filtered)
 
     with tab_nachschub:
         render_nachschub(filtered)
