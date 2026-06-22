@@ -3544,15 +3544,27 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
         fig_top = px.bar(
             chart_df, x="bewegungen", y="artikel", orientation="h",
             title=t("top_chart"), text="artikel",
+            color="bewegungen", color_continuous_scale=["#5b9bd5", "#1f4e79"],
             labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
         )
-        # Artikelnummer VORNE in jeden Balken (linker Anfang), nicht hinten.
-        fig_top.update_traces(textposition="inside", insidetextanchor="start",
-                              textfont_color="white", cliponaxis=False)
-        # Y-Achsen-Beschriftung weg (Nummer steht jetzt im Balken) + Hoehe so,
-        # dass alle Balken gut lesbar sind.
+        # Artikelnummer VORNE in jeden Balken (linker Anfang), weiss; Balken im
+        # Blau-Verlauf nach Haeufigkeit, ohne Rand.
+        fig_top.update_traces(
+            textposition="inside", insidetextanchor="start",
+            textfont=dict(color="white", size=13),
+            marker_line_width=0, cliponaxis=False,
+        )
+        # Aufgeraeumter Look: keine Farbleiste, transparenter Hintergrund,
+        # dezentes X-Raster, mehr Luft zwischen den Balken, Hoehe nach Anzahl.
         fig_top.update_yaxes(showticklabels=False, title_text="")
-        fig_top.update_layout(height=max(450, len(chart_df) * 34))
+        fig_top.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.07)")
+        fig_top.update_layout(
+            height=max(450, len(chart_df) * 34),
+            coloraxis_showscale=False,
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            bargap=0.3, title_font_size=16,
+            margin=dict(l=10, r=30, t=50, b=10),
+        )
         st.plotly_chart(fig_top, use_container_width=True)
         show = top.rename(columns=_TOP_RENAME)
         col_cfg = {c: st.column_config.Column(help=h)
