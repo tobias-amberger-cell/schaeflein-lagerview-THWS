@@ -776,6 +776,14 @@ TR: dict[str, dict[str, str]] = {
     "lock_without": {"de": "Ohne gesperrte", "en": "Exclude locked"},
     "tp_period": {"de": "Durchsatz-Zeitraum (Tage)", "en": "Throughput period (days)"},
     "top_count": {"de": "Top-Artikel anzeigen", "en": "Show top items"},
+    "top_show_all": {"de": "Alle Artikel anzeigen", "en": "Show all articles"},
+    "top_show_all_h": {
+        "de": "Zeigt in der Tabelle ALLE Artikel statt nur der Top-N (Regler). "
+              "Das Diagramm bleibt auf die Top-25 begrenzt (mehr Balken wären "
+              "unleserlich).",
+        "en": "Shows ALL articles in the table instead of just the top N (slider). "
+              "The chart stays limited to the top 25 (more bars would be unreadable).",
+    },
     "top_dl_all": {
         "de": "Diagramm/Tabelle zeigen die Top-N (Regler). Der **CSV-Download "
               "enthält ALLE {n} Artikel**, unabhängig vom Regler.",
@@ -3412,8 +3420,14 @@ _TOP_HELP = {
 
 
 def render_top(tpa: pd.DataFrame, article_limit: int,
-               movements_filtered: bool, filtered: pd.DataFrame) -> None:
-    """Unter-Tab 'Top-Artikel': meistbewegte Artikel aus TPA."""
+               movements_filtered: bool, filtered: pd.DataFrame,
+               show_all: bool = False) -> None:
+    """Unter-Tab 'Top-Artikel': meistbewegte Artikel aus TPA.
+
+    show_all=True -> Tabelle zeigt ALLE Artikel (Checkbox in der Sidebar);
+    sonst nur die Top-N laut Regler. Das Diagramm bleibt immer auf Top-25
+    begrenzt (mehr Balken waeren unleserlich), der CSV-Export immer komplett.
+    """
     st.markdown(t("top_intro"))
     with st.expander(t("top_info_t")):
         st.markdown(t("top_info_b"))
@@ -3423,7 +3437,7 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
     if top_all.empty:
         st.info(t("no_data_filters"))
     else:
-        top = top_all.head(article_limit)
+        top = top_all if show_all else top_all.head(article_limit)
         chart_df = top.head(min(article_limit, 25)).sort_values("bewegungen")
         st.plotly_chart(
             px.bar(
@@ -3687,6 +3701,8 @@ def main() -> None:
         st.divider()
         days = st.slider(t("tp_period"), 7, 180, 30, step=7)
         article_limit = st.slider(t("top_count"), 5, 500, 25, step=5)
+        show_all_top = st.checkbox(t("top_show_all"), value=False,
+                                   help=t("top_show_all_h"))
         st.divider()
         st.caption(f"DB: `{get_db_path()}`")
 
@@ -3828,7 +3844,8 @@ def main() -> None:
         render_trend(tpa, days, movements_filtered, filtered)
 
     with sub_top:
-        render_top(tpa, article_limit, movements_filtered, filtered)
+        render_top(tpa, article_limit, movements_filtered, filtered,
+                   show_all_top)
 
     with tab_article:
         render_article(tpa, movements_filtered, filtered)
