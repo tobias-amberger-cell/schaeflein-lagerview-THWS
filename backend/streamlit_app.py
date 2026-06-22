@@ -3553,8 +3553,13 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
             title=t("top_chart"), text="artikel",
             labels=dict(bewegungen="Bewegungen", artikel="Artikel"),
         )
-        # Artikelnummer als Beschriftung an jedem Balken.
-        fig_top.update_traces(textposition="outside", cliponaxis=False)
+        # Artikelnummer VORNE in jeden Balken (linker Anfang), nicht hinten.
+        fig_top.update_traces(textposition="inside", insidetextanchor="start",
+                              textfont_color="white", cliponaxis=False)
+        # Y-Achsen-Beschriftung weg (Nummer steht jetzt im Balken) + Hoehe so,
+        # dass alle Balken gut lesbar sind.
+        fig_top.update_yaxes(showticklabels=False, title_text="")
+        fig_top.update_layout(height=max(450, len(chart_df) * 34))
         st.plotly_chart(fig_top, use_container_width=True)
         show = top.rename(columns=_TOP_RENAME)
         col_cfg = {c: st.column_config.Column(help=h)
