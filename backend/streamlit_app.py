@@ -846,10 +846,10 @@ TR: dict[str, dict[str, str]] = {
     "dl": {"de": "⬇️ Als CSV", "en": "⬇️ As CSV"},
     # Tab-Erklaerungen / Ueberschriften
     "halls_intro": {
-        "de": "**Lager-Übersicht** — Belegung, Auslastung und ABC-Verteilung für das "
-              "ganze Lager BER03 auf einen Blick (eine Halle, keine Trennung).",
-        "en": "**Warehouse overview** — occupancy, utilization and ABC distribution "
-              "for the whole warehouse BER03 at a glance (single hall).",
+        "de": "### 📊 Lager-Übersicht\n**Belegung, Auslastung und ABC-Verteilung** "
+              "für das ganze Lager BER03 auf einen Blick (eine Halle, keine Trennung).",
+        "en": "### 📊 Warehouse overview\n**Occupancy, utilization and ABC "
+              "distribution** for the whole warehouse BER03 at a glance (single hall).",
     },
     "halls_info_t": {
         "de": "ℹ️ Was bedeutet das? — zentrale Begriffe (gelten für ALLE Tabs)",
@@ -1488,6 +1488,14 @@ TR: dict[str, dict[str, str]] = {
               "one from picks · *cum. pick %* = what share of all picks adds up down to "
               "this row.",
     },
+    "abc_head": {
+        "de": "### 🏷️ ABC-Analyse\n**Welche Plätze/Artikel sind die wichtigen?** "
+              "A = Renner (Großteil der Picks), C = Langsamdreher – die Grundlage "
+              "für kurze Wege und Umlagern.",
+        "en": "### 🏷️ ABC analysis\n**Which slots/articles are the important ones?** "
+              "A = fast movers (most of the picks), C = slow movers – the basis for "
+              "short paths and relocation.",
+    },
     "abc_explain_head": {
         "de": "ℹ️ Was bedeutet das? (Wozu ABC, Modi, Klassen)",
         "en": "ℹ️ What does this mean? (purpose, modes, classes)",
@@ -1654,10 +1662,10 @@ TR: dict[str, dict[str, str]] = {
     "tp_range": {"de": "Zeitraum", "en": "Date range"},
     "tab_article": {"de": "🔎 Artikel", "en": "🔎 Article"},
     "art_intro": {
-        "de": "**Artikel-Detail** — wie oft und von welchen Plätzen ein einzelner "
-              "Artikel bewegt wurde.",
-        "en": "**Article detail** — how often and from which slots a single article "
-              "was moved.",
+        "de": "### 🔎 Artikel-Detail\n**Wie oft und von welchen Plätzen** ein "
+              "einzelner Artikel bewegt wurde.",
+        "en": "### 🔎 Article detail\n**How often and from which slots** a single "
+              "article was moved.",
     },
     "art_info_t": {
         "de": "ℹ️ Was bedeutet das? (Artikel-Detail + „Picks je Quellplatz“)",
@@ -3277,27 +3285,25 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
 def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                movements_filtered: bool) -> None:
     """Tab 'ABC-Analyse': Verteilung, Stamm-vs-berechnet, Anpassungs-Tipps."""
+    # Einheitliches Layout wie die anderen Tabs: Ueberschrift + Text -> Info ->
+    # Steuerung -> Inhalt.
+    a_thr, b_thr = 80, 95  # feste Standard-Schwellen (Pareto)
+    st.markdown(t("abc_head"))
+    with st.expander(t("abc_explain_head")):
+        st.markdown(t("abc_purpose"))
+        st.markdown(t("abc_mode_note"))
+        st.markdown(t("abc_thresh_note").format(a=a_thr, b=b_thr))
+        st.markdown(t("abc_dist_note"))
+        st.markdown(t("abc_c_note"))
+
     abc_mode = st.radio(
         t("abc_mode"),
         options=[t("abc_by_slots"), t("abc_by_articles")],
         horizontal=True,
     )
     by_articles = abc_mode == t("abc_by_articles")
-
-    # Feste Standard-Schwellen (Pareto 80/95) -- keine Regler mehr.
-    a_thr, b_thr = 80, 95
-
-    # Alle Erklaerungen gebuendelt in EINEM eingeklappten Block (wie in den
-    # anderen Tabs) -> oben keine Textwand.
-    with st.expander(t("abc_explain_head")):
-        st.markdown(t("abc_purpose"))
-        st.markdown(t("abc_mode_note"))
-        st.markdown(t("abc_thresh_note").format(a=a_thr, b=b_thr))
-        st.markdown(t("abc_intro_articles").format(a=a_thr, b=b_thr)
-                    if by_articles else t("abc_intro").format(a=a_thr, b=b_thr))
-        st.markdown(t("abc_dist_note"))
-        if not by_articles:
-            st.markdown(t("abc_c_note"))
+    st.caption(t("abc_intro_articles").format(a=a_thr, b=b_thr)
+               if by_articles else t("abc_intro").format(a=a_thr, b=b_thr))
 
     if by_articles:
         mov_filter_note(movements_filtered, filtered)
