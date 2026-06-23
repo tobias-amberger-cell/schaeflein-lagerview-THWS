@@ -774,7 +774,7 @@ TR: dict[str, dict[str, str]] = {
     "lock_all": {"de": "Alle", "en": "All"},
     "lock_only": {"de": "Nur gesperrte", "en": "Locked only"},
     "lock_without": {"de": "Ohne gesperrte", "en": "Exclude locked"},
-    "tp_period": {"de": "Durchsatz-Zeitraum (Tage)", "en": "Throughput period (days)"},
+    "tp_period": {"de": "Zeitraum (Tage)", "en": "Period (days)"},
     "top_count": {"de": "Top-Artikel anzeigen", "en": "Show top items"},
     "top_show_all": {"de": "Alle Artikel anzeigen", "en": "Show all articles"},
     "top_show_all_h": {
@@ -834,7 +834,7 @@ TR: dict[str, dict[str, str]] = {
     "tab_putaway": {"de": "📥 Einlagern", "en": "📥 Put-away"},
     "tab_retrieve": {"de": "📤 Auslagern", "en": "📤 Retrieve"},
     "tab_abc": {"de": "ABC-Analyse", "en": "ABC analysis"},
-    "tab_tp": {"de": "Durchsatz", "en": "Throughput"},
+    "tab_tp": {"de": "Tagesbewegungen", "en": "Daily movements"},
     "tab_top": {"de": "Top-Artikel", "en": "Top items"},
     "tab_3d": {"de": "3D-Modell", "en": "3D model"},
     # gemeinsame Maßnahmen-Strings
@@ -954,7 +954,7 @@ TR: dict[str, dict[str, str]] = {
         "de": "Die Heatmap zeigt, **wann** im Lager gepickt wird. Jedes Kästchen steht für ein Zeitfenster "
               "(Wochentag und Stunde), und die Farbe sagt, wie viel darin gepickt wurde: hell = wenig, rot = viel.\n\n"
               "**Was ist ein Pick?** Ein Pick ist eine einzelne Entnahme – also eine Position eines Auftrags, genau "
-              "wie im Durchsatz-Tab. *Ob eine Position genau einer Orderzeile oder einem Artikel entspricht, legt das "
+              "wie im Tagesbewegungen-Tab. *Ob eine Position genau einer Orderzeile oder einem Artikel entspricht, legt das "
               "Lagersystem fest.*\n\n"
               "**Was heißt „Picks je Quellplatz“?** Normalerweise zählt die Heatmap alle Picks im Lager. Sobald du "
               "links Plätze filterst, zählen nur noch die Entnahmen, die von genau diesen Plätzen ausgehen – so "
@@ -964,7 +964,7 @@ TR: dict[str, dict[str, str]] = {
               "sonst verwässert.",
         "en": "The heatmap shows **when** picking happens. Each cell stands for one time window (weekday and hour), "
               "and the colour tells you how much was picked in it: light = little, red = a lot.\n\n"
-              "**What is a pick?** A pick is a single retrieval – one line of an order, just like in the Throughput "
+              "**What is a pick?** A pick is a single retrieval – one line of an order, just like in the Daily movements "
               "tab. *Whether one line equals exactly one order row or one article is defined by the warehouse "
               "system.*\n\n"
               "**What does “picks per source slot” mean?** By default the heatmap counts all picks in the warehouse. "
@@ -1530,6 +1530,12 @@ TR: dict[str, dict[str, str]] = {
     "abc_by_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
     "abc_col_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
     "abc_col_avgmenge": {"de": "Ø Menge/Bewegung", "en": "avg qty/movement"},
+    "abc_csv_all": {
+        "de": "Die Tabelle zeigt die ersten 200 Zeilen – der CSV-Download enthält "
+              "**alle {n} Artikel**.",
+        "en": "The table shows the first 200 rows – the CSV download contains "
+              "**all {n} articles**.",
+    },
     "abc_byart_head": {
         "de": "**📋 Tabelle 2: Artikel nach Bewegungen**",
         "en": "**📋 Table 2: Articles by movements**"},
@@ -1670,28 +1676,31 @@ TR: dict[str, dict[str, str]] = {
         "en": "**🏷️ Table 1: Where doesn't the stored class fit? (recommendations)**",
     },
     "abc_adjust_intro": {
-        "de": "Hier stehen nur die Plätze, bei denen die hinterlegte Klasse nicht zur "
-              "berechneten passt. **⬆️ Hochstufen** heißt: wird öfter gepickt als "
-              "hinterlegt. **⬇️ Herabstufen** heißt: seltener.",
-        "en": "This shows only the slots where the stored class doesn't match the "
-              "calculated one. **⬆️ Promote** means: picked more often than recorded. "
-              "**⬇️ Demote** means: less often.",
+        "de": "Hier stehen nur die Plätze, deren **Ware** öfter oder seltener gepickt "
+              "wird, als die hinterlegte Klasse sagt. **⬆️ Hochstufen** = die Ware "
+              "wird häufiger gebraucht als hinterlegt. **⬇️ Herabstufen** = seltener.",
+        "en": "This shows only the slots whose **goods** are picked more or less often "
+              "than the stored class says. **⬆️ Promote** = the goods are needed more "
+              "often than recorded. **⬇️ Demote** = less often.",
     },
     "abc_promote": {"de": "⬆️ Hochstufen", "en": "⬆️ Promote"},
     "abc_demote": {"de": "⬇️ Herabstufen", "en": "⬇️ Demote"},
     "abc_rec": {"de": "Empfehlung", "en": "Recommendation"},
     "abc_promote_note": {
-        "de": "Hinterlegte Klasse zu **niedrig** – wird häufiger gepickt als "
-              "gedacht. Auf einen besseren Platz / höhere Klasse hochstufen "
-              "(meistgepickte oben).",
-        "en": "Stored class too **low** – picked more often than recorded. Promote "
-              "to a better slot / higher class (most-picked on top).",
+        "de": "Die **Ware** auf diesem Platz wird **häufiger** gepickt, als die "
+              "hinterlegte ABC-Klasse vermuten lässt → Klasse anheben und die Ware "
+              "auf einen besser erreichbaren Platz umlagern (meistgepickte oben).",
+        "en": "The **goods** on this slot are picked **more often** than the stored "
+              "ABC class suggests → raise the class and relocate the goods to a "
+              "better-reachable slot (most-picked on top).",
     },
     "abc_demote_note": {
-        "de": "Hinterlegte Klasse zu **hoch** – kaum gepickt. Guten Platz freimachen "
-              "und Klasse senken (am wenigsten gepickte oben).",
-        "en": "Stored class too **high** – barely picked. Free up the good slot and "
-              "lower the class (least-picked on top).",
+        "de": "Die **Ware** wird **seltener** gepickt als hinterlegt → Klasse senken "
+              "und den gut erreichbaren Platz für einen echten Renner freimachen "
+              "(am wenigsten gepickte oben).",
+        "en": "The **goods** are picked **less often** than recorded → lower the class "
+              "and free up the well-reachable slot for a true mover (least-picked on "
+              "top).",
     },
     "abc_none_cat": {
         "de": "Keine Plätze in dieser Kategorie (mit aktuellen Filtern).",
@@ -1725,7 +1734,7 @@ TR: dict[str, dict[str, str]] = {
               "**Was heißt „Picks je Quellplatz“?** Ein Quellplatz ist der Platz, aus dem entnommen wird. Die Tabelle "
               "zeigt je Platz, wie oft dieser Artikel von dort gepickt wurde – so siehst du, ob er über viele Plätze "
               "verstreut ist oder nur von wenigen kommt.\n\n"
-              "**Was ist ein Pick?** Eine einzelne Entnahme – eine Position eines Auftrags, wie im Durchsatz-Tab.\n\n"
+              "**Was ist ein Pick?** Eine einzelne Entnahme – eine Position eines Auftrags, wie im Tagesbewegungen-Tab.\n\n"
               "**Bewegungen über Zeit** = die Picks dieses Artikels je Tag (ein Balken = ein Tag). Das Wochenende ist "
               "immer ausgeblendet.",
         "en": "Pick an article above (from the list or by number). You then see how often and where it was "
@@ -1735,7 +1744,7 @@ TR: dict[str, dict[str, str]] = {
               "**What does “picks per source slot” mean?** A source slot is the slot goods are picked from. The table "
               "shows, per slot, how often this article was picked there – so you see whether it's spread over many "
               "slots or comes from just a few.\n\n"
-              "**What is a pick?** A single retrieval – one line of an order, like in the Throughput tab.\n\n"
+              "**What is a pick?** A single retrieval – one line of an order, like in the Daily movements tab.\n\n"
               "**Movements over time** = the picks of this article per day (one bar = one day). The weekend is always "
               "hidden.",
     },
@@ -1750,14 +1759,14 @@ TR: dict[str, dict[str, str]] = {
         "en": "No movements found for this article.",
     },
     "tp_intro": {
-        "de": "**Durchsatz** — wie viele Lagerbewegungen es pro Tag gab. Den Zeitraum "
-              "stellst du links mit dem Regler ein.",
-        "en": "**Throughput** — how many warehouse movements there were per day. Set "
-              "the period with the slider on the left.",
+        "de": "**Tagesbewegungen** — wie viele Lagerbewegungen es pro Tag gab. Den "
+              "Zeitraum stellst du links mit dem Regler ein.",
+        "en": "**Daily movements** — how many warehouse movements there were per day. "
+              "Set the period with the slider on the left.",
     },
     "tp_info_t": {
-        "de": "ℹ️ Was bedeutet das? (Durchsatz + „eine Bewegung“ erklärt)",
-        "en": "ℹ️ What does this mean? (throughput + “one movement”)",
+        "de": "ℹ️ Was bedeutet das? (Tagesbewegungen + „eine Bewegung“ erklärt)",
+        "en": "ℹ️ What does this mean? (daily movements + “one movement”)",
     },
     "tp_info_b": {
         "de": "Dieser Tab zählt die Lagerbewegungen pro Tag und zeigt sie als Balken (ein Balken = ein Tag).\n\n"
@@ -1796,7 +1805,7 @@ TR: dict[str, dict[str, str]] = {
         "de": "Dieser Tab zeigt die meistbewegten Artikel, sortiert nach Bewegungen (oben die stärksten). So siehst "
               "du die echten Dreher im Sortiment. Wie viele angezeigt werden, stellst du links mit dem Regler ein.\n\n"
               "**Was zählt als eine Bewegung?** Eine Bewegung ist eine Position eines Auftrags – eine Entnahme bzw. "
-              "ein Pick, genau wie im Durchsatz-Tab. *Ob eine Position genau einer Orderzeile oder einem Artikel "
+              "ein Pick, genau wie im Tagesbewegungen-Tab. *Ob eine Position genau einer Orderzeile oder einem Artikel "
               "entspricht, legt das Lagersystem fest.*\n\n"
               "**Spalten:** *Artikel-Nr* = die Artikelnummer · *Bezeichnung* = der Klartext-Name · *Bewegungen* = wie "
               "oft der Artikel im Zeitraum bewegt wurde.\n\n"
@@ -1805,7 +1814,7 @@ TR: dict[str, dict[str, str]] = {
         "en": "This tab shows the most-moved articles, sorted by movements (the busiest on top). This reveals the "
               "real movers in the assortment. Set how many are shown with the slider on the left.\n\n"
               "**What counts as one movement?** A movement is one line of an order – a retrieval, i.e. a pick, just "
-              "like in the Throughput tab. *Whether one line equals exactly one order row or one article is defined "
+              "like in the Daily movements tab. *Whether one line equals exactly one order row or one article is defined "
               "by the warehouse system.*\n\n"
               "**Columns:** *Article no.* = the article number · *Description* = the plain name · *Movements* = how "
               "often the article was moved in the period.\n\n"
@@ -3540,6 +3549,8 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
             dl_key = "abc_articles"
         table = atab[[c for c in acols if c in atab.columns]].rename(columns=amap)
         st.dataframe(table.head(200), use_container_width=True, hide_index=True)
+        if len(table) > 200:
+            st.caption(t("abc_csv_all").format(n=de_num(len(table))))
         _csv_download(table, dl_key)
     else:
         st.markdown(t("abc_byfreq"))
