@@ -1529,6 +1529,24 @@ TR: dict[str, dict[str, str]] = {
     "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
     "abc_by_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
     "abc_col_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
+    "abc_col_avgmenge": {"de": "Ø Menge/Bewegung", "en": "avg qty/movement"},
+    "abc_bymenge_head": {
+        "de": "**📋 Tabelle 2: Artikel nach verbrauchter Menge**",
+        "en": "**📋 Table 2: Articles by consumed quantity**"},
+    "abc_bymenge_note": {
+        "de": "Sortiert nach **Gesamtmenge** (meiste Stück oben). Daneben die "
+              "**Bewegungen** (wie oft entnommen) und die **Ø Menge je Bewegung**. "
+              "So sieht man, ob eine hohe Menge aus *vielen kleinen* Zugriffen kommt "
+              "(großer Dreher) oder aus *wenigen großen* Entnahmen (Bulk-Artikel). "
+              "*kumul. %* = Anteil der Gesamtmenge bis zu dieser Zeile · *Berechnet* = "
+              "ABC-Klasse aus der Menge.",
+        "en": "Sorted by **total quantity** (most pieces on top). Next to it the "
+              "**movements** (how often picked) and the **avg quantity per movement**. "
+              "This shows whether a high quantity comes from *many small* picks "
+              "(a true mover) or *few large* withdrawals (bulk article). "
+              "*cum. %* = share of total quantity down to this row · *Calculated* = "
+              "ABC class from quantity.",
+    },
     "abc_purpose": {
         "de": "**Wozu ABC?** Es teilt nach Wichtigkeit ein: **A** sind die Renner, die "
               "oft gepickt werden – die gehören auf gut erreichbare Plätze. **C** sind "
@@ -3477,12 +3495,30 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
             st.caption(t("abc_demote_note"))
             _dev_table(demote, "abc_herabstufen")
 
-    # --- Tabelle 2: ALLE Eintraege, sortiert nach Pickhaeufigkeit ----------
-    st.markdown(t("abc_byfreq"))
-    st.caption(t("abc_byfreq_note"))
-    table = data[[c for c in table_cols if c in data.columns]].rename(columns=colmap)
-    st.dataframe(table.head(200), use_container_width=True, hide_index=True)
-    _csv_download(table, "abc_articles" if by_articles else "abc_slots")
+    # --- Tabelle 2: Detailliste je Sicht -----------------------------------
+    if by_menge:
+        # Mengen-Sicht: Gesamtmenge der Bewegungszahl gegenuebergestellt + Ø Menge
+        # je Bewegung -> macht sichtbar, ob eine hohe Menge aus VIELEN kleinen
+        # Zugriffen (Dauerdreher) oder WENIGEN grossen Entnahmen (Bulk) kommt.
+        st.markdown(t("abc_bymenge_head"))
+        st.caption(t("abc_bymenge_note"))
+        mtab = data.copy()
+        mtab["_avg"] = np.where(
+            mtab["bewegungen"] > 0,
+            (mtab["menge"] / mtab["bewegungen"]).round(1), 0.0)
+        mcols = ["artikel", "bezeichnung", "menge", "bewegungen", "_avg",
+                 "CUM_%", "ABC"]
+        mmap = dict(colmap)
+        mmap["_avg"] = t("abc_col_avgmenge")
+        table = mtab[[c for c in mcols if c in mtab.columns]].rename(columns=mmap)
+        st.dataframe(table.head(200), use_container_width=True, hide_index=True)
+        _csv_download(table, "abc_menge")
+    else:
+        st.markdown(t("abc_byfreq"))
+        st.caption(t("abc_byfreq_note"))
+        table = data[[c for c in table_cols if c in data.columns]].rename(columns=colmap)
+        st.dataframe(table.head(200), use_container_width=True, hide_index=True)
+        _csv_download(table, "abc_articles" if by_articles else "abc_slots")
 
 
 def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
