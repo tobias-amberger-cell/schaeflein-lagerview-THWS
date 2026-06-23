@@ -1460,12 +1460,11 @@ TR: dict[str, dict[str, str]] = {
               "low (pick zone) or up high (reserve).",
     },
     "abc_intro": {
-        "de": "**ABC-Analyse** — die Plätze nach Pick-Häufigkeit sortiert und "
-              "aufsummiert. A = Plätze bis {a} % aller Picks, B = bis {b} %, C = der "
-              "Rest (passt sich den Reglern oben an).",
-        "en": "**ABC analysis** — slots sorted by pick frequency and added up. "
-              "A = slots up to {a}% of all picks, B = up to {b}%, C = the rest "
-              "(follows the sliders above).",
+        "de": "**ABC nach Lagerplätzen** — die Plätze nach Pick-Häufigkeit sortiert "
+              "und aufsummiert. A = Plätze bis {a} % aller Picks, B = bis {b} %, "
+              "C = der Rest.",
+        "en": "**ABC by storage slots** — slots sorted by pick frequency and added up. "
+              "A = slots up to {a}% of all picks, B = up to {b}%, C = the rest.",
     },
     "abc_chart": {"de": "ABC-Verteilung (berechnet)", "en": "ABC distribution (calculated)"},
     "abc_cross_intro": {
@@ -1528,6 +1527,8 @@ TR: dict[str, dict[str, str]] = {
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
     "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
+    "abc_by_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
+    "abc_col_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
     "abc_purpose": {
         "de": "**Wozu ABC?** Es teilt nach Wichtigkeit ein: **A** sind die Renner, die "
               "oft gepickt werden – die gehören auf gut erreichbare Plätze. **C** sind "
@@ -1539,11 +1540,15 @@ TR: dict[str, dict[str, str]] = {
               "items.",
     },
     "abc_mode_note": {
-        "de": "**Nach Artikeln** ist die klassische ABC: welche *Produkte* sind "
-              "wichtig. **Nach Lagerplätzen** zeigt, welche *Plätze* am häufigsten "
-              "angefahren werden.",
-        "en": "**By articles** is the classic ABC: which *products* matter. "
-              "**By storage slots** shows which *slots* are visited most often.",
+        "de": "**Nach Artikeln** = klassische ABC nach **Anzahl Bewegungen** (wie oft "
+              "ein Produkt bewegt wird). **Nach Menge (Stück)** = nach der tatsächlich "
+              "bewegten **Stückzahl** (`MENGE_IST`) – wie viel von einem Produkt "
+              "wirklich gebraucht wurde. **Nach Lagerplätzen** = welche *Plätze* am "
+              "häufigsten angefahren werden.",
+        "en": "**By articles** = classic ABC by **number of movements** (how often a "
+              "product is moved). **By quantity (pcs)** = by the actual **units moved** "
+              "(`MENGE_IST`) – how much of a product was really used. **By storage "
+              "slots** = which *slots* are visited most often.",
     },
     "abc_c_note": {
         "de": "Hinweis: Bei „nach Lagerplätzen“ sind die **leeren Plätze (0 Picks)** "
@@ -1610,12 +1615,18 @@ TR: dict[str, dict[str, str]] = {
     "abc_px_articles": {"de": "Artikel (nach Bewegungen sortiert)", "en": "Articles (sorted by movements)"},
     "abc_py": {"de": "kumulativer Anteil %", "en": "cumulative share %"},
     "abc_intro_articles": {
-        "de": "**ABC nach Artikeln** — die Artikel nach Bewegungen sortiert. "
-              "A = Top-Artikel bis {a} % aller Bewegungen, B = bis {b} %, der Rest C "
-              "(passt sich den Reglern oben an).",
-        "en": "**ABC by articles** — articles sorted by movements. "
-              "A = top articles up to {a}% of all movements, B = up to {b}%, "
-              "the rest C (follows the sliders above).",
+        "de": "**ABC nach Artikeln** — die Artikel nach **Anzahl Bewegungen** sortiert. "
+              "A = Top-Artikel bis {a} % aller Bewegungen, B = bis {b} %, der Rest C.",
+        "en": "**ABC by articles** — articles sorted by **number of movements**. "
+              "A = top articles up to {a}% of all movements, B = up to {b}%, rest C.",
+    },
+    "abc_intro_menge": {
+        "de": "**ABC nach Menge** — die Artikel nach **tatsächlich bewegter Stückzahl** "
+              "(`MENGE_IST`) sortiert: wie viel von einem Produkt wirklich gebraucht "
+              "wurde. A = Top-Artikel bis {a} % der Gesamtmenge, B = bis {b} %, Rest C.",
+        "en": "**ABC by quantity** — articles sorted by **actual units moved** "
+              "(`MENGE_IST`): how much of a product was really used. A = top articles "
+              "up to {a}% of total quantity, B = up to {b}%, rest C.",
     },
     "abc_dist": {"de": "ABC-Verteilung", "en": "ABC distribution"},
     "abc_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
@@ -2093,10 +2104,12 @@ def load_tpa_raw() -> pd.DataFrame:
         f"SELECT TRIM(COALESCE(Q_PLATZ, '')) AS q_platz, "
         f"TRIM(COALESCE(ARTIKELNR, '')) AS artikel, "
         f"TRIM(COALESCE(ARTBEZ1, '')) AS bezeichnung, "
-        f"ENDE_DATUM, ENDE_ZEIT "
+        f"MENGE_IST, ENDE_DATUM, ENDE_ZEIT "
         f'FROM "{TPA_TABLE}"',
         con,
     )
+    # MENGE_IST = tatsaechlich bewegte Stueckzahl (fuer ABC nach Verbrauch).
+    df["menge"] = pd.to_numeric(df["MENGE_IST"], errors="coerce").fillna(0)
     df["day"] = pd.to_datetime(df["ENDE_DATUM"], errors="coerce")
     # Wochentag wie SQLite strftime('%w'): 0=So..6=Sa (Pandas: Mo=0..So=6).
     df["weekday"] = (df["day"].dt.dayofweek + 1) % 7
@@ -2154,18 +2167,29 @@ def agg_throughput_trend(tpa: pd.DataFrame, days: int = 30) -> pd.DataFrame:
     return daily.tail(days).reset_index(drop=True)
 
 
-def agg_articles(tpa: pd.DataFrame, limit: int | None = None) -> pd.DataFrame:
-    """Bewegungen je Artikel (ARTIKELNR), absteigend. `limit` schneidet Top-N ab."""
+def agg_articles(tpa: pd.DataFrame, limit: int | None = None,
+                 with_menge: bool = False) -> pd.DataFrame:
+    """Bewegungen je Artikel (ARTIKELNR), absteigend. `limit` schneidet Top-N ab.
+
+    with_menge=True ergaenzt die Spalte `menge` = Summe MENGE_IST (tatsaechlich
+    bewegte Stueckzahl) – fuer die ABC-Sicht nach Verbrauch.
+    """
+    cols = ["artikel", "bezeichnung", "bewegungen"] + (["menge"] if with_menge else [])
     sub = tpa[tpa["artikel"] != ""]
     if sub.empty:
-        return pd.DataFrame(columns=["artikel", "bezeichnung", "bewegungen"])
+        return pd.DataFrame(columns=cols)
+    aggs = {"bezeichnung": ("bezeichnung", "first"),
+            "bewegungen": ("artikel", "size")}
+    if with_menge:
+        aggs["menge"] = ("menge", "sum")
     g = (
-        sub.groupby("artikel")
-        .agg(bezeichnung=("bezeichnung", "first"), bewegungen=("artikel", "size"))
+        sub.groupby("artikel").agg(**aggs)
         .reset_index().sort_values("bewegungen", ascending=False)
         .reset_index(drop=True)
     )
-    g = g[["artikel", "bezeichnung", "bewegungen"]]
+    if with_menge:
+        g["menge"] = g["menge"].astype(int)
+    g = g[cols]
     return g.head(limit) if limit else g
 
 
@@ -3298,19 +3322,22 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
 
     abc_mode = st.radio(
         t("abc_mode"),
-        options=[t("abc_by_slots"), t("abc_by_articles")],
+        options=[t("abc_by_slots"), t("abc_by_articles"), t("abc_by_menge")],
         horizontal=True,
     )
-    by_articles = abc_mode == t("abc_by_articles")
-    st.caption(t("abc_intro_articles").format(a=a_thr, b=b_thr)
-               if by_articles else t("abc_intro").format(a=a_thr, b=b_thr))
+    by_articles = abc_mode != t("abc_by_slots")   # beide Artikel-Sichten
+    by_menge = abc_mode == t("abc_by_menge")
+    art_value = "menge" if by_menge else "bewegungen"
+    _intro = (t("abc_intro_menge") if by_menge
+              else t("abc_intro_articles") if by_articles else t("abc_intro"))
+    st.caption(_intro.format(a=a_thr, b=b_thr))
 
     if by_articles:
         mov_filter_note(movements_filtered, filtered)
-        base = agg_articles(tpa)
-        data = classify_abc(base, "bewegungen", a_thr, b_thr) \
+        base = agg_articles(tpa, with_menge=by_menge)
+        data = classify_abc(base, art_value, a_thr, b_thr) \
             if not base.empty else base
-        table_cols = ["artikel", "bezeichnung", "bewegungen", "CUM_%", "ABC"]
+        table_cols = ["artikel", "bezeichnung", art_value, "CUM_%", "ABC"]
     else:
         # Klassifikation IMMER ueber das GANZE Lager (mit den Reglern) -> jeder
         # Platz hat EINE Klasse, konsistent in beiden Tabellen unten und mit
@@ -3332,15 +3359,20 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
         "EBENE": t("level"), "ANZ_PICKS": t("picks_label"),
         "CUM_%": t("abc_cumcol"), "ABC_KLASSE": "Stamm", "ABC": "Berechnet",
         "artikel": "Artikel", "bezeichnung": "Bezeichnung",
-        "bewegungen": "Bewegungen",
+        "bewegungen": "Bewegungen", "menge": t("abc_col_menge"),
     }
 
-    # Wertespalte je Sicht (Artikel = Bewegungen, Plaetze = ANZ_PICKS).
-    val_col = "bewegungen" if by_articles else "ANZ_PICKS"
-    val_label = (("Bewegungen" if _LANG == "de" else "Movements")
-                 if by_articles else t("picks_label"))
-    ent_label = (("Artikel" if _LANG == "de" else "Articles") if by_articles
-                 else ("Plätze" if _LANG == "de" else "Slots"))
+    # Wertespalte + Labels je Sicht.
+    _artikel_lbl = "Artikel" if _LANG == "de" else "Articles"
+    if by_menge:
+        val_col, val_label, ent_label = "menge", t("abc_col_menge"), _artikel_lbl
+    elif by_articles:
+        val_col = "bewegungen"
+        val_label = "Bewegungen" if _LANG == "de" else "Movements"
+        ent_label = _artikel_lbl
+    else:
+        val_col, val_label = "ANZ_PICKS", t("picks_label")
+        ent_label = "Plätze" if _LANG == "de" else "Slots"
     # Verteilung: Balkendiagramm Anteil PLAETZE vs. Anteil PICKS je Klasse
     # (Erklaerung dazu steht im eingeklappten Block oben). Bei Plaetzen werden
     # die LEEREN (0 Picks) als eigene Kategorie ausgewiesen, statt sie unsichtbar
