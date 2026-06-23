@@ -1558,12 +1558,11 @@ TR: dict[str, dict[str, str]] = {
         "de": "A/B/C nach dem aufsummierten Pick-Anteil (Pareto-Prinzip): erst nach "
               "Picks sortieren, dann ist A die kleine Gruppe, die zusammen schon die "
               "ersten **{a} %** aller Picks ausmacht, B geht bis **{b} %**, der Rest ist "
-              "C. Verschiebst du die Regler, ändert sich die Einteilung sofort "
-              "(Standard 80 / 95 %).",
+              "C (Standard-Schwellen {a} / {b} %).",
         "en": "A/B/C by the cumulative pick share (Pareto principle): sort by picks "
               "first, then A is the small group that already makes up the first **{a}%** "
-              "of all picks, B goes up to **{b}%**, the rest is C. Moving the sliders "
-              "re-classifies instantly (default 80 / 95 %).",
+              "of all picks, B goes up to **{b}%**, the rest is C (standard thresholds "
+              "{a} / {b} %).",
     },
     "abc_dist_count": {"de": "Anzahl je Klasse", "en": "Count per class"},
     "abc_dist_share": {"de": "Pick-Anteil je Klasse", "en": "Pick share per class"},
@@ -3285,16 +3284,11 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     )
     by_articles = abc_mode == t("abc_by_articles")
 
-    cc1, cc2 = st.columns(2)
-    with cc1:
-        a_thr = st.slider(t("abc_a_thresh"), 50, 95, 80, step=1,
-                          help=fhelp("abc_calc"))
-    with cc2:
-        b_thr = st.slider(t("abc_b_thresh"), a_thr + 1, 99, max(a_thr + 1, 95),
-                          step=1, help=fhelp("abc_calc"))
+    # Feste Standard-Schwellen (Pareto 80/95) -- keine Regler mehr.
+    a_thr, b_thr = 80, 95
 
     # Alle Erklaerungen gebuendelt in EINEM eingeklappten Block (wie in den
-    # anderen Tabs) -> oben keine Textwand. Reagiert auf Modus + Reglerwerte.
+    # anderen Tabs) -> oben keine Textwand.
     with st.expander(t("abc_explain_head")):
         st.markdown(t("abc_purpose"))
         st.markdown(t("abc_mode_note"))
