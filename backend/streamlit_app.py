@@ -63,12 +63,40 @@ st.set_page_config(
 # getroffenes Mesh hat als Namen die PLATZ_ID -> Kennzahlen aus __DATA__ ins
 # Panel. KEINE React/Node-Abhaengigkeit, laeuft komplett in der iframe.
 _THREE_VIEWER_HTML = """
-<div id="wrap" style="display:flex;gap:8px;height:__HEIGHT__px;font-family:sans-serif;">
-  <div id="view" style="flex:3;position:relative;background:#f5f5f7;border-radius:8px;overflow:hidden;">
+<style>
+  /* Navigations-Controller unten rechts in der Karte. */
+  #nav { position:absolute; bottom:12px; right:12px; display:flex; flex-direction:column; gap:4px; z-index:5; }
+  #nav .navrow { display:flex; gap:4px; }
+  #nav button { width:34px; height:34px; padding:0; border:none; border-radius:6px;
+    background:rgba(38,38,40,.62); color:#fff; font-size:16px; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.25);
+    touch-action:none; -webkit-user-select:none; user-select:none; }
+  #nav button:hover { background:rgba(38,38,40,.85); }
+  #nav button:active { background:#1565c0; }
+</style>
+<div id="wrap" style="display:flex;flex-direction:column;gap:8px;font-family:sans-serif;">
+  <div id="view" style="position:relative;height:__HEIGHT__px;background:#f5f5f7;border-radius:8px;overflow:hidden;">
     <div id="loading" style="position:absolute;top:10px;left:12px;font-size:13px;color:#555;background:rgba(255,255,255,.7);padding:2px 8px;border-radius:4px;">…</div>
     <div id="legend" style="position:absolute;bottom:10px;left:12px;font-size:12px;color:#333;background:rgba(255,255,255,.88);padding:8px 10px;border-radius:6px;line-height:1.5;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
+    <div id="nav">
+      <div class="navrow">
+        <button data-act="rotl" title="Nach links drehen">⟲</button>
+        <button data-act="fwd"  title="Vorwärts">▲</button>
+        <button data-act="rotr" title="Nach rechts drehen">⟳</button>
+      </div>
+      <div class="navrow">
+        <button data-act="left"  title="Nach links">◄</button>
+        <button data-act="home"  title="Ansicht zurücksetzen">⌂</button>
+        <button data-act="right" title="Nach rechts">►</button>
+      </div>
+      <div class="navrow">
+        <button data-act="zout" title="Herauszoomen">−</button>
+        <button data-act="back" title="Rückwärts">▼</button>
+        <button data-act="zin"  title="Hineinzoomen">+</button>
+      </div>
+    </div>
   </div>
-  <div id="panel" style="flex:1;min-width:230px;max-width:320px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;overflow:auto;"></div>
+  <div id="panel" style="height:200px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;overflow:auto;"></div>
 </div>
 <script type="importmap">
 { "imports": {
@@ -202,6 +230,7 @@ controls.addEventListener('change', requestRender);
 // damit das Anklicken nicht kaputt geht.
 const keys = {};
 let moveScale = 1;  // wird nach dem Laden an die Modellgroesse angepasst
+let homePos = null, homeTarget = null;  // Standard-Ansicht (Controller "Home")
 function onKey(e, down){
   const k = e.key.toLowerCase();
   if(['w','a','s','d','q','e'].includes(k)){ keys[k] = down; e.preventDefault(); }
@@ -219,17 +248,73 @@ function updateMovement(){
   _fwd.subVectors(controls.target, camera.position).normalize();
   _right.crossVectors(_fwd, camera.up).normalize();
   _mv.set(0, 0, 0);
-  if(keys.w) _mv.addScaledVector(_fwd, speed);
-  if(keys.s) _mv.addScaledVector(_fwd, -speed);
-  if(keys.d) _mv.addScaledVector(_right, speed);
-  if(keys.a) _mv.addScaledVector(_right, -speed);
+  if(keys.w || keys.navF) _mv.addScaledVector(_fwd, speed);
+  if(keys.s || keys.navB) _mv.addScaledVector(_fwd, -speed);
+  if(keys.d || keys.navR) _mv.addScaledVector(_right, speed);
+  if(keys.a || keys.navL) _mv.addScaledVector(_right, -speed);
   if(keys.e) _mv.y += speed;
   if(keys.q) _mv.y -= speed;
-  if(_mv.lengthSq() === 0) return false;
-  camera.position.add(_mv);
-  controls.target.add(_mv);  // Zielpunkt mitnehmen -> man "fliegt", Orbit bleibt
-  needsRender = true;
-  return true;
+  let acted = false;
+  if(_mv.lengthSq() > 0){
+    camera.position.add(_mv);
+    controls.target.add(_mv);  // Zielpunkt mitnehmen -> man "fliegt", Orbit bleibt
+    acted = true;
+  }
+  // Controller: Drehen links/rechts um den Zielpunkt (Azimut um die Y-Achse).
+  if(keys.rotl || keys.rotr){
+    const ang = (keys.rotl ? 1 : -1) * 0.025;
+    const ox = camera.position.x - controls.target.x;
+    const oz = camera.position.z - controls.target.z;
+    const cs = Math.cos(ang), sn = Math.sin(ang);
+    camera.position.x = controls.target.x + (ox * cs - oz * sn);
+    camera.position.z = controls.target.z + (ox * sn + oz * cs);
+    acted = true;
+  }
+  // Controller: Zoom = Dolly zum/vom Zielpunkt (Fokus bleibt erhalten).
+  if(keys.zin || keys.zout){
+    const f = keys.zin ? 0.95 : 1.05;
+    camera.position.set(
+      controls.target.x + (camera.position.x - controls.target.x) * f,
+      controls.target.y + (camera.position.y - controls.target.y) * f,
+      controls.target.z + (camera.position.z - controls.target.z) * f
+    );
+    acted = true;
+  }
+  if(acted){ needsRender = true; }
+  return acted;
+}
+
+// Standard-Ansicht wiederherstellen (Controller-Button "Home").
+function homeView(){
+  if(!homePos || !homeTarget) return;
+  camera.position.copy(homePos);
+  controls.target.copy(homeTarget);
+  camera.updateProjectionMatrix();
+  controls.update();
+  requestRender();
+}
+
+// On-Screen-Controller unten rechts verdrahten. Halte-Buttons setzen die
+// gleichen keys[] wie WASD -> die animate()-Schleife bewegt waehrend des
+// Druecks. Loslassen (irgendwo) stoppt alles. "Home" ist ein Einmal-Klick.
+const NAV_HOLD = { fwd:'navF', back:'navB', left:'navL', right:'navR',
+                   rotl:'rotl', rotr:'rotr', zin:'zin', zout:'zout' };
+const navEl = document.getElementById('nav');
+if(navEl){
+  navEl.querySelectorAll('button').forEach((b) => {
+    const act = b.getAttribute('data-act');
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if(act === 'home'){ homeView(); return; }
+      const k = NAV_HOLD[act]; if(k){ keys[k] = true; }
+    });
+    // Klick nicht zum Canvas durchreichen (sonst Raycaster-Auswahl).
+    b.addEventListener('click', (e) => e.stopPropagation());
+  });
+  // Loslassen an beliebiger Stelle -> alle Halte-Tasten zuruecksetzen.
+  window.addEventListener('pointerup', () => {
+    for(const a in NAV_HOLD){ keys[NAV_HOLD[a]] = false; }
+  });
 }
 
 const raycaster = new THREE.Raycaster();
@@ -416,6 +501,9 @@ new GLTFLoader().load('__GLB__',
     camera.updateProjectionMatrix();
     moveScale = maxDim * 0.004;  // Flug-Geschwindigkeit relativ zur Modellgroesse
     controls.update();
+    // Standard-Ansicht fuer den "Home"-Button (Controller) merken.
+    homePos = camera.position.clone();
+    homeTarget = controls.target.clone();
     loadingEl.style.display = 'none';
     // Gesuchten Platz anfliegen (ueberschreibt die Standard-Ansicht).
     if(FOCUS){ focusOnId(FOCUS); }
@@ -1953,11 +2041,15 @@ TR: dict[str, dict[str, str]] = {
     "d3_caption": {
         "de": "Steuerung: Ziehen = drehen, Scrollen = zoomen, Rechtsklick-Ziehen "
               "= verschieben. **W A S D = durch die Regale fliegen**, Q/E = "
-              "runter/hoch, Shift = schneller (erst ins Modell klicken). "
-              "Klick auf einen Platz zeigt seine Daten.",
+              "runter/hoch, Shift = schneller (erst ins Modell klicken). Oder den "
+              "**Controller unten rechts** nutzen (Pfeile = bewegen, ⟲⟳ = drehen, "
+              "+/− = zoomen, ⌂ = Ansicht zurücksetzen). "
+              "Klick auf einen Platz zeigt seine Daten **unter der Karte**.",
         "en": "Controls: drag = rotate, scroll = zoom, right-drag = pan. "
               "**W A S D = fly through the racks**, Q/E = down/up, Shift = "
-              "faster (click into the model first). Click a slot to see its data.",
+              "faster (click into the model first). Or use the **controller at the "
+              "bottom right** (arrows = move, ⟲⟳ = rotate, +/− = zoom, ⌂ = reset "
+              "view). Click a slot to see its data **below the map**.",
     },
     "abc3d_head": {"de": "### 🏷️ ABC je Lagerplatz", "en": "### 🏷️ ABC per slot"},
     "abc3d_intro": {
@@ -3995,7 +4087,8 @@ def render_3d(filtered: pd.DataFrame) -> None:
             .replace("__HIDEGREY__", "true" if perf_mode else "false")
             .replace("__FOCUS__", focus_id)
         )
-        components.html(html, height=viewer_height + 16)
+        # +230: Detail-Panel liegt jetzt UNTER der Karte (200px) + Abstand.
+        components.html(html, height=viewer_height + 230)
         st.caption(t("d3_caption"))
 
 
