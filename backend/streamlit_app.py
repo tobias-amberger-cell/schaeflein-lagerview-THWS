@@ -52,7 +52,11 @@ st.set_page_config(
 # werden in main() (Tab "3D-Modell") per str.replace gefuellt:
 #   __HEIGHT__  Hoehe in px        __GLB__    URL der klickbaren GLB
 #   __DATA__    JSON PLATZ_ID->Werte  __LABELS__ JSON uebersetzte Beschriftungen
-#   __ROTATE__  "true"/"false"     __ABCCOLOR__ "true"/"false" (ABC einfaerben)
+#   __ROTATE__  "true"/"false"     __COLORMODE__ Faerb-Modus der Plaetze:
+#       'abc'   = nach berechneter ABC-Klasse (rot/gelb/gruen)
+#       'picks' = Heatmap nach Pick-Haeufigkeit (ANZ_PICKS), Rang/Perzentil
+#       'moves' = Heatmap nach Gesamt-Bewegungen (Picks + Nachschub), Rang
+#       'none'  = Original-Material der GLB (keine Einfaerbung)
 #   __HIDEGREY__ "true"/"false"    (Leistungsmodus: datenlose Plaetze ausblenden)
 #   __FOCUS__   gesuchte PLATZ_ID (leer = keine Suche; Kamera springt sonst hin)
 # Ablauf im Browser: GLTF laden -> Kamera einpassen -> Klick = Raycasting ->
@@ -80,7 +84,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const DATA = __DATA__;
 const L = __LABELS__;
 const AUTOROTATE = __ROTATE__;
-const ABCCOLOR = __ABCCOLOR__;
+const COLORMODE = "__COLORMODE__";  // 'abc' | 'picks' | 'moves' | 'none'
 const HIDEGREY = __HIDEGREY__;
 const FOCUS = "__FOCUS__";  // gesuchte PLATZ_ID (leer = keine Suche)
 const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
@@ -94,6 +98,71 @@ const SHARED_MAT = {
   'C': new THREE.MeshStandardMaterial({ color: ABC_HEX.C }),
   'grey': new THREE.MeshStandardMaterial({ color: ABC_HEX.grey }),
 };
+
+// --- Heatmap (Pick-/Bewegungs-Haeufigkeit) --------------------------------
+// Faerbt Plaetze nach RANG/PERZENTIL der gewaehlten Kennzahl (nicht linear),
+// damit wenige Hotspots mit sehr vielen Picks die Skala nicht "wegdruecken".
+// Kalt (blau) = selten, heiss (rot) = oft. Plaetze ohne Aktivitaet (Wert 0)
+// bekommen ein neutrales Grau, damit "nie bewegt" sichtbar bleibt.
+const HEAT_STOPS = [
+  [0.0, 0x2c7bb6], [0.25, 0x00a6ca], [0.5, 0x7fbc41],
+  [0.75, 0xfdae61], [1.0, 0xd7191c],
+];
+const HEAT_ZERO_HEX = 0xcfd3d6;
+function _lerpHex(a, b, t){
+  const ar=(a>>16)&255, ag=(a>>8)&255, ab=a&255;
+  const br=(b>>16)&255, bg=(b>>8)&255, bb=b&255;
+  return ((Math.round(ar+(br-ar)*t))<<16)
+       | ((Math.round(ag+(bg-ag)*t))<<8)
+       |  (Math.round(ab+(bb-ab)*t));
+}
+function heatColor(t){  // t in 0..1 -> Hex
+  if(t<=0) return HEAT_STOPS[0][1];
+  if(t>=1) return HEAT_STOPS[HEAT_STOPS.length-1][1];
+  for(let i=1;i<HEAT_STOPS.length;i++){
+    if(t<=HEAT_STOPS[i][0]){
+      const a=HEAT_STOPS[i-1], b=HEAT_STOPS[i];
+      return _lerpHex(a[1], b[1], (t-a[0])/(b[0]-a[0]));
+    }
+  }
+  return HEAT_STOPS[HEAT_STOPS.length-1][1];
+}
+// Quantisierte, GETEILTE Materialien (max 12 Stufen + 1x "keine Aktivitaet"),
+// damit auch im Heatmap-Modus kein Material pro Mesh entsteht.
+const HEAT_NB = 12;
+const HEAT_MAT = [];
+for(let i=0;i<HEAT_NB;i++){
+  HEAT_MAT.push(new THREE.MeshStandardMaterial({ color: heatColor(i/(HEAT_NB-1)) }));
+}
+const HEAT_ZERO_MAT = new THREE.MeshStandardMaterial({ color: HEAT_ZERO_HEX });
+
+// Kennzahl je Modus: picks = nur Entnahmen, moves = Entnahmen + Nachschub.
+function heatMetric(d){
+  if(COLORMODE==='picks') return (d.p||0);
+  if(COLORMODE==='moves') return (d.p||0)+(d.n||0);
+  return 0;
+}
+// Rang-Funktion: aus allen Plaetzen mit Wert>0 eine sortierte Liste bauen;
+// fuer einen Wert v liefert ranker(v) das Perzentil 0..1 (Anteil aktiver
+// Plaetze mit kleinerem/gleichem Wert). v<=0 -> -1 (= keine Aktivitaet).
+function buildRanker(){
+  const vals=[];
+  for(const k in DATA){ const v=heatMetric(DATA[k]); if(v>0) vals.push(v); }
+  vals.sort((a,b)=>a-b);
+  const N=vals.length;
+  return function(v){
+    if(v<=0 || N===0) return -1;
+    let lo=0, hi=N;
+    while(lo<hi){ const mid=(lo+hi)>>1; if(vals[mid]<=v) lo=mid+1; else hi=mid; }
+    return (lo-1)/Math.max(N-1, 1);
+  };
+}
+// Material fuer ein Mesh im aktiven Heatmap-Modus (ranker vorab gebaut).
+function heatMatFor(d, ranker){
+  const t = ranker(heatMetric(d));
+  if(t < 0) return HEAT_ZERO_MAT;
+  return HEAT_MAT[Math.round(t*(HEAT_NB-1))];
+}
 
 const host = document.getElementById('view');
 const panel = document.getElementById('panel');
@@ -217,6 +286,7 @@ function showSlot(id){
       [L.abc_m, d.a],
       [L.abc_c, d.ac],
       [L.picks, d.p],
+      [L.nachschub, (d.n==null?0:d.n)],
       [L.util, util],
       [L.status, status],
     ];
@@ -272,6 +342,22 @@ function fillLegend(counts){
     + '<span style="width:12px;height:12px;border-radius:2px;background:' + hex + ';display:inline-block;"></span>'
     + '<span style="flex:1;">' + label + '</span>'
     + '<span style="font-weight:600;margin-left:8px;">' + fmtN(n) + '</span></div>';
+  // Modus 'none': Plaetze nicht eingefaerbt -> keine Legende anzeigen.
+  if(COLORMODE==='none'){ legendEl.innerHTML = ''; return; }
+  // Heatmap-Modi: Farbverlauf-Balken (kalt->heiss) statt ABC-Klassen.
+  if(COLORMODE==='picks' || COLORMODE==='moves'){
+    const title = (COLORMODE==='moves') ? L.heat_moves : L.heat_picks;
+    const stops = HEAT_STOPS.map((s) =>
+      '#' + s[1].toString(16).padStart(6,'0') + ' ' + Math.round(s[0]*100) + '%'
+    ).join(',');
+    legendEl.innerHTML =
+      '<div style="font-weight:600;margin-bottom:4px;">' + title + '</div>'
+      + '<div style="width:150px;height:10px;border-radius:2px;background:linear-gradient(to right,' + stops + ');"></div>'
+      + '<div style="display:flex;justify-content:space-between;width:150px;font-size:11px;color:#555;margin-bottom:4px;">'
+      + '<span>' + L.heat_low + '</span><span>' + L.heat_high + '</span></div>'
+      + row('#cfd3d6', L.heat_zero, counts.zero);
+    return;
+  }
   legendEl.innerHTML =
     '<div style="font-weight:600;margin-bottom:4px;">' + L.legend + '</div>'
     + row('#c62828', 'A', counts.A)
@@ -287,7 +373,11 @@ new GLTFLoader().load('__GLB__',
 
     // Eine Traversierung: Plaetze je Klasse zaehlen und (optional) einfaerben.
     // grau = Mesh hat eine PLATZ_ID, aber keinen Datensatz in der DB.
-    const counts = { A:0, B:0, C:0, grey:0 };
+    const counts = { A:0, B:0, C:0, grey:0, zero:0, active:0 };
+    const heatOn = (COLORMODE==='picks' || COLORMODE==='moves');
+    // Rang-Skala einmal aus ALLEN Plaetzen bauen (stabil, unabhaengig davon,
+    // welche Meshes die GLB enthaelt).
+    const ranker = heatOn ? buildRanker() : null;
     root.traverse((o) => {
       if(!o.isMesh || !o.name || !PID_RE.test(o.name)) return;
       meshIndex[o.name] = o;  // fuer die Lagerplatz-Suche
@@ -299,7 +389,18 @@ new GLTFLoader().load('__GLB__',
       // Draw-Calls. Kein Datenverlust, da grau ohnehin keine DB-Daten hat.
       if(key === 'grey' && HIDEGREY){ o.visible = false; }
       // Einfaerben ueber GETEILTE Materialien (kein Klon pro Mesh).
-      if(ABCCOLOR){ o.material = SHARED_MAT[key]; }
+      if(COLORMODE==='abc'){
+        o.material = SHARED_MAT[key];
+      } else if(heatOn){
+        if(d){
+          if(heatMetric(d) > 0){ counts.active += 1; } else { counts.zero += 1; }
+          o.material = heatMatFor(d, ranker);
+        } else {
+          counts.zero += 1;            // kein DB-Datensatz -> "keine Aktivitaet"
+          o.material = HEAT_ZERO_MAT;
+        }
+      }
+      // COLORMODE==='none' -> Original-Material der GLB bleibt unveraendert.
     });
     fillLegend(counts);
 
@@ -1879,6 +1980,31 @@ TR: dict[str, dict[str, str]] = {
               "see its metrics on the right. Every slot is linked to the database.",
     },
     "d3_color_abc": {"de": "Nach ABC einfärben", "en": "Color by ABC"},
+    # CAD-Viewer: Auswahl der Einfaerbung (ABC / Pick-Heatmap / Bewegungs-Heatmap)
+    "d3_cad_cm_abc": {"de": "ABC-Klasse", "en": "ABC class"},
+    "d3_cad_cm_picks": {"de": "Heatmap: Picks", "en": "Heatmap: picks"},
+    "d3_cad_cm_moves": {"de": "Heatmap: Bewegungen", "en": "Heatmap: movements"},
+    "d3_cad_cm_none": {"de": "Keine (Original)", "en": "None (original)"},
+    "d3_cad_cm_help": {
+        "de": "Wie die Plätze eingefärbt werden. **ABC-Klasse**: rot/gelb/grün nach "
+              "berechneter ABC-Klasse. **Heatmap: Picks**: fließend kalt→heiß nach "
+              "Pick-Häufigkeit (ANZ_PICKS). **Heatmap: Bewegungen**: nach Picks + "
+              "Nachschub zusammen. **Keine**: Original-Optik des Modells. Die "
+              "Heatmaps färben nach Rang/Perzentil – wenige Hotspots verzerren die "
+              "Skala nicht; graue Plätze = keine Aktivität.",
+        "en": "How slots are colored. **ABC class**: red/yellow/green by calculated "
+              "ABC class. **Heatmap: picks**: smooth cold→hot by pick frequency "
+              "(ANZ_PICKS). **Heatmap: movements**: by picks + replenishment "
+              "combined. **None**: model's original look. The heatmaps color by "
+              "rank/percentile – a few hotspots don't distort the scale; grey slots "
+              "= no activity.",
+    },
+    "d3_heat_picks": {"de": "Pick-Häufigkeit", "en": "Pick frequency"},
+    "d3_heat_moves": {"de": "Bewegungen (Picks + Nachschub)",
+                      "en": "Movements (picks + replenishment)"},
+    "d3_heat_low": {"de": "selten", "en": "rare"},
+    "d3_heat_high": {"de": "oft", "en": "frequent"},
+    "d3_heat_zero": {"de": "keine Aktivität", "en": "no activity"},
     "d3_colormode": {"de": "Färben nach", "en": "Color by"},
     "d3_cm_neutral": {"de": "Neutral (Holz)", "en": "Neutral (wood)"},
     "d3_cm_abc": {"de": "ABC-Klasse", "en": "ABC class"},
@@ -1893,6 +2019,7 @@ TR: dict[str, dict[str, str]] = {
     "d3_f_abc_m": {"de": "ABC (Stamm)", "en": "ABC (master)"},
     "d3_f_abc_c": {"de": "ABC (berechnet)", "en": "ABC (calculated)"},
     "d3_f_picks": {"de": "Picks", "en": "Picks"},
+    "d3_f_nachschub": {"de": "Nachschub", "en": "Replenishment"},
     "d3_f_util": {"de": "Auslastung", "en": "Utilization"},
     "d3_f_status": {"de": "Status", "en": "Status"},
     "d3_f_cap": {"de": "Kapazität (belegt/max)", "en": "Capacity (used/max)"},
@@ -2041,6 +2168,7 @@ def load_platz_full() -> pd.DataFrame:
     platz["MAX_LHM"] = pd.to_numeric(platz["MAX_LHM"], errors="coerce")
     platz["IST_LHM"] = pd.to_numeric(platz["IST_LHM"], errors="coerce")
     platz["ANZ_PICKS"] = pd.to_numeric(platz["ANZ_PICKS"], errors="coerce").fillna(0).astype(int)
+    platz["ANZ_NACHSCHUB"] = pd.to_numeric(platz["ANZ_NACHSCHUB"], errors="coerce").fillna(0).astype(int)
     platz["ZUSTAND"] = pd.to_numeric(platz["ZUSTAND"], errors="coerce").fillna(0).astype(int)
     platz["ABC_KLASSE"] = platz["ABC_KLASSE"].astype(str).str.strip().str.upper()
 
@@ -2310,6 +2438,7 @@ def load_slot_3d_map() -> str:
             "a": (row.ABC_KLASSE or "—"),
             "ac": (row.ABC_CALC if isinstance(row.ABC_CALC, str) else "—"),
             "p": int(row.ANZ_PICKS),
+            "n": int(getattr(row, "ANZ_NACHSCHUB", 0)),
             "u": (None if pd.isna(util) else round(float(util), 1)),
             "b": bool(row.BELEGT),
             # Kapazitaet in Ladehilfsmitteln (belegt/max), freie Kapazitaet,
@@ -3774,6 +3903,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
         "abc_m": t("d3_f_abc_m"),
         "abc_c": t("d3_f_abc_c"),
         "picks": t("d3_f_picks"),
+        "nachschub": t("d3_f_nachschub"),
         "util": t("d3_f_util"),
         "status": t("d3_f_status"),
         "cap": t("d3_f_cap"),
@@ -3790,6 +3920,12 @@ def render_3d(filtered: pd.DataFrame) -> None:
         "grey": t("d3_grey"),
         "notfound": t("d3_notfound"),
         "loading": "Lade Modell" if _LANG == "de" else "Loading model",
+        # Heatmap-Legende (CAD-Viewer, Modi 'picks'/'moves')
+        "heat_picks": t("d3_heat_picks"),
+        "heat_moves": t("d3_heat_moves"),
+        "heat_low": t("d3_heat_low"),
+        "heat_high": t("d3_heat_high"),
+        "heat_zero": t("d3_heat_zero"),
     }
     labels_json = _json.dumps(labels, ensure_ascii=False)
     # Nur 9-stellige PLATZ_ID ins Modell durchreichen.
@@ -3833,7 +3969,16 @@ def render_3d(filtered: pd.DataFrame) -> None:
         glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
         ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
         with ctrl1:
-            color_abc = st.checkbox(t("d3_color_abc"), value=True)
+            # Faerb-Modus: ABC-Klassen, Pick-Heatmap, Bewegungs-Heatmap oder
+            # gar nicht (Original-Optik der GLB).
+            cad_cm_opts = [t("d3_cad_cm_abc"), t("d3_cad_cm_picks"),
+                           t("d3_cad_cm_moves"), t("d3_cad_cm_none")]
+            cad_cm_choice = st.selectbox(t("d3_colormode"), cad_cm_opts, index=0,
+                                         key="d3_cm_cad", help=t("d3_cad_cm_help"))
+            colormode_cad = {
+                t("d3_cad_cm_abc"): "abc", t("d3_cad_cm_picks"): "picks",
+                t("d3_cad_cm_moves"): "moves", t("d3_cad_cm_none"): "none",
+            }[cad_cm_choice]
         with ctrl2:
             perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
         with ctrl3:
@@ -3846,7 +3991,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
             .replace("__DATA__", slot_json)
             .replace("__LABELS__", labels_json)
             .replace("__ROTATE__", "false")
-            .replace("__ABCCOLOR__", "true" if color_abc else "false")
+            .replace("__COLORMODE__", colormode_cad)
             .replace("__HIDEGREY__", "true" if perf_mode else "false")
             .replace("__FOCUS__", focus_id)
         )
