@@ -3827,8 +3827,10 @@ def render_3d(filtered: pd.DataFrame) -> None:
         st.caption(t("d3_schema_caption"))
     else:
         # CAD-Modell: SampleScene_clickable.glb (Meshes nach PLATZ_ID benannt),
-        # CORS-faehig ueber die API geliefert.
-        glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb"
+        # CORS-faehig ueber die API geliefert. Der ?v=-Parameter ist ein
+        # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
+        # neue GLB laden statt der alten aus dem Cache.
+        glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
         ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
         with ctrl1:
             color_abc = st.checkbox(t("d3_color_abc"), value=True)
