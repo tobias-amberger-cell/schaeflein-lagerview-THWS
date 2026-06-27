@@ -1996,7 +1996,6 @@ TR: dict[str, dict[str, str]] = {
               "Sundays. The zero days would only distort the trend; without them the working-day trend is clearer.",
     },
     "tp_chart": {"de": "Bewegungen letzte {n} Tage", "en": "Movements last {n} days"},
-    "tp_chart_range": {"de": "Bewegungen {lo} – {hi}", "en": "Movements {lo} – {hi}"},
     "tp_avg": {"de": "Ø pro Tag", "en": "Avg. per day"},
     "tp_max": {"de": "Maximum", "en": "Maximum"},
     "tp_sum": {"de": "Summe Zeitraum", "en": "Sum (period)"},
@@ -3852,9 +3851,9 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
     st.caption(t("weekend_hidden"))
     use_range = st.checkbox(t("tp_use_range"), value=False)
     # Titel spiegelt die FILTER-Einstellung (nicht die Balkenanzahl): bei „letzte
-    # N Tage" steht der Slider-Wert, bei Datumsbereich der gewaehlte Zeitraum.
-    # Die Balkenanzahl ist fast immer kleiner (nur Tage mit Bewegung, Wochenende
-    # ausgeblendet) und passt sonst nicht zum Filter.
+    # N Tage" der Slider-Wert, beim Datumsbereich die Anzahl Kalendertage der
+    # Auswahl. Die Balkenanzahl ist fast immer kleiner (nur Tage mit Bewegung,
+    # Wochenende ausgeblendet) und passt sonst nicht zum Filter.
     if use_range:
         all_days = agg_movements_by_day(tpa)
         chart_title = t("tp_chart").format(n=days)
@@ -3871,8 +3870,7 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
                     (all_days["day"].dt.date >= lo)
                     & (all_days["day"].dt.date <= hi)
                 ].copy()
-                chart_title = t("tp_chart_range").format(
-                    lo=lo.strftime("%d.%m.%Y"), hi=hi.strftime("%d.%m.%Y"))
+                chart_title = t("tp_chart").format(n=(hi - lo).days + 1)
             else:
                 trend = all_days.copy()
             trend = trend.sort_values("day")
