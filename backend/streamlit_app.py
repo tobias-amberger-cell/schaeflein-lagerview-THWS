@@ -27,7 +27,7 @@ from __future__ import annotations
 #  6. main()                        -> Sidebar-Filter, KPIs und die Tabs/Register
 #
 #  Roter Faden: alle Auswertungen kommen aus EINER Tabelle (PLATZ) plus den
-#  Bewegungsdaten (TPA/FAHRPOS). Es wird NICHTS in die DB zurueckgeschrieben –
+#  Bewegungsdaten (TPA). Es wird NICHTS in die DB zurueckgeschrieben –
 #  reine Lese-/Analyse-App. Dieselbe Logik steckt in der Flutter-App.
 # ===========================================================================
 import os
@@ -899,11 +899,9 @@ window.addEventListener('resize', () => {
 # PLATZ   = ein Datensatz je Stellplatz (Stammdaten + Auslastung + ABC)
 # PALETTE = Palettenbestand (aktuell nicht ausgewertet, nur zur Doku)
 # TPA     = Transport-/Pick-Auftragspositionen = die Bewegungen (6 Monate)
-# FAHRPOS = Fahrpositionen; Q_PLATZ = Quellplatz -> daraus Pick-Frequenz
 PLATZ_TABLE = "df_platz_ber03_schlg_rti3"
 PALETTE_TABLE = "df_palette_08042026_ber03_schlg_rti3"
 TPA_TABLE = "df_tpa_6mon_ber03_schlg_rti3"
-FAHRPOS_TABLE = "df_fahrpos_6mon_ber03_schlg_rti3"
 
 # Such-Reihenfolge fuer die lokale DB. Der erste existierende Pfad gewinnt;
 # wird keiner gefunden, faellt get_db_path() auf den Download per URL zurueck.
@@ -1197,32 +1195,24 @@ TR: dict[str, dict[str, str]] = {
               "These are the warehouse hot spots and are often heavily utilized.",
     },
     "bottle_chart": {
-        "de": "Top-15 Hochfrequenz-Plätze (Picks gesamt, Farbe = Auslastung %)",
-        "en": "Top-15 high-frequency slots (total picks, color = utilization %)",
+        "de": "Top-15 Hochfrequenz-Plätze (Picks, Farbe = Auslastung %)",
+        "en": "Top-15 high-frequency slots (picks, color = utilization %)",
     },
     "bottle_info_t": {
         "de": "ℹ️ Was bedeutet das? (Hochfrequenz-Plätze + Spalten)",
         "en": "ℹ️ What does this mean? (high-frequency slots + columns)",
     },
     "bottle_info_b": {
-        "de": "Dieser Tab zeigt die **meistangefahrenen Plätze**, sortiert nach den gesamten Picks (oben die "
+        "de": "Dieser Tab zeigt die **meistgepickten Plätze**, sortiert nach den Picks (oben die "
               "stärksten). Das sind die Hot-Spots im Lager.\n\n"
-              "**Warum zwei Pick-Spalten?**\n"
-              "- **Picks (Stamm)** = die Zugriffshäufigkeit, die im Lagersystem für den Platz hinterlegt ist.\n"
-              "- **Picks gesamt** = zusätzlich die tatsächlichen Anfahrten aus den Bewegungsdaten.\n"
-              "Bei vielen Plätzen sind beide Werte gleich – dann gab es eben keine zusätzlichen Anfahrten. Das ist "
-              "kein Fehler, sondern heißt nur: hier ist der Stamm-Wert die einzige Quelle.\n\n"
+              "**Picks** = die Zugriffshäufigkeit, die im Lagersystem für den Platz hinterlegt ist.\n\n"
               "**Was bedeutet Auslastung 100 % oder 0 %?**\n"
               "- **100 %** = der Platz ist voll.\n"
               "- **0 %** = der Platz wird oft angefahren, ist aber gerade leer. Genau so ein Platz gehört auf die "
               "Nachschub-Liste.",
-        "en": "This tab shows the **most-visited slots**, sorted by total picks (the busiest on top). These are the "
+        "en": "This tab shows the **most-picked slots**, sorted by picks (the busiest on top). These are the "
               "warehouse hot spots.\n\n"
-              "**Why two pick columns?**\n"
-              "- **Picks (master)** = the access frequency stored for the slot in the warehouse system.\n"
-              "- **Total picks** = plus the actual visits from the movement data.\n"
-              "For many slots both values are equal – then there simply were no extra visits. That's not an error, "
-              "it just means the master value is the only source here.\n\n"
+              "**Picks** = the access frequency stored for the slot in the warehouse system.\n\n"
               "**What does utilization 100 % or 0 % mean?**\n"
               "- **100 %** = the slot is full.\n"
               "- **0 %** = the slot is visited often but is currently empty. Exactly such a slot belongs on the "
@@ -2299,8 +2289,7 @@ def load_platz_full() -> pd.DataFrame:
       2. Spalten in Zahlen wandeln (DB liefert teils Strings)
       3. Kennzahlen ableiten: UTILIZATION (%), FREE_CAPACITY, BELEGT,
          DAYS_EMPTY (Tage seit LEER_DATUM)
-      4. Pick-Frequenz aus FAHRPOS dazumergen (PICK_COUNT_FAHR)
-      5. ABC_CALC: ABC-Klasse aus der kumulativen Pick-Verteilung berechnen
+      4. ABC_CALC: ABC-Klasse aus der kumulativen Pick-Verteilung berechnen
     @st.cache_data(ttl=3600) = Ergebnis 1 h zwischenspeichern (teurer Query).
     """
     con = get_connection()
@@ -2362,30 +2351,6 @@ def load_platz_full() -> pd.DataFrame:
     ).dt.days
     platz["DAYS_SINCE_PICK"] = (_ref_date - _zugriff).dt.days
 
-    # Pick-Count aus Fahrpos zusaetzlich mergen (Q_PLATZ = Quellplatz).
-    try:
-        fahrpos = pd.read_sql_query(
-            f'SELECT Q_PLATZ FROM "{FAHRPOS_TABLE}" '
-            f"WHERE TRIM(COALESCE(Q_PLATZ, '')) <> ''",
-            con,
-        )
-        # Q_PLATZ ist in der DB ein Integer (z. B. 32306700), PLATZ_ID dagegen
-        # eine 9-stellige Zeichenkette mit fuehrender Null (z. B. "032306700").
-        # Ohne zfill(9) liefert der Join 0 Treffer; mit zfill werden >99,9 %
-        # der Fahrpos-Zeilen korrekt zugeordnet.
-        fahrpos["Q_PLATZ"] = fahrpos["Q_PLATZ"].astype(str).str.strip().str.zfill(9)
-        pick_freq = (
-            fahrpos.groupby("Q_PLATZ").size().reset_index(name="PICK_COUNT_FAHR")
-        )
-        platz["PLATZ_ID_STR"] = platz["PLATZ_ID"].astype(str).str.strip().str.zfill(9)
-        platz = platz.merge(
-            pick_freq, left_on="PLATZ_ID_STR", right_on="Q_PLATZ", how="left"
-        )
-        platz["PICK_COUNT_FAHR"] = platz["PICK_COUNT_FAHR"].fillna(0).astype(int)
-        platz.drop(columns=["Q_PLATZ", "PLATZ_ID_STR"], inplace=True)
-    except Exception:
-        platz["PICK_COUNT_FAHR"] = 0
-
     # ABC nach kumulativer Pick-Verteilung (Pareto, aus warehouse_analytics.py):
     # Plaetze absteigend nach Picks sortieren, kumulierten Anteil bilden und
     # klassifizieren -> A = Plaetze, die zusammen die ersten 80 % aller Picks
@@ -2413,7 +2378,7 @@ def load_platz_full() -> pd.DataFrame:
     return platz
 
 
-# --- Bewegungsdaten (TPA/FAHRPOS) -----------------------------------------
+# --- Bewegungsdaten (TPA) -------------------------------------------------
 # Diese load_*-Funktionen liefern jeweils ein fertiges DataFrame fuer genau
 # einen Tab. Trennung von Datenbeschaffung (hier) und Darstellung (in main()).
 
@@ -2734,17 +2699,6 @@ FORMULAS: list[dict] = [
                        "95 % = B, der Rest = C.",
                  "en": "Sort by picks first, then add up: up to 80 % = A, up to 95 % = "
                        "B, the rest = C."},
-    },
-    {
-        "key": "pick_total",
-        "title": {"de": "Picks gesamt", "en": "Total picks"},
-        "latex": r"\text{Picks gesamt} = \text{Picks (Stamm)} + \text{Anfahrten (Bewegungsdaten)}",
-        "plain": {"de": "Picks (Stamm) + zusätzliche Anfahrten",
-                  "en": "Picks (master) + extra visits"},
-        "note": {"de": "Die im Lagersystem hinterlegten Picks plus die zusätzlichen "
-                       "Anfahrten aus den Bewegungsdaten.",
-                 "en": "The picks stored in the warehouse system plus the extra visits "
-                       "from the movement data."},
     },
 ]
 
@@ -3333,7 +3287,7 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
 # Hochfrequenz-Tabelle: technische -> sprechende Spalten + Tooltips.
 _HF_RENAME = {
     "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
-    "ANZ_PICKS": "Picks (Stamm)", "PICK_TOTAL": "Picks gesamt",
+    "ANZ_PICKS": "Picks",
     "MAX_LHM": "Kapazität (max. LHM)", "IST_LHM": "Belegt (Ist-LHM)",
     "UTILIZATION": "Auslastung %",
 }
@@ -3342,11 +3296,7 @@ _HF_HELP = {
     "Regal": "Regalnummer im Lager.",
     "Fach": "Fach innerhalb des Regals.",
     "Ebene": "Wie hoch der Platz liegt.",
-    "Picks (Stamm)": "Die im Lagersystem hinterlegte Zugriffshäufigkeit dieses "
-                     "Platzes.",
-    "Picks gesamt": "Stamm-Picks plus die tatsächlichen Anfahrten aus den "
-                    "Bewegungsdaten. Gleich wie „Picks (Stamm)“ heißt: keine "
-                    "zusätzlichen Anfahrten (kein Fehler).",
+    "Picks": "Die im Lagersystem hinterlegte Zugriffshäufigkeit dieses Platzes.",
     "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
                             "(kann auch mehr als einer sein).",
     "Belegt (Ist-LHM)": "Wie viele davon aktuell drauf stehen.",
@@ -3362,12 +3312,10 @@ def render_high_frequency_slots(filtered: pd.DataFrame) -> None:
         st.markdown(t("bottle_info_b"))
     # Voller, sortierter Satz fuer den Export; Anzeige auf Top 50 begrenzt.
     high_freq_full = (
-        filtered.assign(
-            PICK_TOTAL=lambda d: d["ANZ_PICKS"] + d["PICK_COUNT_FAHR"]
-        )
-        .sort_values(["PICK_TOTAL", "UTILIZATION"], ascending=[False, False])[
+        filtered
+        .sort_values(["ANZ_PICKS", "UTILIZATION"], ascending=[False, False])[
             ["PLATZ_ID", "REGAL", "FACH", "EBENE",
-             "ANZ_PICKS", "PICK_TOTAL", "MAX_LHM", "IST_LHM", "UTILIZATION"]
+             "ANZ_PICKS", "MAX_LHM", "IST_LHM", "UTILIZATION"]
         ].copy()
     )
     high_freq_full["UTILIZATION"] = high_freq_full["UTILIZATION"].round(1)
