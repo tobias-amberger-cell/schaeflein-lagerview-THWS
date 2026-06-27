@@ -943,11 +943,9 @@ TR: dict[str, dict[str, str]] = {
     "abc_src": {"de": "ABC-Quelle", "en": "ABC source"},
     "abc_src_help": {
         "de": "Worauf sich die ABC-Auswahl bezieht: **Stamm** = im WMS hinterlegte "
-              "Klasse, **Berechnet** = aus tatsaechlichen Picks (Pareto 80/95 %), "
-              "**Beide** = Platz zaehlt, wenn Stamm ODER Berechnet passt.",
+              "Klasse, **Berechnet** = aus tatsaechlichen Picks (Pareto 80/95 %).",
         "en": "What the ABC selection refers to: **Master** = class stored in the "
-              "WMS, **Calculated** = from actual picks (Pareto 80/95 %), "
-              "**Both** = slot counts if master OR calculated matches.",
+              "WMS, **Calculated** = from actual picks (Pareto 80/95 %).",
     },
     "abc_src_stamm": {"de": "Stamm", "en": "Master"},
     "abc_src_calc": {"de": "Berechnet", "en": "Calculated"},
@@ -4294,12 +4292,12 @@ def main() -> None:
         # Quelle der ABC-Auswahl: Stamm (WMS), Berechnet (Picks) oder Beide.
         # Greift nur, wenn oben Klassen gewaehlt sind; Default 'Beide' = altes
         # ODER-Verhalten. -> auf kanonische (deutsche) Schluessel zurueckmappen.
-        abc_src_opts = [t("abc_src_stamm"), t("abc_src_calc"), t("abc_src_both")]
+        abc_src_opts = [t("abc_src_stamm"), t("abc_src_calc")]
         abc_src_choice = st.radio(
-            t("abc_src"), options=abc_src_opts, index=2, horizontal=True,
+            t("abc_src"), options=abc_src_opts, index=1, horizontal=True,
             help=t("abc_src_help"), disabled=not abc,
         )
-        abc_src = ["Stamm", "Berechnet", "Beide"][abc_src_opts.index(abc_src_choice)]
+        abc_src = ["Stamm", "Berechnet"][abc_src_opts.index(abc_src_choice)]
         util_range = st.slider(
             t("util"), 0, 100, (0, 100), step=5, help=t("util_help"),
         )
