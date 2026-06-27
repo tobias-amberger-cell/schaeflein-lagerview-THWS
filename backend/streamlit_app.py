@@ -1996,6 +1996,7 @@ TR: dict[str, dict[str, str]] = {
               "Sundays. The zero days would only distort the trend; without them the working-day trend is clearer.",
     },
     "tp_chart": {"de": "Bewegungen letzte {n} Tage", "en": "Movements last {n} days"},
+    "tp_chart_range": {"de": "Bewegungen {lo} – {hi}", "en": "Movements {lo} – {hi}"},
     "tp_avg": {"de": "Ø pro Tag", "en": "Avg. per day"},
     "tp_max": {"de": "Maximum", "en": "Maximum"},
     "tp_sum": {"de": "Summe Zeitraum", "en": "Sum (period)"},
@@ -3850,8 +3851,13 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
     mov_filter_note(movements_filtered, filtered)
     st.caption(t("weekend_hidden"))
     use_range = st.checkbox(t("tp_use_range"), value=False)
+    # Titel spiegelt die FILTER-Einstellung (nicht die Balkenanzahl): bei „letzte
+    # N Tage" steht der Slider-Wert, bei Datumsbereich der gewaehlte Zeitraum.
+    # Die Balkenanzahl ist fast immer kleiner (nur Tage mit Bewegung, Wochenende
+    # ausgeblendet) und passt sonst nicht zum Filter.
     if use_range:
         all_days = agg_movements_by_day(tpa)
+        chart_title = t("tp_chart").format(n=days)
         if all_days.empty:
             trend = all_days
         else:
@@ -3865,11 +3871,14 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
                     (all_days["day"].dt.date >= lo)
                     & (all_days["day"].dt.date <= hi)
                 ].copy()
+                chart_title = t("tp_chart_range").format(
+                    lo=lo.strftime("%d.%m.%Y"), hi=hi.strftime("%d.%m.%Y"))
             else:
                 trend = all_days.copy()
             trend = trend.sort_values("day")
     else:
         trend = agg_throughput_trend(tpa, days)
+        chart_title = t("tp_chart").format(n=days)
     # Wochenende IMMER ausblenden (kein Toggle mehr).
     trend = drop_weekend(trend, "day")
     if trend.empty:
@@ -3877,7 +3886,7 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
     else:
         fig = px.bar(
             trend, x="day", y="movements",
-            title=t("tp_chart").format(n=len(trend)),
+            title=chart_title,
         )
         fig.update_layout(
             yaxis_title=t("picks_label"),
