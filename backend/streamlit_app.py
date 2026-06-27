@@ -4273,10 +4273,8 @@ def main() -> None:
             st.image(str(logo), width=110)
         with col_title:
             st.title("Schaeflein LagerView v1.4")
-            st.caption(t("caption"))
     else:
         st.title("📦 Schaeflein LagerView v1.4")
-        st.caption(t("caption"))
 
     try:
         platz = load_platz_full()
