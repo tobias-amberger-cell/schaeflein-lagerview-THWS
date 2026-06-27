@@ -2670,11 +2670,12 @@ _MASSNAHME_HELP = {
     "Zielplatz-Vorschlag": "Ein konkreter freier Platz, auf den der Inhalt "
                            "umgelagert werden kann (nach freier Kapazität zugeordnet).",
     "Artikel-Nr.": "Artikelnummer der Ware auf dem Platz. Näherung aus den "
-                   "Bewegungsdaten (jüngste Buchung von diesem Platz), da das "
-                   "Lagersystem keinen festen Artikel je Platz führt. „—“ = "
-                   "keine Bewegung bekannt.",
+                   "Bewegungsdaten (jüngste Buchung dieses Platzes), da das "
+                   "Lagersystem keinen festen Artikel je Platz führt.",
     "Artikel": "Bezeichnung der Ware auf dem Platz – näherungsweise aus der "
-               "jüngsten Bewegung abgeleitet, nicht für jeden Platz bekannt.",
+               "jüngsten Bewegung abgeleitet. „Artikel unbekannt“ heißt: Platz "
+               "ist belegt, die Palette wurde aber im erfassten Zeitraum nicht "
+               "bewegt, daher kein Artikel ableitbar.",
 }
 
 # Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
@@ -2833,9 +2834,14 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                 c: st.column_config.Column(help=h)
                 for c, h in col_help.items() if c in show.columns
             }
+        # Einheitliche Tabellenhoehe: ~10 Zeilen sichtbar, der Rest scrollt im
+        # Container (statt langer Seiten). Bei <=10 Treffern auto (kein Leerraum).
+        # 35 px je Zeile + 38 px Kopf entspricht der Streamlit-Standardhoehe.
+        view = show.head(200)
+        height = 35 * 10 + 38 if len(view) > 10 else None
         st.dataframe(
-            show.head(200), use_container_width=True, hide_index=True,
-            column_config=col_cfg,
+            view, use_container_width=True, hide_index=True,
+            column_config=col_cfg, height=height,
         )
         key = "".join(c if c.isalnum() else "_" for c in titel.lower())
         # CSV-Download; optional direkt daneben ein ℹ️-Button mit der/den
@@ -3215,8 +3221,12 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
             .merge(_art, left_on="_pid", right_on="PLATZ_KEY", how="left")
             .drop(columns=["_pid", "PLATZ_KEY"])
         )
+        # Ohne Bewegungseintrag ist der Artikel nicht ableitbar: Nr. = "—",
+        # Bezeichnung sagt es im Klartext, damit "belegt aber leer?" keine Frage
+        # aufwirft.
         out["ARTIKEL_NR"] = out["ARTIKEL_NR"].fillna("—").replace("", "—")
-        out["ARTIKEL_BEZ"] = out["ARTIKEL_BEZ"].fillna("—").replace("", "—")
+        out["ARTIKEL_BEZ"] = (out["ARTIKEL_BEZ"].fillna("Artikel unbekannt")
+                              .replace("", "Artikel unbekannt"))
         return out
 
     def _hotc_vorschlag(df: pd.DataFrame) -> list:
