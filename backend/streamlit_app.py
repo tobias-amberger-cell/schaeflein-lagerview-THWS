@@ -1498,6 +1498,17 @@ TR: dict[str, dict[str, str]] = {
     "abc_search_none": {"de": "Keine Treffer für die Suche.",
                         "en": "No matches for the search."},
     "abc_search_hits": {"de": "{n} Treffer.", "en": "{n} matches."},
+    "search_lbl_slot": {"de": "🔍 Suche nach Platz, Regal oder Fach",
+                        "en": "🔍 Search by slot, rack or bin"},
+    "search_lbl_article": {"de": "🔍 Suche nach Artikel-Nr. oder Bezeichnung",
+                           "en": "🔍 Search by article no. or name"},
+    "search_lbl_slot_article": {
+        "de": "🔍 Suche nach Platz, Regal, Fach oder Artikel (Nr./Bezeichnung)",
+        "en": "🔍 Search by slot, rack, bin or article (no./name)"},
+    "search_lbl_date": {"de": "🔍 Suche nach Datum oder Wochentag",
+                        "en": "🔍 Search by date or weekday"},
+    "search_lbl_srcslot": {"de": "🔍 Suche nach Quellplatz",
+                           "en": "🔍 Search by source slot"},
     "abc_byfreq_note": {
         "de": "Die komplette Liste, sortiert nach Picks (die häufigsten oben). "
               "*Stamm* = die im Lagersystem hinterlegte Klasse · *Berechnet* = die aus "
@@ -2863,7 +2874,12 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                 for c, h in col_help.items() if c in show.columns
             }
         key = "".join(c if c.isalnum() else "_" for c in titel.lower())
-        show = _table_search(show, key="search_" + key)
+        # Label nennt die Suchfelder; Artikel-Spalten gibt es nur in manchen
+        # Listen (z. B. Um-/Auslagern), daher dynamisch je nach Spalten.
+        _slbl = (t("search_lbl_slot_article")
+                 if any("Artikel" in str(c) for c in show.columns)
+                 else t("search_lbl_slot"))
+        show = _table_search(show, key="search_" + key, label=_slbl)
         # Einheitliche Tabellenhoehe: ~10 Zeilen sichtbar, der Rest scrollt im
         # Container (statt langer Seiten). Bei <=10 Treffern auto (kein Leerraum).
         # 35 px je Zeile + 38 px Kopf entspricht der Streamlit-Standardhoehe.
@@ -3119,7 +3135,8 @@ def render_high_frequency_slots(filtered: pd.DataFrame) -> None:
     else:
         col_cfg = {c: st.column_config.Column(help=h)
                    for c, h in _HF_HELP.items() if c in high_freq_full.columns}
-        high_freq_full = _table_search(high_freq_full, key="search_highfreq")
+        high_freq_full = _table_search(high_freq_full, key="search_highfreq",
+                                       label=t("search_lbl_slot"))
         st.dataframe(high_freq_full.head(50), use_container_width=True,
                      hide_index=True, column_config=col_cfg)
         _csv_download(high_freq_full, "hochfrequenz_plaetze")
@@ -3150,7 +3167,8 @@ def render_free(filtered: pd.DataFrame) -> None:
     free_full = free_full.rename(columns=_PUTAWAY_RENAME)
     col_cfg = {c: st.column_config.Column(help=h)
                for c, h in _PUTAWAY_HELP.items() if c in free_full.columns}
-    free_full = _table_search(free_full, key="search_free")
+    free_full = _table_search(free_full, key="search_free",
+                              label=t("search_lbl_slot"))
     st.dataframe(free_full.head(100), use_container_width=True,
                  hide_index=True, column_config=col_cfg)
     _csv_download(free_full, "free_capacity")
@@ -3653,7 +3671,8 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
                     st.info(t("abc_none_cat"))
                     return
                 tbl = sub[_dev_cols].rename(columns=colmap)
-                tbl = _table_search(tbl, key="search_" + key)
+                tbl = _table_search(tbl, key="search_" + key,
+                                    label=t("search_lbl_slot"))
                 st.dataframe(tbl.head(200), use_container_width=True,
                              hide_index=True)
                 _csv_download(tbl, key)
@@ -3796,7 +3815,8 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
         tbl = tbl.rename(columns={"day": "Datum", "movements": "Bewegungen"})
         tbl = tbl[["Datum", t("wd_label"), "Bewegungen"]]
         tbl = tbl.sort_values("Datum", ascending=False)
-        tbl = _table_search(tbl, key="search_durchsatz")
+        tbl = _table_search(tbl, key="search_durchsatz",
+                            label=t("search_lbl_date"))
         st.dataframe(tbl, use_container_width=True, hide_index=True)
         _csv_download(tbl, "durchsatz")
 
@@ -3862,7 +3882,8 @@ def render_top(tpa: pd.DataFrame, article_limit: int,
         show = top.rename(columns=_TOP_RENAME)
         col_cfg = {c: st.column_config.Column(help=h)
                    for c, h in _TOP_HELP.items() if c in show.columns}
-        show = _table_search(show, key="search_top")
+        show = _table_search(show, key="search_top",
+                             label=t("search_lbl_article"))
         st.dataframe(show, use_container_width=True, hide_index=True,
                      column_config=col_cfg)
         st.caption(t("top_dl_all").format(n=de_num(len(top_all))))
@@ -3925,7 +3946,8 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                 }
                 col_cfg = {c: st.column_config.Column(help=h)
                            for c, h in slot_help.items() if c in slot_tbl.columns}
-                slot_tbl = _table_search(slot_tbl, key="search_artikel_plaetze")
+                slot_tbl = _table_search(slot_tbl, key="search_artikel_plaetze",
+                                         label=t("search_lbl_srcslot"))
                 st.dataframe(slot_tbl, use_container_width=True,
                              hide_index=True, column_config=col_cfg)
                 _csv_download(slot_tbl, "artikel_plaetze")
