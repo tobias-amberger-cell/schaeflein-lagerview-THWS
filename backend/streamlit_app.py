@@ -3720,8 +3720,14 @@ def render_trend(tpa: pd.DataFrame, days: int, movements_filtered: bool,
                   de_num(int(trend['movements'].sum())))
 
         tbl = trend.copy()
+        # Wochentags-Kuerzel (Pandas: Mo=0..So=6) – Wochenende ist schon raus.
+        _wd = (["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+               if _LANG == "en"
+               else ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"])
+        tbl[t("wd_label")] = tbl["day"].dt.dayofweek.map(lambda i: _wd[i])
         tbl["day"] = tbl["day"].dt.strftime("%Y-%m-%d")
         tbl = tbl.rename(columns={"day": "Datum", "movements": "Bewegungen"})
+        tbl = tbl[["Datum", t("wd_label"), "Bewegungen"]]
         tbl = tbl.sort_values("Datum", ascending=False)
         st.dataframe(tbl, use_container_width=True, hide_index=True)
         _csv_download(tbl, "durchsatz")
