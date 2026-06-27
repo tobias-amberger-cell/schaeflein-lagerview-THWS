@@ -3078,9 +3078,14 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                 c: st.column_config.Column(help=h)
                 for c, h in col_help.items() if c in show.columns
             }
+        shown = show.head(200)
+        # Hoehe an die Zeilenzahl koppeln -> Tabelle zeigt ALLE Zeilen ohne
+        # internen Scrollbalken (man scrollt die Seite, nicht die Box).
+        # 35 px je Zeile + 1 Kopfzeile (Streamlit-Standard).
         st.dataframe(
-            show.head(200), use_container_width=True, hide_index=True,
+            shown, use_container_width=True, hide_index=True,
             column_config=col_cfg,
+            height=(len(shown) + 1) * 35 + 3,
         )
         key = "".join(c if c.isalnum() else "_" for c in titel.lower())
         # CSV-Download; optional direkt daneben ein ℹ️-Button mit der/den
