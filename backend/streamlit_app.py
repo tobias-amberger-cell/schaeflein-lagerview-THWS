@@ -2339,22 +2339,28 @@ def load_platz_full() -> pd.DataFrame:
     # Sperr-Indikator (NICHT ZUSTAND); gleiche Definition wie der Sidebar-Filter.
     _sperr = platz["SPERR_KNZ"].astype(str).str.strip().str.lower()
     platz["GESPERRT"] = ~_sperr.isin(["", "0", "nan", "none"])
-    platz["DAYS_EMPTY"] = (
-        pd.Timestamp.now().normalize()
-        - pd.to_datetime(platz["LEER_DATUM"], errors="coerce")
-    ).dt.days
     # Tage seit letztem Pick (ZUGRIFF_DATUM). Eigenstaendiges Staleness-Signal
     # neben DAYS_EMPTY: besser gefuellt (auch Plaetze OHNE Leer-Datum haben ein
     # Zugriffsdatum) und unterscheidet "kuerzlich aktiv, Nachschub vergessen" von
     # "totes Fach". 'None'-Strings in den Rohdaten als fehlend behandeln.
-    platz["DAYS_SINCE_PICK"] = (
-        pd.Timestamp.now().normalize()
-        - pd.to_datetime(
-            platz["ZUGRIFF_DATUM"].replace(
-                {"None": np.nan, "none": np.nan, "": np.nan}),
-            errors="coerce",
-        )
+    _zugriff = pd.to_datetime(
+        platz["ZUGRIFF_DATUM"].replace(
+            {"None": np.nan, "none": np.nan, "": np.nan}),
+        errors="coerce",
+    )
+    # Bezugsdatum ("heute") fuer ALLE Staleness-Rechnungen: das JUENGSTE Datum IN
+    # den Daten, NICHT die Systemuhr. Die warehouse.db ist ein fester Export-Stand;
+    # gegen die laufende Uhr gemessen wuerden alle Plaetze jeden Tag aelter und der
+    # Aktiv-Filter im Nachschub-Tab liefe mit der Zeit gegen 0 Treffer. Gegen den
+    # Datenstichtag bleibt die Rechnung stabil; bei echten Live-Daten ist
+    # max(ZUGRIFF_DATUM) praktisch "heute". Fallback auf die Uhr, falls leer.
+    _ref_date = _zugriff.max()
+    if pd.isna(_ref_date):
+        _ref_date = pd.Timestamp.now().normalize()
+    platz["DAYS_EMPTY"] = (
+        _ref_date - pd.to_datetime(platz["LEER_DATUM"], errors="coerce")
     ).dt.days
+    platz["DAYS_SINCE_PICK"] = (_ref_date - _zugriff).dt.days
 
     # Pick-Count aus Fahrpos zusaetzlich mergen (Q_PLATZ = Quellplatz).
     try:
