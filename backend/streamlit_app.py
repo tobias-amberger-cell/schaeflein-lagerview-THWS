@@ -2785,11 +2785,12 @@ _PUTAWAY_BLOCKED_RENAME = {
 
 # Schlanke Spalten fuer den Nachschub-Tab: jeder Platz ist hier per Definition
 # GANZ leer (IST_LHM = 0), darum ist IST_LHM (immer 0) keine Entscheidungshilfe.
-# Relevant ist: Ort, Platz-Guete (ABC), Pickhaeufigkeit (Dringlichkeit) und wie
-# voll der Platz sein SOLL (MAX_LHM).
+# Relevant ist: Ort, Platz-Guete (ABC), Pickhaeufigkeit (Dringlichkeit).
+# MAX_LHM (Soll-LHM) NICHT: im Pickbereich konstant 1 und die Auffuellmenge steht
+# ohnehin im Vorschlag-Text (das Vorschlag-SQL liest MAX_LHM weiterhin aus dem df).
 _REPLEN_COLS = [
     "PLATZ_ID", "REGAL", "FACH", "EBENE",
-    "ABC_KLASSE", "ANZ_PICKS", "MAX_LHM",
+    "ABC_KLASSE", "ANZ_PICKS",
 ]
 
 # Sprechende Spaltenkoepfe fuer die Nachschub-Tabellen (technisch -> Klartext).
