@@ -4256,6 +4256,11 @@ def main() -> None:
         TR["lang_label"]["de"], ["Deutsch", "English"], horizontal=True,
     ) == "English" else "de"
 
+    # Formel-Referenz oben in die Sidebar (direkt zum Sprach-Umschalter), nicht
+    # mehr ins Hauptfenster -> der Kopfbereich bleibt aufgeraeumt.
+    with st.sidebar:
+        render_formulas_popover()
+
     logo = _logo_path()
     if logo is not None:
         try:
@@ -4273,8 +4278,6 @@ def main() -> None:
     else:
         st.title("📦 Schaeflein LagerView v1.4")
         st.caption(t("caption"))
-
-    render_formulas_popover()
 
     try:
         platz = load_platz_full()
@@ -4336,6 +4339,27 @@ def main() -> None:
         show_all_top = st.checkbox(t("top_show_all"), value=False,
                                    help=t("top_show_all_h"))
         st.divider()
+        # Zusammenfassung der aktiven Filter -> gehoert zu den Reglern (nicht
+        # mehr ins Hauptfenster). Haengt nur an den Regler-Werten, ist daher
+        # schon hier (vor apply_filters) berechenbar. Setzt zugleich
+        # _FILTER_LABEL fuer die CSV-Kommentarzeile (Nachvollziehbarkeit).
+        _af: list[str] = []
+        if abc:
+            _af.append(f"{t('abc')}: {', '.join(abc)} ({abc_src_choice})")
+        if util_range != (0, 100):
+            _af.append(f"{t('util')}: {util_range[0]}–{util_range[1]}")
+        if only_occupied:
+            _af.append(t("only_occ"))
+        if regal_range != (0, regal_max):
+            _af.append(f"{t('rack')}: {regal_range[0]}–{regal_range[1]}")
+        if ebene_range != (0, ebene_max):
+            _af.append(f"{t('level')}: {ebene_range[0]}–{ebene_range[1]}")
+        if min_picks > 0:
+            _af.append(f"{t('min_picks')}: ≥ {min_picks}")
+        if sperr_mode != "Alle":
+            _af.append(f"{t('lock_status')}: {sperr_choice}")
+        _FILTER_LABEL = "; ".join(_af) if _af else t("filter_none")
+        st.caption(f"{t('active_filters')}: {_FILTER_LABEL}")
         st.caption(f"DB: `{get_db_path()}`")
 
     # Einmal filtern -> alle Tabs nutzen dasselbe gefilterte DataFrame.
@@ -4347,26 +4371,6 @@ def main() -> None:
         sperr_mode=sperr_mode,
         abc_src=abc_src,
     )
-
-    # Menschenlesbare Zusammenfassung der aktiven Filter -> Caption unter den KPIs
-    # und Kommentarzeile in jedem CSV-Download (Nachvollziehbarkeit).
-    _af: list[str] = []
-    if abc:
-        _af.append(f"{t('abc')}: {', '.join(abc)} ({abc_src_choice})")
-    if util_range != (0, 100):
-        _af.append(f"{t('util')}: {util_range[0]}–{util_range[1]}")
-    if only_occupied:
-        _af.append(t("only_occ"))
-    if regal_range != (0, regal_max):
-        _af.append(f"{t('rack')}: {regal_range[0]}–{regal_range[1]}")
-    if ebene_range != (0, ebene_max):
-        _af.append(f"{t('level')}: {ebene_range[0]}–{ebene_range[1]}")
-    if min_picks > 0:
-        _af.append(f"{t('min_picks')}: ≥ {min_picks}")
-    if sperr_mode != "Alle":
-        _af.append(f"{t('lock_status')}: {sperr_choice}")
-    _FILTER_LABEL = "; ".join(_af) if _af else t("filter_none")
-    st.caption(f"{t('active_filters')}: {_FILTER_LABEL}")
 
     # Bewegungsdaten (TPA) einmal roh laden und auf die gefilterten Plaetze
     # einschraenken (ueber Q_PLATZ -> PLATZ_ID). So wirken die Sidebar-Filter
