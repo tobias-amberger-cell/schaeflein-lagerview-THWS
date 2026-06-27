@@ -75,7 +75,7 @@ _THREE_VIEWER_HTML = """
   #nav button:active { background:#1565c0; }
 </style>
 <div id="wrap" style="display:flex;flex-direction:column;gap:8px;font-family:sans-serif;">
-  <div id="view" style="position:relative;height:__HEIGHT__px;background:#2b2b30;border-radius:8px;overflow:hidden;">
+  <div id="view" style="position:relative;height:__HEIGHT__px;background:#b3b8bd;border-radius:8px;overflow:hidden;">
     <div id="loading" style="position:absolute;top:10px;left:12px;font-size:13px;color:#555;background:rgba(255,255,255,.7);padding:2px 8px;border-radius:4px;">…</div>
     <div id="legend" style="position:absolute;bottom:10px;left:12px;font-size:12px;color:#333;background:rgba(255,255,255,.88);padding:8px 10px;border-radius:6px;line-height:1.5;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
     <div id="nav">
@@ -200,7 +200,7 @@ panel.innerHTML = '<div style="color:#888;">' + L.hint + '</div>';
 
 let W = host.clientWidth || 600, H = host.clientHeight || 600;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x2b2b30);  // dunkles Anthrazit (Plaetze heben sich ab)
+scene.background = new THREE.Color(0xb3b8bd);  // mittleres Hellgrau (nicht grell, nicht dunkel)
 const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
@@ -494,6 +494,33 @@ new GLTFLoader().load('__GLB__',
       // COLORMODE==='none' -> Original-Material der GLB bleibt unveraendert.
     });
     fillLegend(counts);
+
+    // Bodenplatte ("WarehouseFloor") an die Regalflaeche anpassen: in der GLB
+    // ist das Regal laenger als die Platte. Wir skalieren die Platte horizontal
+    // so, dass sie die gesamte Platzflaeche (+kleiner Rand) abdeckt, und
+    // zentrieren sie darunter. Reparent auf die Szene -> Welt-Transform, dann
+    // freies Skalieren/Positionieren unabhaengig von der Verschachtelung.
+    const floor = root.getObjectByName('WarehouseFloor');
+    if(floor){
+      const slotBox = new THREE.Box3();
+      root.traverse((o) => {
+        if(o.isMesh && o.name && PID_RE.test(o.name)) slotBox.expandByObject(o);
+      });
+      if(!slotBox.isEmpty()){
+        scene.attach(floor);
+        const sSize = slotBox.getSize(new THREE.Vector3());
+        const sCtr = slotBox.getCenter(new THREE.Vector3());
+        const fBox = new THREE.Box3().setFromObject(floor);
+        const fSize = fBox.getSize(new THREE.Vector3());
+        const margin = 1.08;  // etwas Ueberstand ueber die aeussersten Regale
+        floor.scale.x *= Math.max((sSize.x * margin) / (fSize.x || 1), 1);
+        floor.scale.z *= Math.max((sSize.z * margin) / (fSize.z || 1), 1);
+        floor.updateMatrixWorld(true);
+        const fCtr2 = new THREE.Box3().setFromObject(floor).getCenter(new THREE.Vector3());
+        floor.position.x += sCtr.x - fCtr2.x;  // unter den Regalen zentrieren
+        floor.position.z += sCtr.z - fCtr2.z;
+      }
+    }
 
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
