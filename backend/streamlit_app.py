@@ -3169,8 +3169,10 @@ def render_uebersicht(filtered: pd.DataFrame) -> None:
         state_counts,
         x="HALLE", y="Plaetze", color="_state", barmode="stack",
         category_orders={"_state": [s_full, s_part, s_empty]},
+        # Einheitliche Blau-Palette wie ABC-/Top-Artikel-Diagramm (kein Orange);
+        # Grau bleibt fuer "leer" als neutraler Zustand.
         color_discrete_map={
-            s_full: "#ef6c00", s_part: "#ffb74d", s_empty: "#bdbdbd",
+            s_full: "#1565c0", s_part: "#64b5f6", s_empty: "#bdbdbd",
         },
         labels={"_state": t("halls_state_legend")},
         title=t("halls_chart"),
