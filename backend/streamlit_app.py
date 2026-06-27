@@ -2177,6 +2177,46 @@ def load_tpa_raw() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_artikel_je_platz() -> pd.DataFrame:
+    """Naeherung 'welcher Artikel liegt auf einem Platz' aus den TPA-Bewegungen.
+
+    WICHTIG: Die Platz-Tabelle fuehrt KEINEN festen Artikel je Platz. Ableitbar
+    ist es nur ueber die Bewegungen: die JUENGSTE Buchung, die den Platz beruehrt
+    – egal ob als Quelle (Q_PLATZ, von dort gepickt) oder als Ziel (Z_PLATZ,
+    dorthin eingelagert). Z_PLATZ ist noetig, weil belegte Plaetze OHNE Pick
+    (z. B. 'Premiumplatz blockiert', 0 Picks) sonst gar keinen Artikel haetten.
+    Bleibt eine Naeherung; Plaetze ganz ohne Bewegung haben keinen Artikel.
+
+    Liefert PLATZ_KEY (getrimmte PLATZ_ID), ARTIKEL_NR, ARTIKEL_BEZ.
+    """
+    con = get_connection()
+    df = pd.read_sql_query(
+        f"SELECT TRIM(COALESCE(Q_PLATZ, '')) AS q_platz, "
+        f"TRIM(COALESCE(Z_PLATZ, '')) AS z_platz, "
+        f"TRIM(COALESCE(ARTIKELNR, '')) AS artikel, "
+        f"TRIM(COALESCE(ARTBEZ1, '')) AS bezeichnung, ENDE_DATUM "
+        f'FROM "{TPA_TABLE}"',
+        con,
+    )
+    df = df[df["artikel"] != ""].copy()
+    df["day"] = pd.to_datetime(df["ENDE_DATUM"], errors="coerce")
+    df = df.dropna(subset=["day"])
+    if df.empty:
+        return pd.DataFrame(columns=["PLATZ_KEY", "ARTIKEL_NR", "ARTIKEL_BEZ"])
+    # Lang-Form: jede Bewegung zaehlt fuer ihren Quell- UND ihren Zielplatz.
+    cols = ["artikel", "bezeichnung", "day"]
+    q = df[df["q_platz"] != ""][["q_platz", *cols]].rename(columns={"q_platz": "PLATZ_KEY"})
+    z = df[df["z_platz"] != ""][["z_platz", *cols]].rename(columns={"z_platz": "PLATZ_KEY"})
+    both = pd.concat([q, z], ignore_index=True)
+    latest = (
+        both.sort_values("day").groupby("PLATZ_KEY").tail(1)
+        [["PLATZ_KEY", "artikel", "bezeichnung"]]
+        .rename(columns={"artikel": "ARTIKEL_NR", "bezeichnung": "ARTIKEL_BEZ"})
+    )
+    return latest
+
+
 def filter_tpa(tpa: pd.DataFrame, allowed_pids: set[str] | None) -> pd.DataFrame:
     """Bewegungen auf erlaubte Quellplaetze einschraenken (None = alle Plaetze)."""
     if allowed_pids is None:
@@ -2611,6 +2651,7 @@ _MASSNAHME_RENAME = {
     "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
     "ANZ_PICKS": "Picks", "ABC_KLASSE": "ABC (Platz)",
     "MAX_LHM": "Kapazität (max. LHM)", "IST_LHM": "Belegt (Ist-LHM)",
+    "ARTIKEL_NR": "Artikel-Nr.", "ARTIKEL_BEZ": "Artikel",
 }
 _MASSNAHME_HELP = {
     "Platz": "Die eindeutige Nummer des Lagerplatzes.",
@@ -2628,6 +2669,12 @@ _MASSNAHME_HELP = {
     "Vorschlag": "Die empfohlene Handlung für diese Zeile.",
     "Zielplatz-Vorschlag": "Ein konkreter freier Platz, auf den der Inhalt "
                            "umgelagert werden kann (nach freier Kapazität zugeordnet).",
+    "Artikel-Nr.": "Artikelnummer der Ware auf dem Platz. Näherung aus den "
+                   "Bewegungsdaten (jüngste Buchung von diesem Platz), da das "
+                   "Lagersystem keinen festen Artikel je Platz führt. „—“ = "
+                   "keine Bewegung bekannt.",
+    "Artikel": "Bezeichnung der Ware auf dem Platz – näherungsweise aus der "
+               "jüngsten Bewegung abgeleitet, nicht für jeden Platz bekannt.",
 }
 
 # Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
@@ -3134,6 +3181,10 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
 
+    # Welcher Artikel liegt auf dem Platz? Naeherung aus den Bewegungen (s.
+    # load_artikel_je_platz). Einmal laden, je Tabelle ueber _add_artikel anfuegen.
+    _art = load_artikel_je_platz()
+
     # Zielplatz-Pool: freie, nicht gesperrte Plaetze. Unten (<= Pickzone) sind
     # gute Pickplaetze (Ziel fuer heisse/zu hohe Ware), oben (> Pickzone) ist
     # Reserve (Ziel fuer Ladenhueter vom Premiumplatz).
@@ -3155,6 +3206,18 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         col = [labels[i] if i < len(labels) else t("ziel_none")
                for i in range(len(src))]
         return src.assign(**{t("col_ziel"): col})
+
+    def _add_artikel(src: pd.DataFrame) -> pd.DataFrame:
+        """Artikel-Nr./Bezeichnung der Ware auf dem Platz anfuegen (Naeherung aus
+        den Bewegungen, s. load_artikel_je_platz); ohne Treffer -> '—'."""
+        out = (
+            src.assign(_pid=src["PLATZ_ID"].astype(str).str.strip())
+            .merge(_art, left_on="_pid", right_on="PLATZ_KEY", how="left")
+            .drop(columns=["_pid", "PLATZ_KEY"])
+        )
+        out["ARTIKEL_NR"] = out["ARTIKEL_NR"].fillna("—").replace("", "—")
+        out["ARTIKEL_BEZ"] = out["ARTIKEL_BEZ"].fillna("—").replace("", "—")
+        return out
 
     def _hotc_vorschlag(df: pd.DataFrame) -> list:
         """Konkrete Ziel-Klasse je heissem C-Platz statt nur 'hochstufen': die
@@ -3178,27 +3241,30 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     st.markdown(t("ua_group_free"))
     render_massnahme_kategorie(
         t("ua_crit_t"), t("ua_crit_d"),
-        _add_ziel(critical, free_high),
+        _add_artikel(_add_ziel(critical, free_high)),
         # ABC-Spalte weglassen: per Filter ist jede Zeile "A" -> redundant.
         cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
-        extra_cols=[t("col_ziel")], vorschlag=t("ua_crit_v"))
+        extra_cols=["ARTIKEL_NR", "ARTIKEL_BEZ", t("col_ziel")],
+        vorschlag=t("ua_crit_v"))
 
     # --- Gruppe 2: besser platzieren (umlagern) ---
     st.markdown(t("ua_group_place"))
     render_massnahme_kategorie(
         t("reloc_hotC_t"), t("reloc_hotC_d"),
-        _add_ziel(hot_c, free_low),
+        _add_artikel(_add_ziel(hot_c, free_low)),
         # ABC-Spalte weglassen: per Filter immer "C"; das C->A/B-Hochstufen steht
         # ohnehin im Titel und in der Vorschlag-Spalte.
         cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
-        extra_cols=[t("col_ziel")], vorschlag=_hotc_vorschlag(hot_c),
-        formel_keys=["abc_calc"])
+        extra_cols=["ARTIKEL_NR", "ARTIKEL_BEZ", t("col_ziel")],
+        vorschlag=_hotc_vorschlag(hot_c), formel_keys=["abc_calc"])
     render_massnahme_kategorie(
         t("reloc_highA_t"), t("reloc_highA_d"),
-        _add_ziel(high_a, free_low),
+        _add_artikel(_add_ziel(high_a, free_low)),
         # ABC-Spalte hier weglassen: per Filter ist jede Zeile "A" -> redundant.
         cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
-        extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
+        # Artikel-Nr./Bezeichnung (welche Ware liegt drauf) + Zielplatz anhaengen.
+        extra_cols=["ARTIKEL_NR", "ARTIKEL_BEZ", t("col_ziel")],
+        vorschlag=t("reloc_highA_v"))
 
 
 def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
