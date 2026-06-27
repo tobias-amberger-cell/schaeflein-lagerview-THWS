@@ -2369,11 +2369,15 @@ def load_platz_full() -> pd.DataFrame:
             f"WHERE TRIM(COALESCE(Q_PLATZ, '')) <> ''",
             con,
         )
-        fahrpos["Q_PLATZ"] = fahrpos["Q_PLATZ"].astype(str).str.strip()
+        # Q_PLATZ ist in der DB ein Integer (z. B. 32306700), PLATZ_ID dagegen
+        # eine 9-stellige Zeichenkette mit fuehrender Null (z. B. "032306700").
+        # Ohne zfill(9) liefert der Join 0 Treffer; mit zfill werden >99,9 %
+        # der Fahrpos-Zeilen korrekt zugeordnet.
+        fahrpos["Q_PLATZ"] = fahrpos["Q_PLATZ"].astype(str).str.strip().str.zfill(9)
         pick_freq = (
             fahrpos.groupby("Q_PLATZ").size().reset_index(name="PICK_COUNT_FAHR")
         )
-        platz["PLATZ_ID_STR"] = platz["PLATZ_ID"].astype(str).str.strip()
+        platz["PLATZ_ID_STR"] = platz["PLATZ_ID"].astype(str).str.strip().str.zfill(9)
         platz = platz.merge(
             pick_freq, left_on="PLATZ_ID_STR", right_on="Q_PLATZ", how="left"
         )
