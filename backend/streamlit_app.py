@@ -115,6 +115,7 @@ const AUTOROTATE = __ROTATE__;
 const COLORMODE = "__COLORMODE__";  // 'abc' | 'picks' | 'moves' | 'none'
 const HIDEGREY = __HIDEGREY__;
 const FOCUS = "__FOCUS__";  // gesuchte PLATZ_ID (leer = keine Suche)
+const SENS = parseFloat("__SENS__") || 1;  // Maus-Empfindlichkeit (Drehen/Zoom/Pan)
 const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
 const PID_RE = /^[0-9]{9}$/;
 
@@ -221,6 +222,11 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = false;  // kein Nachziehen/Gleiten: stoppt beim Loslassen
 controls.autoRotate = AUTOROTATE;
 controls.autoRotateSpeed = 0.8;
+// Maus-Empfindlichkeit: kleiner = Maus weiter bewegen fuer dieselbe Drehung
+// (feineres, ruhigeres Navigieren). 1.0 = Standard.
+controls.rotateSpeed = SENS;
+controls.zoomSpeed = SENS;
+controls.panSpeed = SENS;
 controls.addEventListener('change', requestRender);
 
 // --- "Schweben" durch die Regale per WASD ---------------------------------
@@ -2043,6 +2049,14 @@ TR: dict[str, dict[str, str]] = {
               "kein Zoom. Zoomen per Mausrad im Modell.",
         "en": "Height of the viewer window in pixels – larger = more canvas, "
               "not zoom. Zoom with the mouse wheel inside the model.",
+    },
+    "d3_sens": {"de": "Maus-Empfindlichkeit", "en": "Mouse sensitivity"},
+    "d3_sens_help": {
+        "de": "Wie stark die Maus auf Drehen/Zoomen reagiert. Kleiner = du musst "
+              "die Maus weiter bewegen, dafür feiner und ruhiger steuerbar. "
+              "1.0 = Standard.",
+        "en": "How strongly the mouse reacts to rotate/zoom. Lower = you move the "
+              "mouse further, but control is finer and steadier. 1.0 = default.",
     },
     "d3_aisle": {"de": "Gang-Breite", "en": "Aisle width"},
     "d3_aisle_help": {
@@ -4070,7 +4084,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
     # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
     # neue GLB laden statt der alten aus dem Cache.
     glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
-    ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
+    ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 1])
     with ctrl1:
         # Faerb-Modus: ABC-Klassen, Pick-Heatmap, Bewegungs-Heatmap oder
         # gar nicht (Original-Optik der GLB).
@@ -4087,6 +4101,10 @@ def render_3d(filtered: pd.DataFrame) -> None:
     with ctrl3:
         viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
                                   help=t("d3_height_help"))
+    with ctrl4:
+        # Maus-Empfindlichkeit fuer Drehen/Zoom/Pan; kleiner = feiner steuerbar.
+        sens = st.slider(t("d3_sens"), 0.2, 1.5, 1.0, step=0.1,
+                         key="d3_sens_cad", help=t("d3_sens_help"))
     html = (
         _THREE_VIEWER_HTML
         .replace("__HEIGHT__", str(viewer_height))
@@ -4097,6 +4115,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
         .replace("__COLORMODE__", colormode_cad)
         .replace("__HIDEGREY__", "true" if perf_mode else "false")
         .replace("__FOCUS__", focus_id)
+        .replace("__SENS__", str(sens))
     )
     # +230: Detail-Panel liegt jetzt UNTER der Karte (200px) + Abstand.
     components.html(html, height=viewer_height + 230)
