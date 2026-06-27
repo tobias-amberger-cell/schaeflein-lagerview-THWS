@@ -1107,8 +1107,12 @@ TR: dict[str, dict[str, str]] = {
         "en": "### ⬆️ Replenishment\n**Which pick slots are empty and should be refilled?** "
               "The lists show completely empty slots in the pick zone (the low levels), ranked by urgency.",
     },
+    "replen_principle_t": {
+        "de": "ℹ️ Worum geht's hier? (Zweck + die zwei Listen)",
+        "en": "ℹ️ What's this about? (purpose + the two lists)",
+    },
     "replen_principle": {
-        "de": "**Worum geht's hier?** Ist ein Platz leer, an dem sonst oft gepickt wird, steht der Mitarbeiter vor "
+        "de": "Ist ein Platz leer, an dem sonst oft gepickt wird, steht der Mitarbeiter vor "
               "einem leeren Fach – er muss suchen, oder die Ware fehlt. Je öfter der Platz normalerweise gepickt "
               "wird und je länger er schon leer ist, desto dringender der Nachschub.\n\n"
               "Es gibt zwei Listen:\n"
@@ -1118,7 +1122,7 @@ TR: dict[str, dict[str, str]] = {
               "Gesperrte Plätze lassen wir bewusst weg. Über den Regler **„Aktiv …“** zeigen wir außerdem nur Plätze, "
               "an denen kürzlich gepickt wurde. Fächer, die seit Monaten unberührt sind (früher viel gepickt, jetzt "
               "tot), blenden wir aus und zählen sie oben nur als Hinweis.",
-        "en": "**What's this about?** If a slot is empty where picking usually happens often, the worker faces an "
+        "en": "If a slot is empty where picking usually happens often, the worker faces an "
               "empty bin – they have to search, or goods are missing. The more often the slot is normally picked and "
               "the longer it has been empty, the more urgent the refill.\n\n"
               "There are two lists:\n"
@@ -3351,8 +3355,10 @@ def _replen_vorschlag_col(df: pd.DataFrame, kind: str) -> pd.DataFrame:
 def render_nachschub(filtered: pd.DataFrame) -> None:
     """Tab 'Nachschub': leere Pickplaetze nach Dringlichkeit."""
     st.markdown(t("replen_head"))
-    # WARUM dieser Tab existiert + Eskalations-Logik der drei Listen.
-    st.caption(t("replen_principle"))
+    # WARUM dieser Tab existiert + Eskalations-Logik der drei Listen -> Expander
+    # (wie das Glossar darunter), damit oben kein Textblock dauerhaft zustellt.
+    with st.expander(t("replen_principle_t")):
+        st.markdown(t("replen_principle"))
     # Kurz-Glossar: beantwortet "was heisst leer / was zaehlt als Pick / Spalten".
     with st.expander(t("replen_glossary_t")):
         st.markdown(t("replen_glossary_b"))
