@@ -495,33 +495,6 @@ new GLTFLoader().load('__GLB__',
     });
     fillLegend(counts);
 
-    // Bodenplatte ("WarehouseFloor") an die Regalflaeche anpassen: in der GLB
-    // ist das Regal laenger als die Platte. Wir skalieren die Platte horizontal
-    // so, dass sie die gesamte Platzflaeche (+kleiner Rand) abdeckt, und
-    // zentrieren sie darunter. Reparent auf die Szene -> Welt-Transform, dann
-    // freies Skalieren/Positionieren unabhaengig von der Verschachtelung.
-    const floor = root.getObjectByName('WarehouseFloor');
-    if(floor){
-      const slotBox = new THREE.Box3();
-      root.traverse((o) => {
-        if(o.isMesh && o.name && PID_RE.test(o.name)) slotBox.expandByObject(o);
-      });
-      if(!slotBox.isEmpty()){
-        scene.attach(floor);
-        const sSize = slotBox.getSize(new THREE.Vector3());
-        const sCtr = slotBox.getCenter(new THREE.Vector3());
-        const fBox = new THREE.Box3().setFromObject(floor);
-        const fSize = fBox.getSize(new THREE.Vector3());
-        const margin = 1.08;  // etwas Ueberstand ueber die aeussersten Regale
-        floor.scale.x *= Math.max((sSize.x * margin) / (fSize.x || 1), 1);
-        floor.scale.z *= Math.max((sSize.z * margin) / (fSize.z || 1), 1);
-        floor.updateMatrixWorld(true);
-        const fCtr2 = new THREE.Box3().setFromObject(floor).getCenter(new THREE.Vector3());
-        floor.position.x += sCtr.x - fCtr2.x;  // unter den Regalen zentrieren
-        floor.position.z += sCtr.z - fCtr2.z;
-      }
-    }
-
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
