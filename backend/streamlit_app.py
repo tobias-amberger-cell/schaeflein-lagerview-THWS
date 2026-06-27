@@ -96,7 +96,7 @@ _THREE_VIEWER_HTML = """
       </div>
     </div>
   </div>
-  <div id="panel" style="height:200px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;overflow:auto;"></div>
+  <div id="panel" style="height:380px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;overflow:auto;"></div>
 </div>
 <script type="importmap">
 { "imports": {
@@ -3078,14 +3078,9 @@ def render_massnahme_kategorie(titel: str, beschreibung: str, df: pd.DataFrame,
                 c: st.column_config.Column(help=h)
                 for c, h in col_help.items() if c in show.columns
             }
-        shown = show.head(200)
-        # Hoehe an die Zeilenzahl koppeln -> Tabelle zeigt ALLE Zeilen ohne
-        # internen Scrollbalken (man scrollt die Seite, nicht die Box).
-        # 35 px je Zeile + 1 Kopfzeile (Streamlit-Standard).
         st.dataframe(
-            shown, use_container_width=True, hide_index=True,
+            show.head(200), use_container_width=True, hide_index=True,
             column_config=col_cfg,
-            height=(len(shown) + 1) * 35 + 3,
         )
         key = "".join(c if c.isalnum() else "_" for c in titel.lower())
         # CSV-Download; optional direkt daneben ein ℹ️-Button mit der/den
@@ -4201,8 +4196,9 @@ def render_3d(filtered: pd.DataFrame) -> None:
         .replace("__FOCUS__", focus_id)
         .replace("__SENS__", str(sens))
     )
-    # +230: Detail-Panel liegt jetzt UNTER der Karte (200px) + Abstand.
-    components.html(html, height=viewer_height + 230)
+    # +410: Detail-Panel liegt UNTER der Karte (380px) + Abstand -> alle
+    # Platz-Infos passen ohne internen Scrollbalken.
+    components.html(html, height=viewer_height + 410)
     st.caption(t("d3_caption"))
 
 
