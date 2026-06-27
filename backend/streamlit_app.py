@@ -115,6 +115,7 @@ const AUTOROTATE = __ROTATE__;
 const COLORMODE = "__COLORMODE__";  // 'abc' | 'picks' | 'moves' | 'none'
 const HIDEGREY = __HIDEGREY__;
 const FOCUS = "__FOCUS__";  // gesuchte PLATZ_ID (leer = keine Suche)
+const SPREAD = parseFloat("__SPREAD__") || 1;  // Gaenge optisch auseinanderziehen
 const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
 const PID_RE = /^[0-9]{9}$/;
 
@@ -463,9 +464,11 @@ new GLTFLoader().load('__GLB__',
     // Rang-Skala einmal aus ALLEN Plaetzen bauen (stabil, unabhaengig davon,
     // welche Meshes die GLB enthaelt).
     const ranker = heatOn ? buildRanker() : null;
+    const slotMeshes = [];
     root.traverse((o) => {
       if(!o.isMesh || !o.name || !PID_RE.test(o.name)) return;
       meshIndex[o.name] = o;  // fuer die Lagerplatz-Suche
+      slotMeshes.push(o);     // fuer das "Auseinanderziehen" (Spread)
       const d = DATA[o.name];
       const cls = d ? d.ac : null;
       const key = (cls === 'A' || cls === 'B' || cls === 'C') ? cls : 'grey';
@@ -489,9 +492,25 @@ new GLTFLoader().load('__GLB__',
     });
     fillLegend(counts);
 
-    const box = new THREE.Box3().setFromObject(root);
-    const size = box.getSize(new THREE.Vector3());
+    // "Auseinanderziehen": Platz-Meshes vom Zentrum aus horizontal spreizen,
+    // damit die Gaenge optisch breiter werden (die GLB-Geometrie selbst ist
+    // fix). Reparent auf die Szene -> Welt-Transform bleibt, position ist dann
+    // Weltkoordinate, sodass das Spreizen unabhaengig von der Verschachtelung
+    // funktioniert. Klick-Raycasting nutzt scene.children -> bleibt klickbar.
+    let box = new THREE.Box3();
+    slotMeshes.forEach((m) => box.expandByObject(m));
     const center = box.getCenter(new THREE.Vector3());
+    if(SPREAD !== 1 && slotMeshes.length){
+      for(const m of slotMeshes){
+        scene.attach(m);
+        m.position.x = center.x + (m.position.x - center.x) * SPREAD;
+        m.position.z = center.z + (m.position.z - center.z) * SPREAD;
+      }
+      box = new THREE.Box3();
+      slotMeshes.forEach((m) => box.expandByObject(m));
+      box.getCenter(center);
+    }
+    const size = box.getSize(new THREE.Vector3());
     controls.target.copy(center);
     const maxDim = Math.max(size.x, size.y, size.z);
     modelMaxDim = maxDim;
@@ -4070,7 +4089,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
     # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
     # neue GLB laden statt der alten aus dem Cache.
     glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
-    ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
+    ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 1])
     with ctrl1:
         # Faerb-Modus: ABC-Klassen, Pick-Heatmap, Bewegungs-Heatmap oder
         # gar nicht (Original-Optik der GLB).
@@ -4087,6 +4106,10 @@ def render_3d(filtered: pd.DataFrame) -> None:
     with ctrl3:
         viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
                                   help=t("d3_height_help"))
+    with ctrl4:
+        # Gaenge optisch auseinanderziehen (Explode-View), 1.0 = Originallayout.
+        spread = st.slider(t("d3_aisle"), 1.0, 3.0, 1.0, step=0.1,
+                           key="d3_aisle_cad", help=t("d3_aisle_help"))
     html = (
         _THREE_VIEWER_HTML
         .replace("__HEIGHT__", str(viewer_height))
@@ -4097,6 +4120,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
         .replace("__COLORMODE__", colormode_cad)
         .replace("__HIDEGREY__", "true" if perf_mode else "false")
         .replace("__FOCUS__", focus_id)
+        .replace("__SPREAD__", str(spread))
     )
     # +230: Detail-Panel liegt jetzt UNTER der Karte (200px) + Abstand.
     components.html(html, height=viewer_height + 230)
