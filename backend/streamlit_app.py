@@ -1007,10 +1007,9 @@ TR: dict[str, dict[str, str]] = {
     "m_occupied_help": {
         "de": "Plaetze, auf denen mindestens 1 Ladehilfsmittel steht (auch teilweise "
               "gefuellte zaehlen mit). Der Prozentwert ist ihr Anteil an allen "
-              "Plaetzen; die Zeile darunter teilt sie in voll und noch-mit-Platz auf.",
+              "Plaetzen.",
         "en": "Slots holding at least 1 load unit (partially filled ones count too). "
-              "The percentage is their share of all slots; the line below splits them "
-              "into full and room-left.",
+              "The percentage is their share of all slots.",
     },
     "m_occupied_split": {
         "de": "davon voll: {full} · noch Platz: {partial}",
@@ -4403,10 +4402,13 @@ def main() -> None:
     c1, c2, c3 = st.columns(3)
     c1.metric(t("m_slots"), de_num(len(filtered)),
               help=t("m_slots_help"))
+    # Aufteilung voll / noch-Platz nicht mehr als Caption darunter, sondern
+    # direkt ins Info-Icon der Kachel (aufgeraeumter).
+    occ_split = t("m_occupied_split").format(
+        full=de_num(full_occ), partial=de_num(partial_occ))
     c2.metric(t("m_occupied"), de_num(occupied),
-              f"{occupied/total*100:.1f}%", help=t("m_occupied_help"))
-    c2.caption(t("m_occupied_split").format(
-        full=de_num(full_occ), partial=de_num(partial_occ)))
+              f"{occupied/total*100:.1f}%",
+              help=f"{t('m_occupied_help')}\n\n{occ_split}")
     util_hint = (f" · Ø Auslastung {avg_util:.1f} %"
                  if not pd.isna(avg_util) else "")
     c3.metric(t("m_avg_stock"),
