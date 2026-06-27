@@ -1491,6 +1491,13 @@ TR: dict[str, dict[str, str]] = {
     },
     "abc_byfreq": {"de": "**📋 Tabelle 2: Alle Einträge nach Pickhäufigkeit**",
                    "en": "**📋 Table 2: All entries by pick frequency**"},
+    "abc_search_art": {"de": "🔍 Artikel suchen (Nr. oder Bezeichnung)",
+                       "en": "🔍 Search article (no. or name)"},
+    "abc_search_slot": {"de": "🔍 Platz suchen (Platz-Nr., Regal, Fach)",
+                        "en": "🔍 Search slot (slot no., rack, bin)"},
+    "abc_search_none": {"de": "Keine Treffer für die Suche.",
+                        "en": "No matches for the search."},
+    "abc_search_hits": {"de": "{n} Treffer.", "en": "{n} matches."},
     "abc_byfreq_note": {
         "de": "Die komplette Liste, sortiert nach Picks (die häufigsten oben). "
               "*Stamm* = die im Lagersystem hinterlegte Klasse · *Berechnet* = die aus "
@@ -3657,6 +3664,18 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
             acols = ["artikel", "bezeichnung", "bewegungen", "menge", "_avg",
                      "CUM_%", "ABC"]
             dl_key = "abc_articles"
+        # Suche: filtert die Liste nach Artikel-Nr. ODER Bezeichnung (Teiltext,
+        # ohne Gross-/Kleinschreibung). Aendert NUR die Tabelle, nicht die
+        # ABC-Verteilung oben (die soll das ganze Lager zeigen).
+        q = st.text_input(t("abc_search_art"), "", key="abc_q_art").strip()
+        if q:
+            m = (atab["artikel"].astype(str)
+                 .str.contains(q, case=False, na=False, regex=False)
+                 | atab["bezeichnung"].astype(str)
+                 .str.contains(q, case=False, na=False, regex=False))
+            atab = atab[m]
+            st.caption(t("abc_search_none") if atab.empty
+                       else t("abc_search_hits").format(n=de_num(len(atab))))
         table = atab[[c for c in acols if c in atab.columns]].rename(columns=amap)
         st.dataframe(table.head(200), use_container_width=True, hide_index=True)
         if len(table) > 200:
@@ -3665,7 +3684,20 @@ def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
     else:
         st.markdown(t("abc_byfreq"))
         st.caption(t("abc_byfreq_note"))
-        table = data[[c for c in table_cols if c in data.columns]].rename(columns=colmap)
+        # Suche: filtert nach Platz-Nr., Regal oder Fach (Teiltext, case-insensitiv).
+        sdata = data
+        q = st.text_input(t("abc_search_slot"), "", key="abc_q_slot").strip()
+        if q:
+            m = pd.Series(False, index=data.index)
+            for c in ["PLATZ_ID", "REGAL", "FACH"]:
+                if c in data.columns:
+                    m |= data[c].astype(str).str.contains(
+                        q, case=False, na=False, regex=False)
+            sdata = data[m]
+            st.caption(t("abc_search_none") if sdata.empty
+                       else t("abc_search_hits").format(n=de_num(len(sdata))))
+        table = sdata[[c for c in table_cols if c in sdata.columns]].rename(
+            columns=colmap)
         st.dataframe(table.head(200), use_container_width=True, hide_index=True)
         _csv_download(table, "abc_slots")
 
