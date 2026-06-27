@@ -929,9 +929,23 @@ TR: dict[str, dict[str, str]] = {
     "filter": {"de": "Filter", "en": "Filters"},
     "abc": {"de": "ABC-Klasse", "en": "ABC class"},
     "abc_help": {
-        "de": "Filtert auf Stamm-ABC ODER kumulativ berechnete ABC.",
-        "en": "Filters on master ABC OR calculated ABC.",
+        "de": "Filtert die ausgewaehlten Klassen je nach gewaehlter Quelle "
+              "(Stamm-ABC, berechnete ABC oder beide).",
+        "en": "Filters the selected classes by the chosen source "
+              "(master ABC, calculated ABC or both).",
     },
+    "abc_src": {"de": "ABC-Quelle", "en": "ABC source"},
+    "abc_src_help": {
+        "de": "Worauf sich die ABC-Auswahl bezieht: **Stamm** = im WMS hinterlegte "
+              "Klasse, **Berechnet** = aus tatsaechlichen Picks (Pareto 80/95 %), "
+              "**Beide** = Platz zaehlt, wenn Stamm ODER Berechnet passt.",
+        "en": "What the ABC selection refers to: **Master** = class stored in the "
+              "WMS, **Calculated** = from actual picks (Pareto 80/95 %), "
+              "**Both** = slot counts if master OR calculated matches.",
+    },
+    "abc_src_stamm": {"de": "Stamm", "en": "Master"},
+    "abc_src_calc": {"de": "Berechnet", "en": "Calculated"},
+    "abc_src_both": {"de": "Beide", "en": "Both"},
     "util": {"de": "Auslastung (%)", "en": "Utilization (%)"},
     "util_help": {
         "de": "Wie voll ein Platz ist: belegte Menge geteilt durch Kapazität, mal 100. "
@@ -2750,15 +2764,23 @@ def apply_filters(
     ebene_range: tuple[int, int] | None = None,
     min_picks: int = 0,
     sperr_mode: str = "Alle",
+    abc_src: str = "Beide",
 ) -> pd.DataFrame:
     """Wendet die Sidebar-Filter auf das Platz-DataFrame an und gibt die
     Teilmenge zurueck. Wird einmal in main() aufgerufen; ALLE Tabs arbeiten
     danach mit diesem `filtered` – so wirkt jeder Filter ueberall gleich.
     Jeder Block ist ein optionaler Filter (leer/Default = nicht einschraenken).
+    `abc_src` bestimmt, worauf die ABC-Auswahl wirkt: 'Stamm' (ABC_KLASSE),
+    'Berechnet' (ABC_CALC) oder 'Beide' (ODER, Default).
     """
     out = df
     if abc:
-        out = out[out["ABC_KLASSE"].isin(abc) | out["ABC_CALC"].isin(abc)]
+        if abc_src == "Stamm":
+            out = out[out["ABC_KLASSE"].isin(abc)]
+        elif abc_src == "Berechnet":
+            out = out[out["ABC_CALC"].isin(abc)]
+        else:  # "Beide"
+            out = out[out["ABC_KLASSE"].isin(abc) | out["ABC_CALC"].isin(abc)]
     lo, hi = util_range
     # Slider-Obergrenze 100 bedeutet "100 % und mehr" (nach oben offen), damit
     # seltene Ueberlast-Artefakte (>=200 %) und Plaetze ohne MAX_LHM im Default
@@ -3315,6 +3337,10 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     ].sort_values("ANZ_PICKS", ascending=False)
     # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> Ware ergonomisch auf einen
     # freien Platz weiter unten umlagern (Platz bleibt, nur Inhalt zieht um).
+    # BELEGT ist Pflicht: ANZ_PICKS>0 zaehlt HISTORISCHE Picks (6 Mon) - ein Platz
+    # kann viel gepickt worden, inzwischen aber leer sein. Ohne BELEGT landen leere
+    # A-Plaetze in der Liste (~3/4 der Treffer), obwohl es da nichts umzulagern gibt
+    # - genau der Fall, den der Info-Text ausschliesst.
     # WICHTIG: EBENE ist KEIN sauberer 1-6-Level. Das Feld enthaelt codierte
     # Cluster (0-6 = echte Ebenen, 10-13 = eigener Block mit ~2200 Plaetzen,
     # 14-24 Ausreisser). Die "zu hoch"-Logik gilt nur fuer die echten
@@ -3325,6 +3351,7 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         & (filtered["EBENE"] >= high_level)
         & (filtered["EBENE"] <= 6)
         & (filtered["ANZ_PICKS"] > 0)
+        & filtered["BELEGT"]
         & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
 
@@ -3373,6 +3400,8 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     render_massnahme_kategorie(
         t("ua_crit_t"), t("ua_crit_d"),
         _add_ziel(critical, free_high),
+        # ABC-Spalte weglassen: per Filter ist jede Zeile "A" -> redundant.
+        cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
         extra_cols=[t("col_ziel")], vorschlag=t("ua_crit_v"))
 
     # --- Gruppe 2: besser platzieren (umlagern) ---
@@ -3380,11 +3409,16 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     render_massnahme_kategorie(
         t("reloc_hotC_t"), t("reloc_hotC_d"),
         _add_ziel(hot_c, free_low),
+        # ABC-Spalte weglassen: per Filter immer "C"; das C->A/B-Hochstufen steht
+        # ohnehin im Titel und in der Vorschlag-Spalte.
+        cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
         extra_cols=[t("col_ziel")], vorschlag=_hotc_vorschlag(hot_c),
         formel_keys=["abc_calc"])
     render_massnahme_kategorie(
         t("reloc_highA_t"), t("reloc_highA_d"),
         _add_ziel(high_a, free_low),
+        # ABC-Spalte hier weglassen: per Filter ist jede Zeile "A" -> redundant.
+        cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
         extra_cols=[t("col_ziel")], vorschlag=t("reloc_highA_v"))
 
 
@@ -4142,6 +4176,15 @@ def main() -> None:
             default=[],
             help=t("abc_help"),
         )
+        # Quelle der ABC-Auswahl: Stamm (WMS), Berechnet (Picks) oder Beide.
+        # Greift nur, wenn oben Klassen gewaehlt sind; Default 'Beide' = altes
+        # ODER-Verhalten. -> auf kanonische (deutsche) Schluessel zurueckmappen.
+        abc_src_opts = [t("abc_src_stamm"), t("abc_src_calc"), t("abc_src_both")]
+        abc_src_choice = st.radio(
+            t("abc_src"), options=abc_src_opts, index=2, horizontal=True,
+            help=t("abc_src_help"), disabled=not abc,
+        )
+        abc_src = ["Stamm", "Berechnet", "Beide"][abc_src_opts.index(abc_src_choice)]
         util_range = st.slider(
             t("util"), 0, 100, (0, 100), step=5, help=t("util_help"),
         )
@@ -4151,11 +4194,14 @@ def main() -> None:
             # EBENE enthaelt vereinzelte Ausreisser-Datensaetze bis 24 (je 1 Platz),
             # waehrend echte Ebenen substanziell belegt sind (0-6 sowie Cluster 10-13).
             # Obergrenze = hoechste Ebene mit nennenswerter Belegung (>= 20 Plaetze),
-            # damit Einzel-Ausreisser die Skala nicht aufblaehen.
+            # damit Einzel-Ausreisser die Skala nicht aufblaehen. Zusaetzlich hart
+            # auf 9 gedeckelt -> die Cluster-Codes 10-13 sind fuer den Bediener
+            # nicht als echte Ebenen lesbar und wuerden die Skala verwirren.
             _ebene_counts = platz["EBENE"].value_counts()
             _ebene_real = _ebene_counts[_ebene_counts >= 20].index
             ebene_max = (max(int(_ebene_real.max()), 1) if len(_ebene_real)
                          else max(int(platz["EBENE"].max()), 1))
+            ebene_max = min(ebene_max, 9)
             picks_max = max(int(platz["ANZ_PICKS"].max()), 1)
             regal_range = st.slider(t("rack"), 0, regal_max, (0, regal_max))
             ebene_range = st.slider(t("level"), 0, ebene_max, (0, ebene_max),
@@ -4184,13 +4230,14 @@ def main() -> None:
         ebene_range=ebene_range,
         min_picks=min_picks,
         sperr_mode=sperr_mode,
+        abc_src=abc_src,
     )
 
     # Menschenlesbare Zusammenfassung der aktiven Filter -> Caption unter den KPIs
     # und Kommentarzeile in jedem CSV-Download (Nachvollziehbarkeit).
     _af: list[str] = []
     if abc:
-        _af.append(f"{t('abc')}: {', '.join(abc)}")
+        _af.append(f"{t('abc')}: {', '.join(abc)} ({abc_src_choice})")
     if util_range != (0, 100):
         _af.append(f"{t('util')}: {util_range[0]}–{util_range[1]}")
     if only_occupied:
