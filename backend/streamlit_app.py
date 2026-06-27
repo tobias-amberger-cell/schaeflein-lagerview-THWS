@@ -75,7 +75,7 @@ _THREE_VIEWER_HTML = """
   #nav button:active { background:#1565c0; }
 </style>
 <div id="wrap" style="display:flex;flex-direction:column;gap:8px;font-family:sans-serif;">
-  <div id="view" style="position:relative;height:__HEIGHT__px;background:#f5f5f7;border-radius:8px;overflow:hidden;">
+  <div id="view" style="position:relative;height:__HEIGHT__px;background:#2b2b30;border-radius:8px;overflow:hidden;">
     <div id="loading" style="position:absolute;top:10px;left:12px;font-size:13px;color:#555;background:rgba(255,255,255,.7);padding:2px 8px;border-radius:4px;">…</div>
     <div id="legend" style="position:absolute;bottom:10px;left:12px;font-size:12px;color:#333;background:rgba(255,255,255,.88);padding:8px 10px;border-radius:6px;line-height:1.5;box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
     <div id="nav">
@@ -200,7 +200,7 @@ panel.innerHTML = '<div style="color:#888;">' + L.hint + '</div>';
 
 let W = host.clientWidth || 600, H = host.clientHeight || 600;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf5f5f7);
+scene.background = new THREE.Color(0x2b2b30);  // dunkles Anthrazit (Plaetze heben sich ab)
 const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
