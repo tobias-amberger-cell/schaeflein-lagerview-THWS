@@ -2078,6 +2078,16 @@ TR: dict[str, dict[str, str]] = {
     "abc3d_classfilter": {"de": "Nur ABC-Klasse", "en": "Only ABC class"},
     "fach_label": {"de": "Fach", "en": "Bin"},
     # --- klickbarer 3D-Viewer ---
+    "d3_head": {
+        "de": "### 🧊 3D-Modell\n**Das Lager als klickbares 3D-Modell** — die Plätze "
+              "im echten CAD-Layout, eingefärbt nach ABC oder Heatmap.",
+        "en": "### 🧊 3D model\n**The warehouse as a clickable 3D model** — the slots "
+              "in the real CAD layout, colored by ABC or heatmap.",
+    },
+    "d3_explain_head": {
+        "de": "ℹ️ Was bedeutet das? (Bedienung, Einfärbung)",
+        "en": "ℹ️ What does this mean? (controls, coloring)",
+    },
     "d3_click_intro": {
         "de": "**Klickbares 3D-Modell** — klick einen Lagerplatz im Modell an, dann "
               "siehst du rechts seine Kennzahlen. Jeder Platz ist mit der Datenbank "
@@ -4004,16 +4014,14 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
 
 
 def render_3d(filtered: pd.DataFrame) -> None:
-    """Tab '3D-Modell': CAD-Viewer ODER Daten-Schema + ABC-je-Platz-Tabelle."""
+    """Tab '3D-Modell': klickbarer CAD-Viewer (Meshes nach PLATZ_ID)."""
     import json as _json
 
-    # Umschalter: CAD-Modell (echte Optik, ~66% Deckung) ODER Schema aus
-    # den Daten (alle 22.429 Plaetze, kein Grau, klotzig).
-    view_opts = [t("d3_view_cad"), t("d3_view_schema")]
-    view_choice = st.radio(t("d3_view"), view_opts, horizontal=True)
-    schema_mode = view_choice == t("d3_view_schema")
-
-    st.markdown(t("d3_schema_intro") if schema_mode else t("d3_click_intro"))
+    # Einheitliches Tab-Layout wie die anderen Reiter: Ueberschrift + Info-
+    # Expander. Es gibt nur noch EINE Ansicht (CAD), daher kein Umschalter mehr.
+    st.markdown(t("d3_head"))
+    with st.expander(t("d3_explain_head")):
+        st.markdown(t("d3_click_intro"))
 
     # Lagerplatz-Suche direkt an der Karte: ID eingeben -> Ansicht fliegt hin.
     search_platz = st.text_input(
@@ -4057,73 +4065,42 @@ def render_3d(filtered: pd.DataFrame) -> None:
     # Nur 9-stellige PLATZ_ID ins Modell durchreichen.
     focus_id = search_platz if search_platz.isdigit() else ""
 
-    if schema_mode:
-        sc1, sc2 = st.columns([1, 1])
-        with sc1:
-            # Färben nach Auslastung (Default = 3D-Heatmap), Belegung, ABC
-            # oder neutral. Alle Modi nutzen dieselben DB-Daten je Box.
-            cm_opts = [t("d3_cm_util"), t("d3_cm_occ"), t("d3_cm_abc"),
-                       t("d3_cm_neutral")]
-            cm_choice = st.selectbox(t("d3_colormode"), cm_opts, index=0,
-                                     key="d3_cm_schema")
-            colormode = {
-                t("d3_cm_util"): "util", t("d3_cm_occ"): "occ",
-                t("d3_cm_abc"): "abc", t("d3_cm_neutral"): "neutral",
-            }[cm_choice]
-        with sc2:
-            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
-                                      key="d3_height_schema",
-                                      help=t("d3_height_help"))
-            aisle = st.slider(t("d3_aisle"), 1.0, 3.0, 1.0, step=0.1,
-                              key="d3_aisle_schema", help=t("d3_aisle_help"))
-        html = (
-            _SCHEMA_VIEWER_HTML
-            .replace("__HEIGHT__", str(viewer_height))
-            .replace("__AISLE__", str(aisle))
-            .replace("__DATA__", slot_json)
-            .replace("__LABELS__", labels_json)
-            .replace("__FOCUS__", focus_id)
-            .replace("__COLORMODE__", colormode)
-        )
-        components.html(html, height=viewer_height + 16)
-        st.caption(t("d3_schema_caption"))
-    else:
-        # CAD-Modell: SampleScene_clickable.glb (Meshes nach PLATZ_ID benannt),
-        # CORS-faehig ueber die API geliefert. Der ?v=-Parameter ist ein
-        # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
-        # neue GLB laden statt der alten aus dem Cache.
-        glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
-        ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
-        with ctrl1:
-            # Faerb-Modus: ABC-Klassen, Pick-Heatmap, Bewegungs-Heatmap oder
-            # gar nicht (Original-Optik der GLB).
-            cad_cm_opts = [t("d3_cad_cm_abc"), t("d3_cad_cm_picks"),
-                           t("d3_cad_cm_moves"), t("d3_cad_cm_none")]
-            cad_cm_choice = st.selectbox(t("d3_colormode"), cad_cm_opts, index=0,
-                                         key="d3_cm_cad", help=t("d3_cad_cm_help"))
-            colormode_cad = {
-                t("d3_cad_cm_abc"): "abc", t("d3_cad_cm_picks"): "picks",
-                t("d3_cad_cm_moves"): "moves", t("d3_cad_cm_none"): "none",
-            }[cad_cm_choice]
-        with ctrl2:
-            perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
-        with ctrl3:
-            viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
-                                      help=t("d3_height_help"))
-        html = (
-            _THREE_VIEWER_HTML
-            .replace("__HEIGHT__", str(viewer_height))
-            .replace("__GLB__", glb_url)
-            .replace("__DATA__", slot_json)
-            .replace("__LABELS__", labels_json)
-            .replace("__ROTATE__", "false")
-            .replace("__COLORMODE__", colormode_cad)
-            .replace("__HIDEGREY__", "true" if perf_mode else "false")
-            .replace("__FOCUS__", focus_id)
-        )
-        # +230: Detail-Panel liegt jetzt UNTER der Karte (200px) + Abstand.
-        components.html(html, height=viewer_height + 230)
-        st.caption(t("d3_caption"))
+    # CAD-Modell: SampleScene_clickable.glb (Meshes nach PLATZ_ID benannt),
+    # CORS-faehig ueber die API geliefert. Der ?v=-Parameter ist ein
+    # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
+    # neue GLB laden statt der alten aus dem Cache.
+    glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
+    ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 1])
+    with ctrl1:
+        # Faerb-Modus: ABC-Klassen, Pick-Heatmap, Bewegungs-Heatmap oder
+        # gar nicht (Original-Optik der GLB).
+        cad_cm_opts = [t("d3_cad_cm_abc"), t("d3_cad_cm_picks"),
+                       t("d3_cad_cm_moves"), t("d3_cad_cm_none")]
+        cad_cm_choice = st.selectbox(t("d3_colormode"), cad_cm_opts, index=0,
+                                     key="d3_cm_cad", help=t("d3_cad_cm_help"))
+        colormode_cad = {
+            t("d3_cad_cm_abc"): "abc", t("d3_cad_cm_picks"): "picks",
+            t("d3_cad_cm_moves"): "moves", t("d3_cad_cm_none"): "none",
+        }[cad_cm_choice]
+    with ctrl2:
+        perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
+    with ctrl3:
+        viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
+                                  help=t("d3_height_help"))
+    html = (
+        _THREE_VIEWER_HTML
+        .replace("__HEIGHT__", str(viewer_height))
+        .replace("__GLB__", glb_url)
+        .replace("__DATA__", slot_json)
+        .replace("__LABELS__", labels_json)
+        .replace("__ROTATE__", "false")
+        .replace("__COLORMODE__", colormode_cad)
+        .replace("__HIDEGREY__", "true" if perf_mode else "false")
+        .replace("__FOCUS__", focus_id)
+    )
+    # +230: Detail-Panel liegt jetzt UNTER der Karte (200px) + Abstand.
+    components.html(html, height=viewer_height + 230)
+    st.caption(t("d3_caption"))
 
 
 def main() -> None:
