@@ -2746,19 +2746,6 @@ FORMULAS: list[dict] = [
                  "en": "The picks stored in the warehouse system plus the extra visits "
                        "from the movement data."},
     },
-    {
-        "key": "ebene_max",
-        "title": {"de": "Obergrenze Ebenen-Regler", "en": "Level slider upper bound"},
-        "latex": r"\text{höchste Ebene mit mindestens 20 Plätzen}",
-        "plain": {"de": "höchste Ebene mit mindestens 20 Plätzen",
-                  "en": "highest level with at least 20 slots"},
-        "note": {"de": "Der Ebenen-Regler endet bei der höchsten Ebene mit mindestens "
-                       "20 Plätzen, damit einzelne Ausreißer ganz oben die Skala nicht "
-                       "aufblähen.",
-                 "en": "The level slider stops at the highest level with at least 20 "
-                       "slots, so single outliers at the very top don't inflate the "
-                       "scale."},
-    },
 ]
 
 _FORMULA_BY_KEY = {f["key"]: f for f in FORMULAS}
