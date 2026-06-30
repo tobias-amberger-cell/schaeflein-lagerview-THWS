@@ -1184,6 +1184,25 @@ TR: dict[str, dict[str, str]] = {
     },
     "pick_by_wd": {"de": "Picks je Wochentag", "en": "Picks per weekday"},
     "pick_by_hour": {"de": "Picks je Stunde", "en": "Picks per hour"},
+    "pick_by_wd_note": {
+        "de": "Summe **aller** Picks je Wochentag über den gesamten Zeitraum "
+              "(Mo–Fr). Die Höhe = Anzahl Entnahmen, nicht ein Tagesdurchschnitt.",
+        "en": "Sum of **all** picks per weekday over the whole period (Mon–Fri). "
+              "Bar height = number of retrievals, not a daily average.",
+    },
+    "pick_by_hour_note": {
+        "de": "Jeder Balken = **Summe aller Picks in dieser Uhrzeit-Stunde** (0–23 "
+              "Uhr) über den gesamten Zeitraum, Mo–Fr zusammengezählt. Die y-Achse "
+              "ist eine **Anzahl** und skaliert automatisch: die Obergrenze ist die "
+              "Pick-Zahl der vollsten Stunde **in der aktuellen Auswahl** – setzt du "
+              "links Filter, zählen nur deren Plätze und die Zahlen sinken "
+              "entsprechend.",
+        "en": "Each bar = **sum of all picks in that clock hour** (0–23) over the "
+              "whole period, Mon–Fri combined. The y-axis is a **count** and "
+              "auto-scales: the upper bound is the busiest hour's pick count **in the "
+              "current selection** – filtering slots on the left counts only those "
+              "and lowers the numbers accordingly.",
+    },
     "wd_label": {"de": "Wochentag", "en": "Weekday"},
     "hour_label": {"de": "Stunde", "en": "Hour"},
     "picks_label": {"de": "Picks", "en": "Picks"},
@@ -3267,6 +3286,7 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
                        labels=dict(value=t("picks_label"), index=t("wd_label"))),
                 use_container_width=True,
             )
+            st.caption(t("pick_by_wd_note"))
         with c2:
             per_hour = (
                 ph.groupby("hour")["picks"].sum().reindex(range(24), fill_value=0)
@@ -3276,6 +3296,10 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
                        labels=dict(value=t("picks_label"), index=t("hour_label"))),
                 use_container_width=True,
             )
+            # Erklaert, dass die y-Achse eine Pick-ANZAHL ist und automatisch auf
+            # den Hoechstwert der aktuellen (ggf. gefilterten) Auswahl skaliert ->
+            # beantwortet "warum geht die Achse z. B. nur bis 254 statt bis ~4370".
+            st.caption(t("pick_by_hour_note"))
         tbl = ph.copy()
         tbl["weekday"] = tbl["weekday"].map(weekday_names)
         tbl = tbl.rename(columns={"weekday": "Wochentag", "hour": "Stunde",
