@@ -3703,14 +3703,6 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
         & (free_usable["EBENE"] >= reserve_level)
     ].sort_values("FREE_CAPACITY", ascending=False)
 
-    # Ueberblick: wie viel freier Platz ueberhaupt (gesamt + je Kategorie)?
-    st.markdown(t("put_overview"))
-    k1, k2, k3 = st.columns(3)
-    k1.metric(t("put_kpi_free"), de_num(len(free_usable)))
-    k2.metric(t("put_fast_t"), de_num(len(fast_lane)))
-    k3.metric(t("put_reserve_t"), de_num(len(reserve)))
-    st.caption(t("put_kpi_capacity").format(
-        n=de_num(int(free_usable["FREE_CAPACITY"].fillna(0).sum()))))
     st.divider()
 
     put_extra = [t("col_vorschlag")]
