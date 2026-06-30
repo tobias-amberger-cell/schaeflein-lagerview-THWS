@@ -3497,19 +3497,8 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
                               .replace("", "Artikel unbekannt"))
         return out
 
-    # KPI-Zeile: zwei Kennzahl-Kacheln nebeneinander fassen oben zusammen, was
-    # unten in den Tabellen im Detail steht. st.columns(2) = zwei Spalten k1/k2.
-    # t("...") holt jeden Text in der gewaehlten Sprache (DE/EN) -> Mehrsprachig.
-    k1, k2 = st.columns(2)
-    # Kachel links: Titel "Plaetze freimachen"; Wert = Anzahl Zeilen in der Liste
-    # `critical` (belegte A-Plaetze mit 0 Picks). de_num macht eine dt. Zahl draus.
-    k1.metric(t("ua_kpi_free"), de_num(len(critical)),
-              help=t("ua_kpi_free_h"))
-    # Kachel rechts: Titel "Besser platzieren"; Wert = zu hohe A-Plaetze `high_a`
-    # (echte Umlagerung). Die heissen C-Plaetze (Klassen-Korrektur) liegen jetzt
-    # im ABC-Tab und zaehlen hier nicht mehr mit.
-    k2.metric(t("ua_kpi_place"), de_num(len(high_a)),
-              help=t("ua_kpi_place_h"))
+    # (KPI-Kacheln unter den Reglern entfernt: jede Tabelle zeigt ihre Anzahl
+    # ohnehin selbst per st.metric -> die Zusammenfassung waere doppelt.)
 
     # --- Gruppe 1: Platz freimachen (auslagern) ---
     st.markdown(t("ua_group_free"))  # Zwischenueberschrift "Platz freimachen"
