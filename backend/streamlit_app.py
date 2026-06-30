@@ -1663,10 +1663,10 @@ TR: dict[str, dict[str, str]] = {
     },
     "ua_kpi_place": {"de": "Besser platzieren", "en": "To place better"},
     "ua_kpi_place_h": {
-        "de": "Schnelldreher auf schlechtem Platz (heiße C-Plätze + zu hohe "
-              "A-Plätze) – die gehören woanders hin.",
-        "en": "Fast movers on a bad slot (hot C slots + too-high A slots) – these "
-              "belong elsewhere.",
+        "de": "Aktive A-Ware, die zu hoch gelagert ist – gehört ergonomisch auf "
+              "einen freien Platz weiter unten.",
+        "en": "Active A goods stored too high – should ergonomically move to a free "
+              "slot lower down.",
     },
     "ua_crit_t": {"de": "Premiumplatz blockiert", "en": "Premium slot blocked"},
     "ua_crit_d": {
@@ -2947,40 +2947,6 @@ _MASSNAHME_HELP = {
                "bewegt, daher kein Artikel ableitbar.",
 }
 
-# Heisse C-Plaetze: eigene Spalten, damit der Widerspruch SOFORT lesbar ist.
-# "Eingestuft als" (Stamm = C) direkt neben "Tatsaechlich" (berechnet = A/B),
-# dazwischen die Picks als Beweis. KEINE Kapazitaet/Zielplatz -> hier wird nicht
-# umgelagert, nur die Klasse korrigiert.
-_HOTC_COLS = [
-    "PLATZ_ID", "REGAL", "FACH", "EBENE",
-    "ANZ_PICKS", "ABC_KLASSE", "ABC_CALC",
-]
-_HOTC_RENAME = {
-    "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
-    "ANZ_PICKS": "Picks (6 Mon.)",
-    "ABC_KLASSE": "Eingestuft als",
-    "ABC_CALC": "Tatsächlich (laut Picks)",
-    "ARTIKEL_NR": "Artikel-Nr.", "ARTIKEL_BEZ": "Artikel",
-}
-_HOTC_HELP = {
-    "Platz": "Die eindeutige Nummer des Lagerplatzes.",
-    "Regal": "Regalnummer im Lager.",
-    "Fach": "Fach innerhalb des Regals.",
-    "Ebene": "Wie hoch der Platz liegt (0 = ganz unten, beste Greifhöhe).",
-    "Picks (6 Mon.)": "Wie oft dieser Platz in den letzten 6 Monaten gepickt "
-                      "wurde – der Beweis, warum er „heiß“ ist.",
-    "Eingestuft als": "Die im Lagersystem hinterlegte ABC-Klasse. Hier immer "
-                      "C = gilt als Langsamdreher.",
-    "Tatsächlich (laut Picks)": "Die aus den echten Picks berechnete Klasse. "
-                                "A/B = wird in Wahrheit häufig gepickt – das ist "
-                                "der Widerspruch zur Einstufung C.",
-    "Artikel-Nr.": "Artikelnummer der Ware auf dem Platz (Näherung aus den "
-                   "Bewegungsdaten).",
-    "Artikel": "Bezeichnung der Ware auf dem Platz (näherungsweise aus der "
-               "jüngsten Bewegung).",
-    "Vorschlag": "Die empfohlene Handlung für diese Zeile.",
-}
-
 # Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
 # Ist-Ware, darum ist ANZ_PICKS hier ~0 und nur verwirrend. Relevant ist nur
 # Ort, Platz-Guete (ABC) und freie Kapazitaet.
@@ -3468,16 +3434,7 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         & (filtered["ABC_KLASSE"] == "A") & (filtered["ANZ_PICKS"] == 0)
     ].sort_values(["REGAL", "EBENE", "FACH"])
 
-    # Gruppe 2: Schnelldreher auf schlechtem Platz (ueber das ganze Lager).
-    # Heisser C-Platz: als C gefuehrt, aber nach den tatsaechlichen Picks
-    # rechnerisch A oder B (ABC_CALC). Diese Fehlklassifikation IST das Signal -
-    # kein willkuerlicher Pick-Schwellen-Regler mehr noetig.
-    hot_c = filtered[
-        (filtered["ABC_KLASSE"] == "C")
-        & (filtered["ABC_CALC"].isin(["A", "B"]))
-        & filtered["BELEGT"]          # nur belegte Plaetze (leere = nichts dahinter)
-        & notgesperrt
-    ].sort_values("ANZ_PICKS", ascending=False)
+    # Gruppe 2: Schnelldreher auf schlechtem Platz.
     # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> Ware ergonomisch auf einen
     # freien Platz weiter unten umlagern (Platz bleibt, nur Inhalt zieht um).
     # BELEGT ist Pflicht: ANZ_PICKS>0 zaehlt HISTORISCHE Picks (6 Mon) - ein Platz
@@ -3540,17 +3497,6 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
                               .replace("", "Artikel unbekannt"))
         return out
 
-    def _hotc_vorschlag(df: pd.DataFrame) -> list:
-        """Konkrete Ziel-Klasse je heissem C-Platz statt nur 'hochstufen': die
-        berechnete ABC-Klasse (ABC_CALC) aus der tatsaechlichen Pick-Haeufigkeit,
-        mit Picks als Begruendung. ABC_CALC ist hier per Filter immer A oder B."""
-        return [
-            t("reloc_hotC_v_to").format(
-                cls=str(getattr(r, "ABC_CALC", "") or "").upper(),
-                picks=de_num(int(getattr(r, "ANZ_PICKS", 0))))
-            for r in df.itertuples(index=False)
-        ]
-
     # KPI-Zeile: zwei Kennzahl-Kacheln nebeneinander fassen oben zusammen, was
     # unten in den Tabellen im Detail steht. st.columns(2) = zwei Spalten k1/k2.
     # t("...") holt jeden Text in der gewaehlten Sprache (DE/EN) -> Mehrsprachig.
@@ -3559,9 +3505,10 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     # `critical` (belegte A-Plaetze mit 0 Picks). de_num macht eine dt. Zahl draus.
     k1.metric(t("ua_kpi_free"), de_num(len(critical)),
               help=t("ua_kpi_free_h"))
-    # Kachel rechts: Titel "Besser platzieren"; Wert = zwei Listen zusammengezaehlt
-    # (heisse C-Plaetze `hot_c` + zu hohe A-Plaetze `high_a`).
-    k2.metric(t("ua_kpi_place"), de_num(len(hot_c) + len(high_a)),
+    # Kachel rechts: Titel "Besser platzieren"; Wert = zu hohe A-Plaetze `high_a`
+    # (echte Umlagerung). Die heissen C-Plaetze (Klassen-Korrektur) liegen jetzt
+    # im ABC-Tab und zaehlen hier nicht mehr mit.
+    k2.metric(t("ua_kpi_place"), de_num(len(high_a)),
               help=t("ua_kpi_place_h"))
 
     # --- Gruppe 1: Platz freimachen (auslagern) ---
@@ -3583,18 +3530,11 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
         vorschlag=t("ua_crit_v"))
 
     # --- Gruppe 2: besser platzieren (umlagern) ---
+    # Die fruehere Liste "Heisse C-Plaetze" (Stamm C, aber berechnet A/B) ist
+    # KEINE physische Umlagerung, sondern eine Klassen-Korrektur und steht
+    # bereits vollstaendig im ABC-Tab ("Stamm vs. Berechnet -> hochstufen").
+    # Darum hier entfernt -> dieser Tab zeigt nur noch echte Bewegungen.
     st.markdown(t("ua_group_place"))
-    # Heisse C-Plaetze: KEIN _add_ziel (kein Umlagern -> kein Zielplatz). Eigene
-    # Spalten _HOTC_* zeigen "Eingestuft als C" direkt neben "Tatsaechlich A/B",
-    # damit der Widerspruch sofort verstanden wird.
-    render_massnahme_kategorie(
-        t("reloc_hotC_t"), t("reloc_hotC_d"),
-        _add_artikel(hot_c),
-        cols=_HOTC_COLS,
-        extra_cols=["ARTIKEL_NR", "ARTIKEL_BEZ"],
-        rename=_HOTC_RENAME, col_help=_HOTC_HELP,
-        rowhint=t("reloc_hotC_rowhint"),
-        vorschlag=_hotc_vorschlag(hot_c), formel_keys=["abc_calc"])
     render_massnahme_kategorie(
         t("reloc_highA_t"), t("reloc_highA_d"),
         _add_artikel(_add_ziel(high_a, free_low)),
