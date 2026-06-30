@@ -1278,11 +1278,10 @@ TR: dict[str, dict[str, str]] = {
         "en": "no free target slot in selection",
     },
     "reloc_hotC_v_to": {
-        "de": "Auf Klasse {cls} hochstufen – {picks} Picks, das entspricht der "
-              "berechneten Klasse {cls}. Auf einen guten Pickplatz (niedrige "
-              "Ebene) umlagern.",
-        "en": "Promote to class {cls} – {picks} picks, matching the calculated "
-              "class {cls}. Relocate to a good pick slot (low level).",
+        "de": "Im Lagersystem auf Klasse {cls} hochstufen – {picks} Picks in "
+              "6 Monaten entsprechen einem {cls}-Schnelldreher, nicht einem C.",
+        "en": "Promote to class {cls} in the system – {picks} picks in 6 months "
+              "match a class-{cls} fast mover, not a C.",
     },
     "reloc_highA_v": {
         "de": "Ware auf den freien Platz weiter unten umlagern – kürzere Greifwege",
@@ -1291,8 +1290,23 @@ TR: dict[str, dict[str, str]] = {
     "sl_highlevel": {"de": "Hohe Ebene ab", "en": "High level from"},
     "reloc_hotC_t": {"de": "Heiße C-Plätze", "en": "Hot C slots"},
     "reloc_hotC_d": {
-        "de": "Stamm-Klasse C, aber nach den Picks berechnet A/B – hochstufen.",
-        "en": "Master class C, but computes to A/B by picks – reclassify.",
+        "de": "Diese Plätze sind im System als **C (Langsamdreher)** geführt, "
+              "werden laut den echten Picks aber wie **A/B (Schnelldreher)** "
+              "genutzt – die Einstufung ist veraltet. Empfehlung: im Lagersystem "
+              "**auf A/B hochstufen**, damit Nachschub und Platzvergabe wieder zur "
+              "echten Nachfrage passen. *(Hier wird nichts umgelagert – es geht "
+              "nur um die richtige Klasse.)*",
+        "en": "These slots are registered as **C (slow movers)** in the system but "
+              "are used like **A/B (fast movers)** according to the real picks – the "
+              "classification is outdated. Recommendation: **promote to A/B** in the "
+              "system so replenishment and slotting match real demand again. "
+              "*(Nothing is relocated here – it's only about the right class.)*",
+    },
+    "reloc_hotC_rowhint": {
+        "de": "Jede Zeile = ein Platz, dessen Einstufung (C) nicht zur "
+              "tatsächlichen Pick-Häufigkeit (A/B) passt.",
+        "en": "Each row = a slot whose classification (C) does not match its "
+              "actual pick frequency (A/B).",
     },
     "reloc_highA_t": {"de": "A-Ware zu hoch gelagert", "en": "A goods stored too high"},
     "reloc_highA_d": {
@@ -2933,6 +2947,40 @@ _MASSNAHME_HELP = {
                "bewegt, daher kein Artikel ableitbar.",
 }
 
+# Heisse C-Plaetze: eigene Spalten, damit der Widerspruch SOFORT lesbar ist.
+# "Eingestuft als" (Stamm = C) direkt neben "Tatsaechlich" (berechnet = A/B),
+# dazwischen die Picks als Beweis. KEINE Kapazitaet/Zielplatz -> hier wird nicht
+# umgelagert, nur die Klasse korrigiert.
+_HOTC_COLS = [
+    "PLATZ_ID", "REGAL", "FACH", "EBENE",
+    "ANZ_PICKS", "ABC_KLASSE", "ABC_CALC",
+]
+_HOTC_RENAME = {
+    "PLATZ_ID": "Platz", "REGAL": "Regal", "FACH": "Fach", "EBENE": "Ebene",
+    "ANZ_PICKS": "Picks (6 Mon.)",
+    "ABC_KLASSE": "Eingestuft als",
+    "ABC_CALC": "Tatsächlich (laut Picks)",
+    "ARTIKEL_NR": "Artikel-Nr.", "ARTIKEL_BEZ": "Artikel",
+}
+_HOTC_HELP = {
+    "Platz": "Die eindeutige Nummer des Lagerplatzes.",
+    "Regal": "Regalnummer im Lager.",
+    "Fach": "Fach innerhalb des Regals.",
+    "Ebene": "Wie hoch der Platz liegt (0 = ganz unten, beste Greifhöhe).",
+    "Picks (6 Mon.)": "Wie oft dieser Platz in den letzten 6 Monaten gepickt "
+                      "wurde – der Beweis, warum er „heiß“ ist.",
+    "Eingestuft als": "Die im Lagersystem hinterlegte ABC-Klasse. Hier immer "
+                      "C = gilt als Langsamdreher.",
+    "Tatsächlich (laut Picks)": "Die aus den echten Picks berechnete Klasse. "
+                                "A/B = wird in Wahrheit häufig gepickt – das ist "
+                                "der Widerspruch zur Einstufung C.",
+    "Artikel-Nr.": "Artikelnummer der Ware auf dem Platz (Näherung aus den "
+                   "Bewegungsdaten).",
+    "Artikel": "Bezeichnung der Ware auf dem Platz (näherungsweise aus der "
+               "jüngsten Bewegung).",
+    "Vorschlag": "Die empfohlene Handlung für diese Zeile.",
+}
+
 # Schlanke Spalten fuer den Einlagern-Tab: freie Plaetze haben kaum/keine
 # Ist-Ware, darum ist ANZ_PICKS hier ~0 und nur verwirrend. Relevant ist nur
 # Ort, Platz-Guete (ABC) und freie Kapazitaet.
@@ -3427,6 +3475,7 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     hot_c = filtered[
         (filtered["ABC_KLASSE"] == "C")
         & (filtered["ABC_CALC"].isin(["A", "B"]))
+        & filtered["BELEGT"]          # nur belegte Plaetze (leere = nichts dahinter)
         & notgesperrt
     ].sort_values("ANZ_PICKS", ascending=False)
     # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> Ware ergonomisch auf einen
@@ -3535,13 +3584,16 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
 
     # --- Gruppe 2: besser platzieren (umlagern) ---
     st.markdown(t("ua_group_place"))
+    # Heisse C-Plaetze: KEIN _add_ziel (kein Umlagern -> kein Zielplatz). Eigene
+    # Spalten _HOTC_* zeigen "Eingestuft als C" direkt neben "Tatsaechlich A/B",
+    # damit der Widerspruch sofort verstanden wird.
     render_massnahme_kategorie(
         t("reloc_hotC_t"), t("reloc_hotC_d"),
-        _add_artikel(_add_ziel(hot_c, free_low)),
-        # ABC-Spalte weglassen: per Filter immer "C"; das C->A/B-Hochstufen steht
-        # ohnehin im Titel und in der Vorschlag-Spalte.
-        cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
-        extra_cols=["ARTIKEL_NR", "ARTIKEL_BEZ", t("col_ziel")],
+        _add_artikel(hot_c),
+        cols=_HOTC_COLS,
+        extra_cols=["ARTIKEL_NR", "ARTIKEL_BEZ"],
+        rename=_HOTC_RENAME, col_help=_HOTC_HELP,
+        rowhint=t("reloc_hotC_rowhint"),
         vorschlag=_hotc_vorschlag(hot_c), formel_keys=["abc_calc"])
     render_massnahme_kategorie(
         t("reloc_highA_t"), t("reloc_highA_d"),
