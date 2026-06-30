@@ -3478,21 +3478,35 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
             for r in df.itertuples(index=False)
         ]
 
-    # KPI-Zeile: Zusammenfassung nach Absicht (statt der Zahlen erst weit unten).
+    # KPI-Zeile: zwei Kennzahl-Kacheln nebeneinander fassen oben zusammen, was
+    # unten in den Tabellen im Detail steht. st.columns(2) = zwei Spalten k1/k2.
+    # t("...") holt jeden Text in der gewaehlten Sprache (DE/EN) -> Mehrsprachig.
     k1, k2 = st.columns(2)
+    # Kachel links: Titel "Plaetze freimachen"; Wert = Anzahl Zeilen in der Liste
+    # `critical` (belegte A-Plaetze mit 0 Picks). de_num macht eine dt. Zahl draus.
     k1.metric(t("ua_kpi_free"), de_num(len(critical)),
               help=t("ua_kpi_free_h"))
+    # Kachel rechts: Titel "Besser platzieren"; Wert = zwei Listen zusammengezaehlt
+    # (heisse C-Plaetze `hot_c` + zu hohe A-Plaetze `high_a`).
     k2.metric(t("ua_kpi_place"), de_num(len(hot_c) + len(high_a)),
               help=t("ua_kpi_place_h"))
 
     # --- Gruppe 1: Platz freimachen (auslagern) ---
-    st.markdown(t("ua_group_free"))
+    st.markdown(t("ua_group_free"))  # Zwischenueberschrift "Platz freimachen"
+    # EINE gemeinsame Funktion baut jede Massnahmen-Tabelle gleich. Sie bekommt
+    # nur: Titel, Beschreibung, Daten, Spaltenlisten, Vorschlagstext.
     render_massnahme_kategorie(
-        t("ua_crit_t"), t("ua_crit_d"),
+        t("ua_crit_t"),   # Titel:        "Premiumplatz blockiert"
+        t("ua_crit_d"),   # Beschreibung: "A-Platz belegt, aber 0 Picks ..."
+        # Daten: Liste `critical` (oben gefiltert) + Zielplatz-Vorschlag
+        # (_add_ziel) + Artikel-Nr./Bezeichnung der Ware (_add_artikel).
         _add_artikel(_add_ziel(critical, free_high)),
         # ABC-Spalte weglassen: per Filter ist jede Zeile "A" -> redundant.
         cols=[c for c in _MASSNAHME_COLS if c != "ABC_KLASSE"],
+        # Zusatzspalten hinten: Artikel-Nr., Bezeichnung, "Zielplatz-Vorschlag".
         extra_cols=["ARTIKEL_NR", "ARTIKEL_BEZ", t("col_ziel")],
+        # Vorschlag-Spalte (1 konkrete Handlung je Zeile):
+        # "Ware in die Reserve umlagern oder auslagern - Premiumplatz freimachen".
         vorschlag=t("ua_crit_v"))
 
     # --- Gruppe 2: besser platzieren (umlagern) ---
@@ -4201,43 +4215,55 @@ def render_3d(filtered: pd.DataFrame) -> None:
     # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
     # neue GLB laden statt der alten aus dem Cache.
     glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
+    # Bedienleiste: vier gleich breite Spalten ([1,1,1,1] = gleiches Verhaeltnis),
+    # in jede kommt ein Regler/Auswahlfeld fuer den Viewer.
     ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 1])
     with ctrl1:
         # Faerb-Modus: ABC-Klassen, Pick-Heatmap, Bewegungs-Heatmap oder
         # gar nicht (Original-Optik der GLB).
+        # Dropdown "Faerben nach" mit 4 Optionen; index=0 -> ABC ist vorausgewaehlt.
         cad_cm_opts = [t("d3_cad_cm_abc"), t("d3_cad_cm_picks"),
                        t("d3_cad_cm_moves"), t("d3_cad_cm_none")]
         cad_cm_choice = st.selectbox(t("d3_colormode"), cad_cm_opts, index=0,
                                      key="d3_cm_cad", help=t("d3_cad_cm_help"))
+        # Die angezeigte (sprachabhaengige) Auswahl zurueck auf einen festen
+        # technischen Code mappen ("abc"/"picks"/...), den der Viewer versteht.
         colormode_cad = {
             t("d3_cad_cm_abc"): "abc", t("d3_cad_cm_picks"): "picks",
             t("d3_cad_cm_moves"): "moves", t("d3_cad_cm_none"): "none",
         }[cad_cm_choice]
     with ctrl2:
+        # Checkbox "Plaetze ohne Daten ausblenden" (Standard an) -> blendet die
+        # grauen "keine Daten"-Plaetze aus: uebersichtlicher + schneller.
         perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
     with ctrl3:
+        # Schieberegler "Anzeigehoehe (px)": 360-900, Start 640, 20er-Schritte.
         viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
                                   help=t("d3_height_help"))
     with ctrl4:
         # Maus-Empfindlichkeit fuer Drehen/Zoom/Pan; kleiner = feiner steuerbar.
         sens = st.slider(t("d3_sens"), 0.2, 1.5, 1.0, step=0.1,
                          key="d3_sens_cad", help=t("d3_sens_help"))
+    # Fertige 3D-Seite zusammenbauen: _THREE_VIEWER_HTML ist eine HTML/JS-Vorlage
+    # (three.js) mit Platzhaltern __XXX__. Jedes .replace(...) setzt einen echten
+    # Wert aus den Reglern oben ein -> aus der Vorlage wird eine konkrete Seite.
     html = (
         _THREE_VIEWER_HTML
-        .replace("__HEIGHT__", str(viewer_height))
-        .replace("__GLB__", glb_url)
-        .replace("__DATA__", slot_json)
-        .replace("__LABELS__", labels_json)
-        .replace("__ROTATE__", "false")
-        .replace("__COLORMODE__", colormode_cad)
-        .replace("__HIDEGREY__", "true" if perf_mode else "false")
-        .replace("__FOCUS__", focus_id)
-        .replace("__SENS__", str(sens))
+        .replace("__HEIGHT__", str(viewer_height))   # Hoehe aus Regler 3
+        .replace("__GLB__", glb_url)                 # die GLB-URL von oben
+        .replace("__DATA__", slot_json)              # Lagerdaten je Platz (JSON)
+        .replace("__LABELS__", labels_json)          # Platz-Beschriftungen
+        .replace("__ROTATE__", "false")              # Auto-Drehen aus
+        .replace("__COLORMODE__", colormode_cad)     # "abc"/"picks"/... aus Spalte 1
+        .replace("__HIDEGREY__", "true" if perf_mode else "false")  # Checkbox 2
+        .replace("__FOCUS__", focus_id)              # auf welchen Platz zoomen
+        .replace("__SENS__", str(sens))              # Maus-Empfindlichkeit
     )
-    # +410: Detail-Panel liegt UNTER der Karte (380px) + Abstand -> alle
-    # Platz-Infos passen ohne internen Scrollbalken.
+    # components.html(...) bettet die fertige Seite als iframe ein -> HIER "lebt"
+    # das 3D-Modell. Hoehe = Viewer + 410: Detail-Panel liegt UNTER der Karte
+    # (380px) + Abstand -> alle Platz-Infos passen ohne internen Scrollbalken.
     components.html(html, height=viewer_height + 410)
-    st.caption(t("d3_caption"))
+    st.caption(t("d3_caption"))  # kleine Bedien-Hilfe: Ziehen=drehen, Scrollen=zoomen
 
 
 def main() -> None:
