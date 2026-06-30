@@ -3679,18 +3679,12 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
         & (free_usable["EBENE"] >= reserve_level)
     ].sort_values("FREE_CAPACITY", ascending=False)
 
-    # Gesperrt: nur Plaetze, die FREI waeren, aber gesperrt sind (waeren sonst
-    # Einlager-Ziele). Voll belegte Sperrplaetze sind hier irrelevant -> raus.
-    blocked = free_slots[free_slots["GESPERRT"]].sort_values(
-        ["REGAL", "EBENE", "FACH"])
-
     # Ueberblick: wie viel freier Platz ueberhaupt (gesamt + je Kategorie)?
     st.markdown(t("put_overview"))
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3 = st.columns(3)
     k1.metric(t("put_kpi_free"), de_num(len(free_usable)))
     k2.metric(t("put_fast_t"), de_num(len(fast_lane)))
     k3.metric(t("put_reserve_t"), de_num(len(reserve)))
-    k4.metric(t("put_kpi_blocked"), de_num(len(blocked)))
     st.caption(t("put_kpi_capacity").format(
         n=de_num(int(free_usable["FREE_CAPACITY"].fillna(0).sum()))))
     st.divider()
@@ -3706,12 +3700,6 @@ def render_einlagern(filtered: pd.DataFrame) -> None:
         _putaway_vorschlag_col(reserve, "reserve"),
         cols=_PUTAWAY_COLS, extra_cols=put_extra, rename=_PUTAWAY_RENAME,
         rowhint=t("put_rowhint"), col_help=_PUTAWAY_HELP)
-    render_massnahme_kategorie(
-        t("put_blocked_t"), t("put_blocked_d"),
-        _putaway_vorschlag_col(blocked, "blocked"),
-        cols=_PUTAWAY_BLOCKED_COLS, extra_cols=put_extra,
-        rename=_PUTAWAY_BLOCKED_RENAME,
-        rowhint=t("put_blocked_rowhint"), col_help=_PUTAWAY_HELP)
 
 
 def render_abc(filtered: pd.DataFrame, tpa: pd.DataFrame,
