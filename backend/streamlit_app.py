@@ -2565,13 +2565,31 @@ def agg_articles(tpa: pd.DataFrame, limit: int | None = None,
 def agg_article_detail(
     tpa: pd.DataFrame, artikelnr: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fuer einen Artikel: Picks je Quellplatz und Bewegungen je Tag."""
+    """Fuer einen Artikel: Picks je Quellplatz und Bewegungen je Tag.
+
+    Je Quellplatz zusaetzlich: Anteil an allen Picks des Artikels (Konzentration),
+    tatsaechlich entnommene Menge (Summe MENGE_IST) und Datum des letzten Picks
+    (zeigt, ob der Platz noch aktiv genutzt wird)."""
     sub = tpa[tpa["artikel"] == artikelnr]
-    slots = (
-        sub[sub["q_platz"] != ""].groupby("q_platz").size()
-        .reset_index(name="picks").rename(columns={"q_platz": "platz"})
-        .sort_values("picks", ascending=False)
-    )
+    src = sub[sub["q_platz"] != ""]
+    if src.empty:
+        slots = pd.DataFrame(
+            columns=["platz", "picks", "anteil_pct", "menge", "last_day"])
+    else:
+        slots = (
+            src.groupby("q_platz")
+            .agg(picks=("q_platz", "size"),
+                 menge=("menge", "sum"),
+                 last_day=("day", "max"))
+            .reset_index().rename(columns={"q_platz": "platz"})
+            .sort_values("picks", ascending=False)
+        )
+        _tot = slots["picks"].sum()
+        slots["anteil_pct"] = (slots["picks"] / _tot * 100).round(1) if _tot else 0.0
+        slots["menge"] = slots["menge"].round(0).astype(int)
+        slots["last_day"] = (pd.to_datetime(slots["last_day"], errors="coerce")
+                             .dt.strftime("%Y-%m-%d").fillna("—"))
+        slots = slots[["platz", "picks", "anteil_pct", "menge", "last_day"]]
     dated = sub.dropna(subset=["day"])
     days = (
         dated.assign(d=dated["day"].dt.normalize())
@@ -4126,13 +4144,25 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                 )
             if not slots.empty:
                 st.markdown(f"**{t('art_by_slot')}**")
-                slot_tbl = slots.rename(columns={"platz": "Quellplatz",
-                                                 "picks": "Picks (von hier)"})
+                slot_tbl = slots.rename(columns={
+                    "platz": "Quellplatz",
+                    "picks": "Picks (von hier)",
+                    "anteil_pct": "Anteil %",
+                    "menge": "Menge (Stück)",
+                    "last_day": "Letzter Pick",
+                })
                 slot_help = {
                     "Quellplatz": "Der Lagerplatz, aus dem dieser Artikel "
                                   "entnommen wurde.",
                     "Picks (von hier)": "Wie oft der Artikel im Zeitraum von "
                                         "genau diesem Platz gepickt wurde.",
+                    "Anteil %": "Wie viel Prozent aller Picks dieses Artikels von "
+                                "diesem Platz kamen – zeigt, ob die Entnahmen auf "
+                                "wenige Plätze konzentriert oder breit verteilt sind.",
+                    "Menge (Stück)": "Tatsächlich von diesem Platz entnommene "
+                                     "Gesamtstückzahl (Summe der bewegten Mengen).",
+                    "Letzter Pick": "Datum des letzten Picks von diesem Platz – "
+                                    "zeigt, ob der Platz noch aktiv genutzt wird.",
                 }
                 col_cfg = {c: st.column_config.Column(help=h)
                            for c, h in slot_help.items() if c in slot_tbl.columns}
