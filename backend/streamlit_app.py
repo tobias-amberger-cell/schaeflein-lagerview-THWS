@@ -1357,10 +1357,11 @@ TR: dict[str, dict[str, str]] = {
     "replen_glossary_b": {
         "de": "- **Leer** heißt hier **ganz leer**: gar nichts steht auf dem Platz. Teilweise gefüllte Plätze (noch "
               "Platz frei, aber schon Ware drauf) stehen nicht hier, sondern im Tab **Einlagern / Free Capacity**.\n"
-              "- **Picks (Häufigkeit)** = Zugriffszähler des Platzes aus dem Lagersystem (WMS). Ein "
-              "**kumulierter** Wert für den Ort (nicht der aktuelle Bestand) und **nicht** der "
-              "6-Monats-Zeitraum der Bewegungsdaten aus der Pick-Heatmap – die beiden „Picks“ sind also "
-              "zwei verschiedene Zähler.\n"
+              "- **Picks (Häufigkeit)** = ein Zugriffszähler des Platzes, der **fertig aus dem "
+              "Lagersystem (WMS)** kommt – wir berechnen ihn **nicht** selbst, sondern übernehmen ihn 1:1. "
+              "Wie das WMS ihn intern hochzählt (über welchen Zeitraum), steht nicht im Export. Er ist "
+              "**nicht** dieselbe Zahl wie in der Pick-Heatmap (die zählen **wir** selbst aus den "
+              "6-Monats-Bewegungen) – zwei verschiedene Zähler.\n"
               "- **ABC (Platz)** = die Güteklasse des Ortes – die **Stamm**-Klasse aus dem Lagersystem (WMS), "
               "**nicht** die von uns aus den Picks berechnete ABC. A = bester Platz; beschreibt den Platz, nicht den Artikel.\n"
               "- **Soll-LHM** = auf wie viele Paletten/Behälter der Platz aufgefüllt werden soll.\n"
@@ -2950,9 +2951,10 @@ _MASSNAHME_HELP = {
     "Fach": "Fach innerhalb des Regals.",
     "Ebene": "Wie hoch der Platz liegt – niedrig heißt Pickzone mit kurzen "
              "Greifwegen.",
-    "Picks": "Zugriffszähler des Platzes aus dem Lagersystem (WMS) – ein "
-             "kumulierter Wert, NICHT der 6-Monats-Zeitraum der Bewegungsdaten "
-             "(Pick-Heatmap).",
+    "Picks": "Ein Zugriffszähler des Platzes, der FERTIG aus dem Lagersystem (WMS) "
+             "kommt – wir berechnen ihn NICHT selbst, sondern übernehmen ihn 1:1. "
+             "NICHT dieselbe Zahl wie in der Pick-Heatmap (die zählen wir selbst aus "
+             "den 6-Monats-Bewegungen).",
     "ABC (Platz)": "Die Güteklasse des Ortes aus dem Lagersystem (A = bester "
                    "Platz). Beschreibt den Platz, nicht den Artikel.",
     "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
@@ -3059,10 +3061,11 @@ _REPLEN_HELP = {
     "ABC (Platz)": "Die Güteklasse des Platzes – die STAMM-Klasse aus dem "
                    "Lagersystem (WMS), NICHT die von uns aus den Picks berechnete "
                    "ABC. A = bester Platz; beschreibt den Platz, nicht den Artikel.",
-    "Picks (Häufigkeit)": "Wie oft dieser Platz laut Lagersystem (WMS) angefahren "
-                          "wird – ein aufsummierter Zähler des Platzes. Das ist "
-                          "NICHT dieselbe Zahl wie in der Pick-Heatmap (die nur die "
-                          "letzten 6 Monate zählt). Je höher, desto dringender der "
+    "Picks (Häufigkeit)": "Ein Zugriffszähler des Platzes, der FERTIG aus dem "
+                          "Lagersystem (WMS) kommt – wir berechnen ihn NICHT selbst, "
+                          "sondern übernehmen ihn 1:1. Er ist NICHT dieselbe Zahl "
+                          "wie in der Pick-Heatmap (die zählen wir selbst aus den "
+                          "6-Monats-Bewegungen). Je höher, desto dringender der "
                           "Nachschub.",
     "Soll-LHM": "Auf so viele Paletten/Behälter sollte der Platz aufgefüllt "
                 "werden.",
@@ -3359,9 +3362,10 @@ _HF_HELP = {
     "Regal": "Regalnummer im Lager.",
     "Fach": "Fach innerhalb des Regals.",
     "Ebene": "Wie hoch der Platz liegt.",
-    "Picks": "Zugriffszähler des Platzes aus dem Lagersystem (WMS) – ein "
-             "kumulierter Wert, NICHT der 6-Monats-Zeitraum der Bewegungsdaten "
-             "(Pick-Heatmap).",
+    "Picks": "Ein Zugriffszähler des Platzes, der FERTIG aus dem Lagersystem (WMS) "
+             "kommt – wir berechnen ihn NICHT selbst, sondern übernehmen ihn 1:1. "
+             "NICHT dieselbe Zahl wie in der Pick-Heatmap (die zählen wir selbst aus "
+             "den 6-Monats-Bewegungen).",
     "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
                             "(kann auch mehr als einer sein).",
     "Belegt (Ist-LHM)": "Wie viele davon aktuell drauf stehen.",
