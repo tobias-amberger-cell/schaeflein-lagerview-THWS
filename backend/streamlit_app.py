@@ -982,6 +982,25 @@ TR: dict[str, dict[str, str]] = {
     "lock_only": {"de": "Nur gesperrte", "en": "Locked only"},
     "lock_without": {"de": "Ohne gesperrte", "en": "Exclude locked"},
     "tp_period": {"de": "Zeitraum (Tage)", "en": "Period (days)"},
+    "tp_period_help": {
+        "de": "Globaler Zeitfilter: schraenkt die Bewegungsdaten in ALLEN "
+              "bewegungsbasierten Tabs ein (Pick-Heatmap, ABC nach "
+              "Auftragszeilen/Menge, Top-Artikel, Artikel-Detail, Trend). "
+              "Gerechnet ab dem Datenstichtag (juengstes Datum im Export) "
+              "rueckwaerts. Ganz rechts = kompletter Zeitraum. Hinweis: ABC "
+              "„nach Lagerplätzen“ nutzt den kumulierten WMS-Zaehler ANZ_PICKS "
+              "(ohne Datum) und bleibt davon unberuehrt.",
+        "en": "Global time filter: limits the movement data in ALL "
+              "movement-based tabs (pick heatmap, ABC by order lines/quantity, "
+              "top articles, article detail, trend). Counted backwards from the "
+              "data cut-off date (latest date in the export). Far right = full "
+              "period. Note: ABC ‘by storage slots’ uses the cumulative WMS "
+              "counter ANZ_PICKS (no date) and is not affected.",
+    },
+    "tp_period_active": {
+        "de": "Zeitraum: letzte {d} Tage (ab Stichtag)",
+        "en": "Period: last {d} days (from cut-off)",
+    },
     "top_count": {"de": "Top-Artikel anzeigen", "en": "Show top items"},
     "top_show_all": {"de": "Alle Artikel anzeigen", "en": "Show all articles"},
     "top_show_all_h": {
@@ -1362,8 +1381,9 @@ TR: dict[str, dict[str, str]] = {
               "Wie das WMS ihn intern hochzählt (über welchen Zeitraum), steht nicht im Export. Er ist "
               "**nicht** dieselbe Zahl wie in der Pick-Heatmap (die zählen **wir** selbst aus den "
               "6-Monats-Bewegungen) – zwei verschiedene Zähler.\n"
-              "- **ABC (Platz)** = die Güteklasse des Ortes – die **Stamm**-Klasse aus dem Lagersystem (WMS), "
-              "**nicht** die von uns aus den Picks berechnete ABC. A = bester Platz; beschreibt den Platz, nicht den Artikel.\n"
+              "- **ABC (berechnet)** = die von **uns** aus der Pick-Frequenz berechnete ABC-Klasse "
+              "(Pareto 80/95 % auf dem Zugriffszähler), **nicht** die Stamm-Klasse aus dem WMS. "
+              "A = am häufigsten gepickt; zeigt die tatsächliche Nachfrage am Platz.\n"
               "- **Soll-LHM** = auf wie viele Paletten/Behälter der Platz aufgefüllt werden soll.\n"
               "- **Tage seit letztem Pick** = wie lange hier nichts mehr entnommen wurde – der eine "
               "Zeit-Wert dieser Tabelle. Kürzlich gepickt und trotzdem leer heißt: Nachschub vergessen. "
@@ -1782,8 +1802,8 @@ TR: dict[str, dict[str, str]] = {
     },
     "abc_mode": {"de": "ABC berechnen nach", "en": "Compute ABC by"},
     "abc_by_slots": {"de": "Lagerplätzen", "en": "Storage slots"},
-    "abc_by_articles": {"de": "Artikeln", "en": "Articles"},
-    "abc_by_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
+    "abc_by_articles": {"de": "Auftragszeilen (Bewegungen)", "en": "Order lines (movements)"},
+    "abc_by_menge": {"de": "Echte Menge (Stück)", "en": "Actual quantity (pcs)"},
     "abc_col_menge": {"de": "Menge (Stück)", "en": "Quantity (pcs)"},
     "abc_col_avgmenge": {"de": "Ø Menge/Bewegung", "en": "avg qty/movement"},
     "abc_csv_all": {
@@ -1837,13 +1857,15 @@ TR: dict[str, dict[str, str]] = {
               "items.",
     },
     "abc_mode_note": {
-        "de": "**Nach Artikeln** = klassische ABC nach **Anzahl Bewegungen** (wie oft "
-              "ein Produkt bewegt wird). **Nach Menge (Stück)** = nach der tatsächlich "
+        "de": "**Nach Auftragszeilen (Bewegungen)** = klassische ABC nach **Anzahl "
+              "Bewegungen** (wie oft ein Produkt bewegt wird – jede TPA-Position ist "
+              "eine Auftragszeile). **Nach echter Menge (Stück)** = nach der tatsächlich "
               "bewegten **Stückzahl** (`MENGE_IST`) – wie viel von einem Produkt "
               "wirklich gebraucht wurde. **Nach Lagerplätzen** = welche *Plätze* am "
               "häufigsten angefahren werden.",
-        "en": "**By articles** = classic ABC by **number of movements** (how often a "
-              "product is moved). **By quantity (pcs)** = by the actual **units moved** "
+        "en": "**By order lines (movements)** = classic ABC by **number of movements** "
+              "(how often a product is moved – each TPA position is one order line). "
+              "**By actual quantity (pcs)** = by the actual **units moved** "
               "(`MENGE_IST`) – how much of a product was really used. **By storage "
               "slots** = which *slots* are visited most often.",
     },
@@ -1912,16 +1934,18 @@ TR: dict[str, dict[str, str]] = {
     "abc_px_articles": {"de": "Artikel (nach Bewegungen sortiert)", "en": "Articles (sorted by movements)"},
     "abc_py": {"de": "kumulativer Anteil %", "en": "cumulative share %"},
     "abc_intro_articles": {
-        "de": "**ABC nach Artikeln** — die Artikel nach **Anzahl Bewegungen** sortiert. "
+        "de": "**ABC nach Auftragszeilen (Bewegungen)** — die Artikel nach **Anzahl "
+              "Bewegungen** sortiert. "
               "A = Top-Artikel bis {a} % aller Bewegungen, B = bis {b} %, der Rest C.",
-        "en": "**ABC by articles** — articles sorted by **number of movements**. "
+        "en": "**ABC by order lines (movements)** — articles sorted by **number of "
+              "movements**. "
               "A = top articles up to {a}% of all movements, B = up to {b}%, rest C.",
     },
     "abc_intro_menge": {
-        "de": "**ABC nach Menge** — die Artikel nach **tatsächlich bewegter Stückzahl** "
+        "de": "**ABC nach echter Menge** — die Artikel nach **tatsächlich bewegter Stückzahl** "
               "(`MENGE_IST`) sortiert: wie viel von einem Produkt wirklich gebraucht "
               "wurde. A = Top-Artikel bis {a} % der Gesamtmenge, B = bis {b} %, Rest C.",
-        "en": "**ABC by quantity** — articles sorted by **actual units moved** "
+        "en": "**ABC by actual quantity** — articles sorted by **actual units moved** "
               "(`MENGE_IST`): how much of a product was really used. A = top articles "
               "up to {a}% of total quantity, B = up to {b}%, rest C.",
     },
@@ -2500,6 +2524,33 @@ def filter_tpa(tpa: pd.DataFrame, allowed_pids: set[str] | None) -> pd.DataFrame
     return tpa[tpa["q_platz"].isin(allowed_pids)]
 
 
+def tpa_span_days(tpa: pd.DataFrame) -> int:
+    """Anzahl Kalendertage, die die Bewegungsdaten abdecken (Stichtag - erstes
+    Datum + 1). Basis fuer den GLOBALEN Zeitraum-Regler: dessen Maximum = volle
+    Spanne, damit 'ganz rechts' = alle Bewegungen bedeutet."""
+    d = tpa["day"].dropna()
+    if d.empty:
+        return 180
+    return int((d.max() - d.min()).days) + 1
+
+
+def filter_tpa_by_days(tpa: pd.DataFrame, days: int, span: int) -> pd.DataFrame:
+    """Bewegungen auf die letzten `days` Kalendertage einschraenken.
+
+    WICHTIG: Das Fenster wird relativ zum DATENSTICHTAG (juengstes Datum im
+    Export) gerechnet, NICHT zur Systemuhr – die warehouse.db ist ein fester
+    Export-Stand, ein Fenster gegen 'heute' waere leer. `days >= span` (Regler
+    ganz rechts) heisst 'kein Zeitfilter' und gibt alle Bewegungen zurueck.
+    """
+    if days >= span:
+        return tpa
+    d = tpa["day"].dropna()
+    if d.empty:
+        return tpa
+    cutoff = d.max() - pd.Timedelta(days=days - 1)
+    return tpa[tpa["day"] >= cutoff]
+
+
 def drop_weekend(df: pd.DataFrame, day_col: str = "day") -> pd.DataFrame:
     """Entfernt Samstag/Sonntag aus einem Tages-DataFrame (Mo=0..So=6).
 
@@ -3035,7 +3086,7 @@ _PUTAWAY_BLOCKED_RENAME = {
 # ohnehin im Vorschlag-Text (das Vorschlag-SQL liest MAX_LHM weiterhin aus dem df).
 _REPLEN_COLS = [
     "PLATZ_ID", "REGAL", "FACH", "EBENE",
-    "ABC_KLASSE", "ANZ_PICKS",
+    "ABC_CALC", "ANZ_PICKS",
 ]
 
 # Sprechende Spaltenkoepfe fuer die Nachschub-Tabellen (technisch -> Klartext).
@@ -3044,7 +3095,7 @@ _REPLEN_RENAME = {
     "REGAL": "Regal",
     "FACH": "Fach",
     "EBENE": "Ebene",
-    "ABC_KLASSE": "ABC (Platz)",
+    "ABC_CALC": "ABC (berechnet)",
     "ANZ_PICKS": "Picks (Häufigkeit)",
     "MAX_LHM": "Soll-LHM",
     "DAYS_EMPTY": "Tage leer",
@@ -3058,9 +3109,10 @@ _REPLEN_HELP = {
     "Fach": "Fach innerhalb des Regals.",
     "Ebene": "Wie hoch der Platz liegt – niedrig heißt Pickzone mit kurzen "
              "Greifwegen.",
-    "ABC (Platz)": "Die Güteklasse des Platzes – die STAMM-Klasse aus dem "
-                   "Lagersystem (WMS), NICHT die von uns aus den Picks berechnete "
-                   "ABC. A = bester Platz; beschreibt den Platz, nicht den Artikel.",
+    "ABC (berechnet)": "Die von UNS aus der Pick-Frequenz berechnete ABC-Klasse "
+                       "(Pareto 80/95 % auf ANZ_PICKS), NICHT die Stamm-Klasse aus "
+                       "dem WMS. A = am häufigsten gepickt. Zeigt die tatsächliche "
+                       "Nachfrage am Platz.",
     "Picks (Häufigkeit)": "Ein Zugriffszähler des Platzes, der FERTIG aus dem "
                           "Lagersystem (WMS) kommt – wir berechnen ihn NICHT selbst, "
                           "sondern übernehmen ihn 1:1. Er ist NICHT dieselbe Zahl "
@@ -4387,7 +4439,12 @@ def main() -> None:
                 sperr_opts.index(sperr_choice)
             ]
         st.divider()
-        days = st.slider(t("tp_period"), 7, 180, 30, step=7)
+        # GLOBALER Zeitraum-Regler: Maximum = volle Datenspanne, Default =
+        # ganz rechts (kompletter Zeitraum -> Verhalten beim Start unveraendert).
+        # load_tpa_raw() ist gecacht, der erneute Aufruf unten kostet nichts.
+        _span = tpa_span_days(load_tpa_raw())
+        days = st.slider(t("tp_period"), 7, _span, _span, step=7,
+                         help=t("tp_period_help"))
         article_limit = st.slider(t("top_count"), 5, 500, 25, step=5)
         show_all_top = st.checkbox(t("top_show_all"), value=False,
                                    help=t("top_show_all_h"))
@@ -4411,6 +4468,8 @@ def main() -> None:
             _af.append(f"{t('min_picks')}: ≥ {min_picks}")
         if sperr_mode != "Alle":
             _af.append(f"{t('lock_status')}: {sperr_choice}")
+        if days < _span:
+            _af.append(t("tp_period_active").format(d=days))
         _FILTER_LABEL = "; ".join(_af) if _af else t("filter_none")
         st.caption(f"{t('active_filters')}: {_FILTER_LABEL}")
         st.caption(f"DB: `{get_db_path()}`")
@@ -4437,6 +4496,10 @@ def main() -> None:
         if movements_filtered else None
     )
     tpa = filter_tpa(tpa_all, allowed_pids)
+    # GLOBALER Zeitraum-Filter: schraenkt die Bewegungen einmalig auf die letzten
+    # `days` Tage (ab Datenstichtag) ein -> wirkt in ALLEN bewegungsbasierten
+    # Tabs gleich. `days == _span` (Regler ganz rechts) = kein Zeitfilter.
+    tpa = filter_tpa_by_days(tpa, days, _span)
 
     # --- KPI-Kacheln oben (beziehen sich auf die gefilterte Auswahl) ---
     total = len(filtered) or 1
