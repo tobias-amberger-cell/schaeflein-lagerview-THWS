@@ -1361,8 +1361,8 @@ TR: dict[str, dict[str, str]] = {
               "**kumulierter** Wert für den Ort (nicht der aktuelle Bestand) und **nicht** der "
               "6-Monats-Zeitraum der Bewegungsdaten aus der Pick-Heatmap – die beiden „Picks“ sind also "
               "zwei verschiedene Zähler.\n"
-              "- **ABC (Platz)** = die Güteklasse des Ortes aus dem Lagersystem (A = bester Platz). Sie beschreibt "
-              "den Platz und wird hier nicht aus den Picks berechnet.\n"
+              "- **ABC (Platz)** = die Güteklasse des Ortes – die **Stamm**-Klasse aus dem Lagersystem (WMS), "
+              "**nicht** die von uns aus den Picks berechnete ABC. A = bester Platz; beschreibt den Platz, nicht den Artikel.\n"
               "- **Soll-LHM** = auf wie viele Paletten/Behälter der Platz aufgefüllt werden soll.\n"
               "- **Tage seit letztem Pick** = wie lange hier nichts mehr entnommen wurde – der eine "
               "Zeit-Wert dieser Tabelle. Kürzlich gepickt und trotzdem leer heißt: Nachschub vergessen. "
@@ -3056,13 +3056,14 @@ _REPLEN_HELP = {
     "Fach": "Fach innerhalb des Regals.",
     "Ebene": "Wie hoch der Platz liegt – niedrig heißt Pickzone mit kurzen "
              "Greifwegen.",
-    "ABC (Platz)": "Die Güteklasse des Ortes aus dem Lagersystem (A = bester "
-                   "Platz). Beschreibt den Platz, nicht den Artikel, und wird hier "
-                   "nicht aus den Picks berechnet.",
-    "Picks (Häufigkeit)": "Zugriffszähler des Platzes aus dem Lagersystem (WMS) – "
-                          "ein kumulierter Wert, NICHT der 6-Monats-Zeitraum der "
-                          "Bewegungsdaten (Pick-Heatmap). Je höher, desto "
-                          "dringender der Nachschub.",
+    "ABC (Platz)": "Die Güteklasse des Platzes – die STAMM-Klasse aus dem "
+                   "Lagersystem (WMS), NICHT die von uns aus den Picks berechnete "
+                   "ABC. A = bester Platz; beschreibt den Platz, nicht den Artikel.",
+    "Picks (Häufigkeit)": "Wie oft dieser Platz laut Lagersystem (WMS) angefahren "
+                          "wird – ein aufsummierter Zähler des Platzes. Das ist "
+                          "NICHT dieselbe Zahl wie in der Pick-Heatmap (die nur die "
+                          "letzten 6 Monate zählt). Je höher, desto dringender der "
+                          "Nachschub.",
     "Soll-LHM": "Auf so viele Paletten/Behälter sollte der Platz aufgefüllt "
                 "werden.",
     "Tage leer": "Wie lange der Platz schon ohne Ware ist. Bei manchen Plätzen "
