@@ -1357,8 +1357,10 @@ TR: dict[str, dict[str, str]] = {
     "replen_glossary_b": {
         "de": "- **Leer** heißt hier **ganz leer**: gar nichts steht auf dem Platz. Teilweise gefüllte Plätze (noch "
               "Platz frei, aber schon Ware drauf) stehen nicht hier, sondern im Tab **Einlagern / Free Capacity**.\n"
-              "- **Picks (Häufigkeit)** = wie oft an diesem Platz normalerweise gepickt wird (im Lagersystem "
-              "hinterlegt). Das ist ein Zähler für den Ort, nicht der aktuelle Bestand.\n"
+              "- **Picks (Häufigkeit)** = Zugriffszähler des Platzes aus dem Lagersystem (WMS). Ein "
+              "**kumulierter** Wert für den Ort (nicht der aktuelle Bestand) und **nicht** der "
+              "6-Monats-Zeitraum der Bewegungsdaten aus der Pick-Heatmap – die beiden „Picks“ sind also "
+              "zwei verschiedene Zähler.\n"
               "- **ABC (Platz)** = die Güteklasse des Ortes aus dem Lagersystem (A = bester Platz). Sie beschreibt "
               "den Platz und wird hier nicht aus den Picks berechnet.\n"
               "- **Soll-LHM** = auf wie viele Paletten/Behälter der Platz aufgefüllt werden soll.\n"
@@ -2948,8 +2950,9 @@ _MASSNAHME_HELP = {
     "Fach": "Fach innerhalb des Regals.",
     "Ebene": "Wie hoch der Platz liegt – niedrig heißt Pickzone mit kurzen "
              "Greifwegen.",
-    "Picks": "Wie oft an diesem Platz gepickt wird (Häufigkeit aus dem "
-             "Lagersystem).",
+    "Picks": "Zugriffszähler des Platzes aus dem Lagersystem (WMS) – ein "
+             "kumulierter Wert, NICHT der 6-Monats-Zeitraum der Bewegungsdaten "
+             "(Pick-Heatmap).",
     "ABC (Platz)": "Die Güteklasse des Ortes aus dem Lagersystem (A = bester "
                    "Platz). Beschreibt den Platz, nicht den Artikel.",
     "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
@@ -3056,7 +3059,9 @@ _REPLEN_HELP = {
     "ABC (Platz)": "Die Güteklasse des Ortes aus dem Lagersystem (A = bester "
                    "Platz). Beschreibt den Platz, nicht den Artikel, und wird hier "
                    "nicht aus den Picks berechnet.",
-    "Picks (Häufigkeit)": "Wie oft an diesem Platz gepickt wird. Je mehr, desto "
+    "Picks (Häufigkeit)": "Zugriffszähler des Platzes aus dem Lagersystem (WMS) – "
+                          "ein kumulierter Wert, NICHT der 6-Monats-Zeitraum der "
+                          "Bewegungsdaten (Pick-Heatmap). Je höher, desto "
                           "dringender der Nachschub.",
     "Soll-LHM": "Auf so viele Paletten/Behälter sollte der Platz aufgefüllt "
                 "werden.",
@@ -3353,7 +3358,9 @@ _HF_HELP = {
     "Regal": "Regalnummer im Lager.",
     "Fach": "Fach innerhalb des Regals.",
     "Ebene": "Wie hoch der Platz liegt.",
-    "Picks": "Die im Lagersystem hinterlegte Zugriffshäufigkeit dieses Platzes.",
+    "Picks": "Zugriffszähler des Platzes aus dem Lagersystem (WMS) – ein "
+             "kumulierter Wert, NICHT der 6-Monats-Zeitraum der Bewegungsdaten "
+             "(Pick-Heatmap).",
     "Kapazität (max. LHM)": "Wie viele Paletten/Behälter auf den Platz passen "
                             "(kann auch mehr als einer sein).",
     "Belegt (Ist-LHM)": "Wie viele davon aktuell drauf stehen.",
@@ -3457,8 +3464,9 @@ def render_umlagern_auslagern(filtered: pd.DataFrame) -> None:
     # Gruppe 2: Schnelldreher auf schlechtem Platz.
     # A-Ware zu hoch: A-Klasse, aktiv, weit oben -> Ware ergonomisch auf einen
     # freien Platz weiter unten umlagern (Platz bleibt, nur Inhalt zieht um).
-    # BELEGT ist Pflicht: ANZ_PICKS>0 zaehlt HISTORISCHE Picks (6 Mon) - ein Platz
-    # kann viel gepickt worden, inzwischen aber leer sein. Ohne BELEGT landen leere
+    # BELEGT ist Pflicht: ANZ_PICKS ist ein kumulierter WMS-Zugriffszaehler (NICHT
+    # der 6-Monats-Bewegungszeitraum) - ein Platz kann viel gepickt worden, inzwischen
+    # aber leer sein. Ohne BELEGT landen leere
     # A-Plaetze in der Liste (~3/4 der Treffer), obwohl es da nichts umzulagern gibt
     # - genau der Fall, den der Info-Text ausschliesst.
     # WICHTIG: EBENE ist KEIN sauberer 1-6-Level. Das Feld enthaelt codierte
