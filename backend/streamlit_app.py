@@ -931,12 +931,14 @@ TR: dict[str, dict[str, str]] = {
     },
     "lang_label": {"de": "🌐 Sprache / Language", "en": "🌐 Sprache / Language"},
     "filter": {"de": "Filter", "en": "Filters"},
-    "abc": {"de": "ABC-Klasse", "en": "ABC class"},
+    "abc": {"de": "ABC-Klasse (je Lagerplatz)", "en": "ABC class (per slot)"},
     "abc_help": {
-        "de": "Filtert die ausgewaehlten Klassen je nach gewaehlter Quelle "
-              "(Stamm-ABC, berechnete ABC oder beide).",
-        "en": "Filters the selected classes by the chosen source "
-              "(master ABC, calculated ABC or both).",
+        "de": "Bezieht sich auf den **Lagerplatz**, nicht auf den Artikel: "
+              "filtert die gewaehlten Klassen je nach Quelle (Stamm-ABC oder "
+              "berechnete ABC). Artikel-ABC gibt es separat im ABC-Tab.",
+        "en": "Refers to the **storage slot**, not the article: filters the "
+              "selected classes by source (master or calculated ABC). "
+              "Article-level ABC is available separately in the ABC tab.",
     },
     "abc_src": {"de": "ABC-Quelle", "en": "ABC source"},
     "abc_src_help": {
