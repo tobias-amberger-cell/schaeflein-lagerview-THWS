@@ -4297,23 +4297,12 @@ def render_3d(filtered: pd.DataFrame) -> None:
     # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
     # neue GLB laden statt der alten aus dem Cache.
     glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
-    # Bedienleiste: vier gleich breite Spalten ([1,1,1,1] = gleiches Verhaeltnis),
+    # Faerb-Modus fest auf ABC: der Umschalter (Pick-/Bewegungs-Heatmap, keine
+    # Faerbung) wurde entfernt -> das Modell wird immer nach ABC-Klasse eingefaerbt.
+    colormode_cad = "abc"
+    # Bedienleiste: drei gleich breite Spalten ([1,1,1] = gleiches Verhaeltnis),
     # in jede kommt ein Regler/Auswahlfeld fuer den Viewer.
-    ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 1])
-    with ctrl1:
-        # Faerb-Modus: ABC-Klassen, Pick-Heatmap, Bewegungs-Heatmap oder
-        # gar nicht (Original-Optik der GLB).
-        # Dropdown "Faerben nach" mit 4 Optionen; index=0 -> ABC ist vorausgewaehlt.
-        cad_cm_opts = [t("d3_cad_cm_abc"), t("d3_cad_cm_picks"),
-                       t("d3_cad_cm_moves"), t("d3_cad_cm_none")]
-        cad_cm_choice = st.selectbox(t("d3_colormode"), cad_cm_opts, index=0,
-                                     key="d3_cm_cad", help=t("d3_cad_cm_help"))
-        # Die angezeigte (sprachabhaengige) Auswahl zurueck auf einen festen
-        # technischen Code mappen ("abc"/"picks"/...), den der Viewer versteht.
-        colormode_cad = {
-            t("d3_cad_cm_abc"): "abc", t("d3_cad_cm_picks"): "picks",
-            t("d3_cad_cm_moves"): "moves", t("d3_cad_cm_none"): "none",
-        }[cad_cm_choice]
+    ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1])
     with ctrl2:
         # Checkbox "Plaetze ohne Daten ausblenden" (Standard an) -> blendet die
         # grauen "keine Daten"-Plaetze aus: uebersichtlicher + schneller.
