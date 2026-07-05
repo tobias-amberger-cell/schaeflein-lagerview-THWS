@@ -1212,13 +1212,13 @@ TR: dict[str, dict[str, str]] = {
               "Bar height = number of retrievals, not a daily average.",
     },
     "pick_by_hour_note": {
-        "de": "Jeder Balken = **Summe aller Picks in dieser Uhrzeit-Stunde** (0–23 "
-              "Uhr) über den gesamten Zeitraum, Mo–Fr zusammengezählt. Die y-Achse "
+        "de": "Jeder Balken = **Summe aller Picks in dieser Uhrzeit-Stunde** (5–16 "
+              "Uhr, Kernarbeitszeit) über den gesamten Zeitraum, Mo–Fr zusammengezählt. Die y-Achse "
               "ist eine **Anzahl** und skaliert automatisch: die Obergrenze ist die "
               "Pick-Zahl der vollsten Stunde **in der aktuellen Auswahl** – setzt du "
               "links Filter, zählen nur deren Plätze und die Zahlen sinken "
               "entsprechend.",
-        "en": "Each bar = **sum of all picks in that clock hour** (0–23) over the "
+        "en": "Each bar = **sum of all picks in that clock hour** (5–16, core hours) over the "
               "whole period, Mon–Fri combined. The y-axis is a **count** and "
               "auto-scales: the upper bound is the busiest hour's pick count **in the "
               "current selection** – filtering slots on the left counts only those "
@@ -3383,8 +3383,9 @@ def render_pickheat(tpa: pd.DataFrame, movements_filtered: bool,
             )
             st.caption(t("pick_by_wd_note"))
         with c2:
+            # Nur Kernarbeitszeit 5-16 Uhr zeigen (Rand-Stunden ausblenden).
             per_hour = (
-                ph.groupby("hour")["picks"].sum().reindex(range(24), fill_value=0)
+                ph.groupby("hour")["picks"].sum().reindex(range(5, 17), fill_value=0)
             )
             st.plotly_chart(
                 px.bar(per_hour, title=t("pick_by_hour"),
