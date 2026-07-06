@@ -1018,17 +1018,19 @@ TR: dict[str, dict[str, str]] = {
     "tp_period_help": {
         "de": "Globaler Zeitfilter: schraenkt die Bewegungsdaten in ALLEN "
               "bewegungsbasierten Tabs ein (Pick-Heatmap, ABC nach "
-              "Auftragszeilen/Menge, Top-Artikel, Artikel-Detail, Trend). "
+              "Auftragszeilen/Menge, Top-Artikel, Artikel-Detail, Trend) "
+              "und berechnet die ABC-Faerbung im 3D-Modell neu. "
               "Gerechnet ab dem Datenstichtag (juengstes Datum im Export) "
               "rueckwaerts. Ganz rechts = kompletter Zeitraum. Hinweis: ABC "
               "„nach Lagerplätzen“ nutzt den kumulierten WMS-Zaehler ANZ_PICKS "
-              "(ohne Datum) und bleibt davon unberuehrt.",
+              "(ohne Datum) und bleibt im ABC-Tab davon unberuehrt.",
         "en": "Global time filter: limits the movement data in ALL "
               "movement-based tabs (pick heatmap, ABC by order lines/quantity, "
-              "top articles, article detail, trend). Counted backwards from the "
+              "top articles, article detail, trend) and recalculates the ABC "
+              "coloring in the 3D model. Counted backwards from the "
               "data cut-off date (latest date in the export). Far right = full "
               "period. Note: ABC ‘by storage slots’ uses the cumulative WMS "
-              "counter ANZ_PICKS (no date) and is not affected.",
+              "counter ANZ_PICKS (no date) and is not affected in the ABC tab.",
     },
     "tp_period_active": {
         "de": "Zeitraum: letzte {d} Tage (ab Stichtag)",
@@ -2214,21 +2216,19 @@ TR: dict[str, dict[str, str]] = {
               "reagiert auf die **Sidebar-Filter** (ABC, Auslastung, „Nur belegte Plätze“, "
               "Regal/Ebene/Picks, Sperr-Status). Herausgefilterte Plätze fallen im Modell "
               "weg.\n\n"
-              "🎨 Mit dem Umschalter **„Färbung“** über dem Modell wählst du: **ABC "
-              "(Gesamt)** = zeitlos aus dem kumulierten WMS-Pick-Zähler (reagiert **nicht** "
-              "auf den Zeitraum-Regler, konsistent zur „Belegt“-Kachel oben) · **Pick-Heatmap "
-              "(Zeitraum)** = färbt nach Picks im gewählten Zeitraum und **reagiert live auf "
-              "den Zeitraum-Regler**. Zum zusätzlichen Ein-/Ausblenden nutze die Checkboxen "
+              "🎨 Die Einfärbung ist fest **ABC-Klasse**. Die berechnete ABC-Klasse "
+              "basiert auf den Picks im gewählten Zeitraum und reagiert damit live "
+              "auf den Zeitraum-Regler. Zum zusätzlichen Ein-/Ausblenden nutze die Checkboxen "
               "**„Plätze ohne Daten ausblenden“** und **„Nur belegte Plätze“** direkt über "
               "dem Modell.",
         "en": "**Clickable 3D model** — click a storage slot in the model and you'll "
               "see its metrics on the right. Every slot is linked to the database.\n\n"
               "ℹ️ **The 3D tab now shows the same selection as the tiles above** and reacts "
               "to the **sidebar filters** (ABC, utilization, “only occupied slots”, "
-              "rack/level/picks, lock status). Filtered-out slots disappear from the model. "
-              "The **time-range slider** still only affects the movement-based tabs – the "
-              "ABC coloring is based on the **cumulative WMS pick counter** (per-slot total), "
-              "which has no time reference. For extra show/hide control use the "
+              "rack/level/picks, lock status). Filtered-out slots disappear from the model.\n\n"
+              "🎨 Coloring is fixed to **ABC class**. The calculated ABC class is based "
+              "on picks in the selected time range, so it reacts live to the time-range "
+              "slider. For extra show/hide control use the "
               "**“Hide slots without data”** and **“Only occupied slots”** checkboxes right "
               "above the model.",
     },
@@ -4283,10 +4283,11 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                 _csv_download(slot_tbl, "artikel_plaetze")
 
 
-def render_3d(filtered: pd.DataFrame) -> None:
+def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
     """Tab '3D-Modell': klickbarer CAD-Viewer (Meshes nach PLATZ_ID).
 
-    Die Plaetze werden fest nach berechneter ABC-Klasse eingefaerbt.
+    Die Plaetze werden fest nach ABC-Klasse eingefaerbt; die berechnete
+    ABC-Klasse basiert hier auf den Picks im gewaehlten Zeitraum.
     """
     import json as _json
 
@@ -4367,7 +4368,22 @@ def render_3d(filtered: pd.DataFrame) -> None:
     # wie die Kacheln oben: die Map wird aus dem gefilterten DataFrame gebaut -> per
     # Sidebar-Filter rausgeworfene Plaetze fehlen und werden als 'keine Daten'
     # (grau) behandelt bzw. beim Standard-Haekchen 'ohne Daten ausblenden' weg.
-    slot_json = build_slot_3d_map(filtered)
+    # Fuer die 3D-ABC-Faerbung zaehlen aber nur Picks im gewaehlten Zeitraum.
+    period_picks = (
+        tpa[tpa["q_platz"] != ""]
+        .groupby("q_platz")
+        .size()
+    )
+    slot_data = filtered.copy()
+    slot_data["ANZ_PICKS"] = (
+        slot_data["PLATZ_ID"].astype(str).str.strip()
+        .map(period_picks)
+        .fillna(0)
+        .astype(int)
+    )
+    slot_data = classify_abc(slot_data, "ANZ_PICKS", 80, 95)
+    slot_data["ABC_CALC"] = slot_data["ABC"]
+    slot_json = build_slot_3d_map(slot_data)
 
     # Fertige 3D-Seite zusammenbauen: _THREE_VIEWER_HTML ist eine HTML/JS-Vorlage
     # (three.js) mit Platzhaltern __XXX__. Jedes .replace(...) setzt einen echten
@@ -4651,7 +4667,7 @@ def main() -> None:
         render_article(tpa, movements_filtered, filtered)
 
     with tab_3d:
-        render_3d(filtered)
+        render_3d(filtered, tpa)
 
 
 if __name__ == "__main__":
