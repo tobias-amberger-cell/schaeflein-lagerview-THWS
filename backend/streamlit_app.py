@@ -2196,9 +2196,22 @@ TR: dict[str, dict[str, str]] = {
     "d3_click_intro": {
         "de": "**Klickbares 3D-Modell** — klick einen Lagerplatz im Modell an, dann "
               "siehst du rechts seine Kennzahlen. Jeder Platz ist mit der Datenbank "
-              "verknüpft.",
+              "verknüpft.\n\n"
+              "ℹ️ **Der 3D-Tab zeigt bewusst immer das ganze Lager** und reagiert "
+              "**nicht** auf die Sidebar-Filter (auch nicht auf den Zeitraum-Regler). "
+              "Die ABC-Färbung beruht auf dem **kumulierten Pick-Zähler des WMS** "
+              "(Gesamtstand je Platz), der keinen Zeitbezug hat – der Zeitraum-Regler "
+              "wirkt nur in den anderen Tabs auf die Bewegungsdaten. Zum Ein-/Ausblenden "
+              "von Plätzen nutze die Checkboxen **„Plätze ohne Daten ausblenden“** und "
+              "**„Nur belegte Plätze“** direkt über dem Modell.",
         "en": "**Clickable 3D model** — click a storage slot in the model and you'll "
-              "see its metrics on the right. Every slot is linked to the database.",
+              "see its metrics on the right. Every slot is linked to the database.\n\n"
+              "ℹ️ **The 3D tab always shows the whole warehouse** and does **not** react "
+              "to the sidebar filters (including the time-range slider). The ABC coloring "
+              "is based on the **cumulative WMS pick counter** (per-slot total), which has "
+              "no time reference – the time-range slider only affects the movement data in "
+              "the other tabs. To show/hide slots use the **“Hide slots without data”** and "
+              "**“Only occupied slots”** checkboxes right above the model.",
     },
     "d3_color_abc": {"de": "Nach ABC einfärben", "en": "Color by ABC"},
     # CAD-Viewer: Auswahl der Einfaerbung (ABC / Pick-Heatmap / Bewegungs-Heatmap)
