@@ -472,7 +472,7 @@ function fillLegend(counts){
     + row('#f9a825', 'B', LEGEND_COUNTS.B)
     + row('#2e7d32', 'C', LEGEND_COUNTS.C)
     + row('#90a4ae', L.zeropicks, LEGEND_COUNTS.zero)
-    + row('#9e9e9e', L.grey, counts.grey)
+    + (HIDEGREY ? '' : row('#9e9e9e', L.grey, counts.grey))
     + '<div style="border-top:1px solid #ddd;margin-top:5px;padding-top:4px;">'
     + row('#ffffff', L.total, LEGEND_COUNTS.A + LEGEND_COUNTS.B + LEGEND_COUNTS.C + LEGEND_COUNTS.zero)
     + '</div>';
