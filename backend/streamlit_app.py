@@ -174,10 +174,13 @@ for(let i=0;i<HEAT_NB;i++){
 }
 const HEAT_ZERO_MAT = new THREE.MeshStandardMaterial({ color: HEAT_ZERO_HEX });
 
-// Kennzahl je Modus: picks = nur Entnahmen, moves = Entnahmen + Nachschub.
+// Kennzahl je Modus: picks = nur Entnahmen (kumuliert, zeitlos),
+// moves = Entnahmen + Nachschub, period = Picks im gewaehlten Zeitraum (d.pp,
+// aus zeitgefilterten TPA -> reagiert auf den Zeitraum-Regler).
 function heatMetric(d){
   if(COLORMODE==='picks') return (d.p||0);
   if(COLORMODE==='moves') return (d.p||0)+(d.n||0);
+  if(COLORMODE==='period') return (d.pp||0);
   return 0;
 }
 // Rang-Funktion: aus allen Plaetzen mit Wert>0 eine sortierte Liste bauen;
@@ -390,6 +393,9 @@ function showSlot(id){
       [L.util, util],
       [L.status, status],
     ];
+    // Nur im Zeitraum-Faerbmodus: Picks im gewaehlten Zeitraum (aus TPA)
+    // zusaetzlich zeigen, damit der Wert hinter der Heatmap-Farbe sichtbar ist.
+    if(COLORMODE==='period') rows.splice(4, 0, [L.picks_period, (d.pp==null?0:d.pp)]);
     if(d.mx != null) rows.push([L.cap, (d.il==null?0:d.il) + ' / ' + d.mx + ' LHM']);
     if(d.fc != null) rows.push([L.free, d.fc + ' LHM']);
     rows.push([L.locked, d.g ? L.yes : L.no]);
@@ -445,8 +451,9 @@ function fillLegend(counts){
   // Modus 'none': Plaetze nicht eingefaerbt -> keine Legende anzeigen.
   if(COLORMODE==='none'){ legendEl.innerHTML = ''; return; }
   // Heatmap-Modi: Farbverlauf-Balken (kalt->heiss) statt ABC-Klassen.
-  if(COLORMODE==='picks' || COLORMODE==='moves'){
-    const title = (COLORMODE==='moves') ? L.heat_moves : L.heat_picks;
+  if(COLORMODE==='picks' || COLORMODE==='moves' || COLORMODE==='period'){
+    const title = (COLORMODE==='moves') ? L.heat_moves
+                : (COLORMODE==='period') ? L.heat_period : L.heat_picks;
     const stops = HEAT_STOPS.map((s) =>
       '#' + s[1].toString(16).padStart(6,'0') + ' ' + Math.round(s[0]*100) + '%'
     ).join(',');
@@ -475,7 +482,7 @@ new GLTFLoader().load('__GLB__',
     // Eine Traversierung: Plaetze je Klasse zaehlen und (optional) einfaerben.
     // grau = Mesh hat eine PLATZ_ID, aber keinen Datensatz in der DB.
     const counts = { A:0, B:0, C:0, zero:0, grey:0, active:0 };
-    const heatOn = (COLORMODE==='picks' || COLORMODE==='moves');
+    const heatOn = (COLORMODE==='picks' || COLORMODE==='moves' || COLORMODE==='period');
     // Rang-Skala einmal aus ALLEN Plaetzen bauen (stabil, unabhaengig davon,
     // welche Meshes die GLB enthaelt).
     const ranker = heatOn ? buildRanker() : null;
@@ -494,7 +501,9 @@ new GLTFLoader().load('__GLB__',
         const cls = d.ac;
         key = (cls === 'A' || cls === 'B' || cls === 'C') ? cls : 'grey';
       }
-      counts[key] += 1;
+      // ABC-Legende zaehlt je Klasse; im Heatmap-Modus uebernimmt der Heat-Zweig
+      // unten das Zaehlen (active/zero), sonst wuerde counts.zero doppelt zaehlen.
+      if(!heatOn){ counts[key] += 1; }
       // Leistungsmodus: graue (datenlose) Plaetze ausblenden -> weniger
       // Draw-Calls. Kein Datenverlust, da grau ohnehin keine DB-Daten hat.
       if(key === 'grey' && HIDEGREY){ o.visible = false; }
@@ -2204,11 +2213,14 @@ TR: dict[str, dict[str, str]] = {
               "ℹ️ **Der 3D-Tab zeigt jetzt dieselbe Auswahl wie die Kacheln oben** und "
               "reagiert auf die **Sidebar-Filter** (ABC, Auslastung, „Nur belegte Plätze“, "
               "Regal/Ebene/Picks, Sperr-Status). Herausgefilterte Plätze fallen im Modell "
-              "weg. Der **Zeitraum-Regler** wirkt weiterhin nur in den bewegungsbasierten "
-              "Tabs – die ABC-Färbung beruht auf dem **kumulierten Pick-Zähler des WMS** "
-              "(Gesamtstand je Platz), der keinen Zeitbezug hat. Zum zusätzlichen "
-              "Ein-/Ausblenden nutze die Checkboxen **„Plätze ohne Daten ausblenden“** und "
-              "**„Nur belegte Plätze“** direkt über dem Modell.",
+              "weg.\n\n"
+              "🎨 Mit dem Umschalter **„Färbung“** über dem Modell wählst du: **ABC "
+              "(Gesamt)** = zeitlos aus dem kumulierten WMS-Pick-Zähler (reagiert **nicht** "
+              "auf den Zeitraum-Regler, konsistent zur „Belegt“-Kachel oben) · **Pick-Heatmap "
+              "(Zeitraum)** = färbt nach Picks im gewählten Zeitraum und **reagiert live auf "
+              "den Zeitraum-Regler**. Zum zusätzlichen Ein-/Ausblenden nutze die Checkboxen "
+              "**„Plätze ohne Daten ausblenden“** und **„Nur belegte Plätze“** direkt über "
+              "dem Modell.",
         "en": "**Clickable 3D model** — click a storage slot in the model and you'll "
               "see its metrics on the right. Every slot is linked to the database.\n\n"
               "ℹ️ **The 3D tab now shows the same selection as the tiles above** and reacts "
@@ -2220,32 +2232,33 @@ TR: dict[str, dict[str, str]] = {
               "**“Hide slots without data”** and **“Only occupied slots”** checkboxes right "
               "above the model.",
     },
-    "d3_color_abc": {"de": "Nach ABC einfärben", "en": "Color by ABC"},
-    # CAD-Viewer: Auswahl der Einfaerbung (ABC / Pick-Heatmap / Bewegungs-Heatmap)
-    "d3_cad_cm_abc": {"de": "ABC-Klasse", "en": "ABC class"},
-    "d3_cad_cm_picks": {"de": "Heatmap: Picks", "en": "Heatmap: picks"},
-    "d3_cad_cm_moves": {"de": "Heatmap: Bewegungen", "en": "Heatmap: movements"},
-    "d3_cad_cm_none": {"de": "Keine (Original)", "en": "None (original)"},
-    "d3_cad_cm_help": {
-        "de": "Wie die Plätze eingefärbt werden. **ABC-Klasse**: rot/gelb/grün nach "
-              "berechneter ABC-Klasse. **Heatmap: Picks**: fließend kalt→heiß nach "
-              "Pick-Häufigkeit (ANZ_PICKS). **Heatmap: Bewegungen**: nach Picks + "
-              "Nachschub zusammen. **Keine**: Original-Optik des Modells. Die "
-              "Heatmaps färben nach Rang/Perzentil – wenige Hotspots verzerren die "
-              "Skala nicht; graue Plätze = keine Aktivität.",
-        "en": "How slots are colored. **ABC class**: red/yellow/green by calculated "
-              "ABC class. **Heatmap: picks**: smooth cold→hot by pick frequency "
-              "(ANZ_PICKS). **Heatmap: movements**: by picks + replenishment "
-              "combined. **None**: model's original look. The heatmaps color by "
-              "rank/percentile – a few hotspots don't distort the scale; grey slots "
-              "= no activity.",
-    },
     "d3_heat_picks": {"de": "Pick-Häufigkeit", "en": "Pick frequency"},
     "d3_heat_moves": {"de": "Bewegungen (Picks + Nachschub)",
                       "en": "Movements (picks + replenishment)"},
+    "d3_heat_period": {"de": "Picks im Zeitraum", "en": "Picks in period"},
     "d3_heat_low": {"de": "selten", "en": "rare"},
     "d3_heat_high": {"de": "oft", "en": "frequent"},
     "d3_heat_zero": {"de": "keine Aktivität", "en": "no activity"},
+    # Faerbung-Umschalter (CAD-Viewer): ABC zeitlos vs. Pick-Heatmap im Zeitraum
+    "d3_color": {"de": "Färbung", "en": "Coloring"},
+    "d3_color_abc": {"de": "ABC (Gesamt)", "en": "ABC (total)"},
+    "d3_color_period": {"de": "Pick-Heatmap (Zeitraum)",
+                        "en": "Pick heatmap (period)"},
+    "d3_color_help": {
+        "de": "**ABC (Gesamt)**: färbt nach ABC-Klasse aus dem kumulierten WMS-"
+              "Pick-Zähler – zeitlos, reagiert **nicht** auf den Zeitraum-Regler "
+              "(konsistent mit der „Belegt“-Kachel oben). **Pick-Heatmap "
+              "(Zeitraum)**: färbt nach Anzahl Picks im per Zeitraum-Regler "
+              "gewählten Fenster (aus den Bewegungsdaten) – **reagiert live** auf "
+              "den Regler. Kalt = selten, heiß = oft gepickt.",
+        "en": "**ABC (total)**: colors by ABC class from the cumulative WMS pick "
+              "counter – timeless, does **not** react to the time-range slider "
+              "(consistent with the “Occupied” tile above). **Pick heatmap "
+              "(period)**: colors by number of picks within the window chosen via "
+              "the time-range slider (from the movement data) – **reacts live** to "
+              "the slider. Cold = rare, hot = frequently picked.",
+    },
+    "d3_f_picks_period": {"de": "Picks im Zeitraum", "en": "Picks in period"},
     "d3_colormode": {"de": "Färben nach", "en": "Color by"},
     "d3_cm_neutral": {"de": "Neutral (Holz)", "en": "Neutral (wood)"},
     "d3_cm_abc": {"de": "ABC-Klasse", "en": "ABC class"},
@@ -2736,16 +2749,23 @@ def classify_abc(
     return out
 
 
-def build_slot_3d_map(df: pd.DataFrame) -> str:
+def build_slot_3d_map(df: pd.DataFrame,
+                      picks_period: dict | None = None) -> str:
     """Baut die JSON-Map PLATZ_ID -> Kennzahlen fuer den 3D-Viewer aus `df`.
 
     Reine Funktion ohne Cache: `render_3d` ruft sie mit dem GEFILTERTEN
     DataFrame auf, damit das Modell dieselbe Auswahl zeigt wie die Kacheln
     oben (Plaetze, die die Sidebar-Filter rauswerfen, fehlen dann in der Map
     -> der Viewer behandelt sie als 'keine Daten' und blendet sie aus).
+
+    `picks_period` (optional): {PLATZ_ID -> Picks im gewaehlten Zeitraum}, aus
+    den ZEITGEFILTERTEN TPA-Bewegungen aggregiert. Landet als Feld 'pp' je Platz
+    und speist den Faerb-Modus 'period' (Pick-Heatmap, die auf den Zeitraum-
+    Regler reagiert) - im Gegensatz zu 'p' (kumulierter WMS-Zaehler, zeitlos).
     """
     import json
 
+    pp_map = picks_period or {}
     out: dict[str, dict] = {}
     for row in df.itertuples(index=False):
         pid = str(row.PLATZ_ID).strip()
@@ -2764,6 +2784,8 @@ def build_slot_3d_map(df: pd.DataFrame) -> str:
             "a": (row.ABC_KLASSE or "—"),
             "ac": (row.ABC_CALC if isinstance(row.ABC_CALC, str) else "—"),
             "p": int(row.ANZ_PICKS),
+            # Picks im gewaehlten Zeitraum (aus TPA); 0 wenn keine im Zeitraum.
+            "pp": int(pp_map.get(pid, 0)),
             "n": int(getattr(row, "ANZ_NACHSCHUB", 0)),
             "u": (None if pd.isna(util) else round(float(util), 1)),
             "b": bool(row.BELEGT),
@@ -4296,8 +4318,13 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
                 _csv_download(slot_tbl, "artikel_plaetze")
 
 
-def render_3d(filtered: pd.DataFrame) -> None:
-    """Tab '3D-Modell': klickbarer CAD-Viewer (Meshes nach PLATZ_ID)."""
+def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
+    """Tab '3D-Modell': klickbarer CAD-Viewer (Meshes nach PLATZ_ID).
+
+    `tpa` = die ZEITGEFILTERTEN Bewegungen (gleicher Frame wie die anderen
+    Tabs). Nur fuer den Faerb-Modus 'Pick-Heatmap (Zeitraum)' noetig: daraus
+    werden die Picks je Platz im gewaehlten Zeitraum aggregiert.
+    """
     import json as _json
 
     # Einheitliches Tab-Layout wie die anderen Reiter: Ueberschrift + Info-
@@ -4312,12 +4339,6 @@ def render_3d(filtered: pd.DataFrame) -> None:
         key="d3_search",
     ).strip()
 
-    # Das Modell zeigt jetzt DIESELBE Auswahl wie die Kacheln oben: die Map
-    # wird aus dem gefilterten DataFrame gebaut (nicht mehr load_slot_3d_map,
-    # das alle Plaetze umfasst). Plaetze, die die Sidebar-Filter rauswerfen,
-    # fehlen dann in der Map -> der Viewer faerbt sie als 'keine Daten' (grau)
-    # und blendet sie bei aktivem Standard-Haekchen 'ohne Daten ausblenden' aus.
-    slot_json = build_slot_3d_map(filtered)
     labels = {
         "hint": t("d3_panel_hint"),
         "platz": t("d3_f_platz"),
@@ -4325,6 +4346,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
         "abc_m": t("d3_f_abc_m"),
         "abc_c": t("d3_f_abc_c"),
         "picks": t("d3_f_picks"),
+        "picks_period": t("d3_f_picks_period"),
         "nachschub": t("d3_f_nachschub"),
         "util": t("d3_f_util"),
         "status": t("d3_f_status"),
@@ -4343,9 +4365,10 @@ def render_3d(filtered: pd.DataFrame) -> None:
         "zeropicks": t("d3_zero_picks"),
         "notfound": t("d3_notfound"),
         "loading": "Lade Modell" if _LANG == "de" else "Loading model",
-        # Heatmap-Legende (CAD-Viewer, Modi 'picks'/'moves')
+        # Heatmap-Legende (CAD-Viewer, Modi 'picks'/'moves'/'period')
         "heat_picks": t("d3_heat_picks"),
         "heat_moves": t("d3_heat_moves"),
+        "heat_period": t("d3_heat_period"),
         "heat_low": t("d3_heat_low"),
         "heat_high": t("d3_heat_high"),
         "heat_zero": t("d3_heat_zero"),
@@ -4359,13 +4382,18 @@ def render_3d(filtered: pd.DataFrame) -> None:
     # Cache-Buster: bei jedem Modell-Wechsel hochzaehlen, damit Browser die
     # neue GLB laden statt der alten aus dem Cache.
     glb_url = "https://ssi-lagerview-api.onrender.com/model-clickable.glb?v=20260624"
-    # Faerb-Modus fest auf ABC: der Umschalter (Pick-/Bewegungs-Heatmap, keine
-    # Faerbung) wurde entfernt -> das Modell wird immer nach ABC-Klasse eingefaerbt.
-    colormode_cad = "abc"
     # Bedienleiste: drei gleich breite Spalten ([1,1,1] = gleiches Verhaeltnis),
     # in jede kommt ein Regler/Auswahlfeld fuer den Viewer.
     ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1])
     with ctrl2:
+        # Faerbung: 'ABC (Gesamt)' = zeitlos (kumulierter WMS-Zaehler, wie die
+        # Belegt-Kachel oben, reagiert NICHT auf den Zeitraum-Regler) oder
+        # 'Pick-Heatmap (Zeitraum)' = faerbt nach Picks im gewaehlten Zeitraum
+        # (aus TPA) und reagiert damit LIVE auf den Zeitraum-Regler.
+        color_opts = [t("d3_color_abc"), t("d3_color_period")]
+        color_choice = st.radio(t("d3_color"), color_opts, horizontal=True,
+                                help=t("d3_color_help"), key="d3_colormode")
+        colormode_cad = "abc" if color_choice == t("d3_color_abc") else "period"
         # Checkbox "Plaetze ohne Daten ausblenden" (Standard an) -> blendet die
         # grauen "keine Daten"-Plaetze aus: uebersichtlicher + schneller.
         perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
@@ -4385,6 +4413,22 @@ def render_3d(filtered: pd.DataFrame) -> None:
         # Maus-Empfindlichkeit fuer Drehen/Zoom/Pan; kleiner = feiner steuerbar.
         sens = st.slider(t("d3_sens"), 0.2, 1.5, 1.0, step=0.1,
                          key="d3_sens_cad", help=t("d3_sens_help"))
+
+    # Datenschicht NACH den Controls bauen (die Faerbung entscheidet, ob die
+    # Zeitraum-Picks noetig sind). Das Modell zeigt DIESELBE Auswahl wie die
+    # Kacheln oben: die Map wird aus dem gefilterten DataFrame gebaut -> per
+    # Sidebar-Filter rausgeworfene Plaetze fehlen und werden als 'keine Daten'
+    # (grau) behandelt bzw. beim Standard-Haekchen 'ohne Daten ausblenden' weg.
+    picks_period = None
+    if colormode_cad == "period":
+        # Picks je Platz im GEWAEHLTEN Zeitraum: eine Bewegung = ein Pick,
+        # gruppiert nach Quell-Platz (q_platz). `tpa` ist bereits per Zeitraum-
+        # Regler gefiltert -> bewegt der Nutzer den Regler, aendert sich diese
+        # Aggregation und damit die Heatmap-Farbe.
+        _picks = tpa[tpa["q_platz"] != ""]
+        picks_period = _picks.groupby("q_platz").size().to_dict()
+    slot_json = build_slot_3d_map(filtered, picks_period)
+
     # Fertige 3D-Seite zusammenbauen: _THREE_VIEWER_HTML ist eine HTML/JS-Vorlage
     # (three.js) mit Platzhaltern __XXX__. Jedes .replace(...) setzt einen echten
     # Wert aus den Reglern oben ein -> aus der Vorlage wird eine konkrete Seite.
@@ -4667,7 +4711,7 @@ def main() -> None:
         render_article(tpa, movements_filtered, filtered)
 
     with tab_3d:
-        render_3d(filtered)
+        render_3d(filtered, tpa)
 
 
 if __name__ == "__main__":
