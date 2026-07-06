@@ -2185,6 +2185,12 @@ TR: dict[str, dict[str, str]] = {
               "bottom right** (arrows = move, ⟲⟳ = rotate, +/− = zoom, ⌂ = reset "
               "view). Click a slot to see its data **below the map**.",
     },
+    "d3_period_status": {
+        "de": "3D-ABC im aktuellen Zeitraum: {p} Picks auf {active} Plaetzen "
+              "· A {a} · B {b} · C {c}",
+        "en": "3D ABC in current period: {p} picks across {active} slots "
+              "· A {a} · B {b} · C {c}",
+    },
     "abc3d_head": {"de": "### 🏷️ ABC je Lagerplatz", "en": "### 🏷️ ABC per slot"},
     "abc3d_intro": {
         "de": "Welche Plätze welcher ABC-Klasse zugeordnet sind. Reagiert auf die "
@@ -2200,9 +2206,9 @@ TR: dict[str, dict[str, str]] = {
     # --- klickbarer 3D-Viewer ---
     "d3_head": {
         "de": "### 🧊 3D-Modell\n**Das Lager als klickbares 3D-Modell** — die Plätze "
-              "im echten CAD-Layout, eingefärbt nach ABC oder Heatmap.",
+              "im echten CAD-Layout, eingefärbt nach ABC-Klasse im Zeitraum.",
         "en": "### 🧊 3D model\n**The warehouse as a clickable 3D model** — the slots "
-              "in the real CAD layout, colored by ABC or heatmap.",
+              "in the real CAD layout, colored by ABC class in the period.",
     },
     "d3_explain_head": {
         "de": "ℹ️ Was bedeutet das? (Bedienung, Einfärbung)",
@@ -2244,7 +2250,7 @@ TR: dict[str, dict[str, str]] = {
     "d3_f_pos": {"de": "Regal / Fach / Ebene", "en": "Rack / bin / level"},
     "d3_f_abc_m": {"de": "ABC (Stamm)", "en": "ABC (master)"},
     "d3_f_abc_c": {"de": "ABC (berechnet)", "en": "ABC (calculated)"},
-    "d3_f_picks": {"de": "Picks", "en": "Picks"},
+    "d3_f_picks": {"de": "Picks im Zeitraum", "en": "Picks in period"},
     "d3_f_nachschub": {"de": "Nachschub", "en": "Replenishment"},
     "d3_f_util": {"de": "Auslastung", "en": "Utilization"},
     "d3_f_status": {"de": "Status", "en": "Status"},
@@ -4383,13 +4389,23 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
     )
     slot_data = classify_abc(slot_data, "ANZ_PICKS", 80, 95)
     slot_data["ABC_CALC"] = slot_data["ABC"]
+    abc_counts = slot_data["ABC_CALC"].value_counts().reindex(
+        ["A", "B", "C"], fill_value=0
+    )
+    period_pick_total = int(slot_data["ANZ_PICKS"].sum())
+    period_active_slots = int(slot_data["ANZ_PICKS"].gt(0).sum())
+    data_rev = (
+        f"{period_pick_total}-{period_active_slots}-"
+        f"{int(abc_counts['A'])}-{int(abc_counts['B'])}-{int(abc_counts['C'])}"
+    )
     slot_json = build_slot_3d_map(slot_data)
 
     # Fertige 3D-Seite zusammenbauen: _THREE_VIEWER_HTML ist eine HTML/JS-Vorlage
     # (three.js) mit Platzhaltern __XXX__. Jedes .replace(...) setzt einen echten
     # Wert aus den Reglern oben ein -> aus der Vorlage wird eine konkrete Seite.
     html = (
-        _THREE_VIEWER_HTML
+        f"<!-- 3d-period-abc:{data_rev} -->\n"
+        + _THREE_VIEWER_HTML
         .replace("__HEIGHT__", str(viewer_height))   # Hoehe aus Regler 3
         .replace("__GLB__", glb_url)                 # die GLB-URL von oben
         .replace("__DATA__", slot_json)              # Lagerdaten je Platz (JSON)
@@ -4406,6 +4422,13 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
     # das 3D-Modell. Hoehe = Viewer + 410: Detail-Panel liegt UNTER der Karte
     # (380px) + Abstand -> alle Platz-Infos passen ohne internen Scrollbalken.
     components.html(html, height=viewer_height + 410)
+    st.caption(t("d3_period_status").format(
+        p=de_num(period_pick_total),
+        active=de_num(period_active_slots),
+        a=de_num(abc_counts["A"]),
+        b=de_num(abc_counts["B"]),
+        c=de_num(abc_counts["C"]),
+    ))
     st.caption(t("d3_caption"))  # kleine Bedien-Hilfe: Ziehen=drehen, Scrollen=zoomen
 
 
