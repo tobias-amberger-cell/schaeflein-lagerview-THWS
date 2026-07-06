@@ -2743,7 +2743,6 @@ def build_slot_3d_map(df: pd.DataFrame) -> str:
     DataFrame auf, damit das Modell dieselbe Auswahl zeigt wie die Kacheln
     oben (Plaetze, die die Sidebar-Filter rauswerfen, fehlen dann in der Map
     -> der Viewer behandelt sie als 'keine Daten' und blendet sie aus).
-    `load_slot_3d_map` cacht die ungefilterte Vollansicht als Fallback.
     """
     import json
 
@@ -2778,16 +2777,6 @@ def build_slot_3d_map(df: pd.DataFrame) -> str:
             "dl": (None if pd.isna(de) else int(de)),
         }
     return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
-
-
-@st.cache_data(ttl=3600, show_spinner="Baue 3D-Platzdaten ...")
-def load_slot_3d_map() -> str:
-    """Ungefilterte 3D-Platzdaten (alle Plaetze), pro Session einmal gecacht.
-
-    Fallback fuer die Vollansicht; der 3D-Tab selbst baut die Map ueber
-    `build_slot_3d_map(filtered)`, damit sie auf die Sidebar-Filter reagiert.
-    """
-    return build_slot_3d_map(load_platz_full())
 
 
 # Zentrale, einzige Quelle aller in der App verwendeten Formeln/Definitionen.
