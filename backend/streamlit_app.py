@@ -112,6 +112,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const DATA = __DATA__;
+const LEGEND_COUNTS = __LEGEND_COUNTS__;
 const L = __LABELS__;
 const AUTOROTATE = __ROTATE__;
 const COLORMODE = "__COLORMODE__";  // 'abc' | 'picks' | 'moves' | 'none'
@@ -467,11 +468,14 @@ function fillLegend(counts){
   }
   legendEl.innerHTML =
     '<div style="font-weight:600;margin-bottom:4px;">' + L.legend + '</div>'
-    + row('#c62828', 'A', counts.A)
-    + row('#f9a825', 'B', counts.B)
-    + row('#2e7d32', 'C', counts.C)
-    + row('#90a4ae', L.zeropicks, counts.zero)
-    + row('#9e9e9e', L.grey, counts.grey);
+    + row('#c62828', 'A', LEGEND_COUNTS.A)
+    + row('#f9a825', 'B', LEGEND_COUNTS.B)
+    + row('#2e7d32', 'C', LEGEND_COUNTS.C)
+    + row('#90a4ae', L.zeropicks, LEGEND_COUNTS.zero)
+    + row('#9e9e9e', L.grey, counts.grey)
+    + '<div style="border-top:1px solid #ddd;margin-top:5px;padding-top:4px;">'
+    + row('#ffffff', L.total, LEGEND_COUNTS.A + LEGEND_COUNTS.B + LEGEND_COUNTS.C + LEGEND_COUNTS.zero)
+    + '</div>';
 }
 
 new GLTFLoader().load('__GLB__',
@@ -2187,9 +2191,9 @@ TR: dict[str, dict[str, str]] = {
     },
     "d3_period_status": {
         "de": "3D-ABC im aktuellen Zeitraum: {p} Picks auf {active} Plaetzen "
-              "· A {a} · B {b} · C {c}",
+              "· A {a} · B {b} · C {c} · 0 Picks {z}",
         "en": "3D ABC in current period: {p} picks across {active} slots "
-              "· A {a} · B {b} · C {c}",
+              "· A {a} · B {b} · C {c} · 0 picks {z}",
     },
     "abc3d_head": {"de": "### 🏷️ ABC je Lagerplatz", "en": "### 🏷️ ABC per slot"},
     "abc3d_intro": {
@@ -2267,8 +2271,9 @@ TR: dict[str, dict[str, str]] = {
         "de": "Dieser Platz ist nicht in der Datenbank (nur im Modell).",
         "en": "This slot is not in the database (model only).",
     },
-    "d3_legend": {"de": "Plätze im Modell", "en": "Slots in model"},
-    "d3_grey": {"de": "ohne Daten", "en": "no data"},
+    "d3_legend": {"de": "Plätze in Daten", "en": "Slots in data"},
+    "d3_grey": {"de": "ohne DB-Daten (CAD)", "en": "no DB data (CAD)"},
+    "d3_total": {"de": "Summe Daten", "en": "Data total"},
     "d3_zero_picks": {"de": "0 Picks", "en": "0 picks"},
     "d3_view": {"de": "Ansicht", "en": "View"},
     "d3_view_cad": {"de": "CAD-Modell (Teildaten)", "en": "CAD model (partial)"},
@@ -4331,6 +4336,7 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         "notdb": t("d3_not_in_db"),
         "legend": t("d3_legend"),
         "grey": t("d3_grey"),
+        "total": t("d3_total"),
         "zeropicks": t("d3_zero_picks"),
         "notfound": t("d3_notfound"),
         "loading": "Lade Modell" if _LANG == "de" else "Loading model",
@@ -4389,14 +4395,23 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
     )
     slot_data = classify_abc(slot_data, "ANZ_PICKS", 80, 95)
     slot_data["ABC_CALC"] = slot_data["ABC"]
-    abc_counts = slot_data["ABC_CALC"].value_counts().reindex(
+    active_slot_data = slot_data[slot_data["ANZ_PICKS"] > 0]
+    abc_counts = active_slot_data["ABC_CALC"].value_counts().reindex(
         ["A", "B", "C"], fill_value=0
     )
+    zero_pick_slots = int(slot_data["ANZ_PICKS"].eq(0).sum())
     period_pick_total = int(slot_data["ANZ_PICKS"].sum())
     period_active_slots = int(slot_data["ANZ_PICKS"].gt(0).sum())
+    legend_counts_json = _json.dumps({
+        "A": int(abc_counts["A"]),
+        "B": int(abc_counts["B"]),
+        "C": int(abc_counts["C"]),
+        "zero": zero_pick_slots,
+    }, ensure_ascii=False, separators=(",", ":"))
     data_rev = (
         f"{period_pick_total}-{period_active_slots}-"
-        f"{int(abc_counts['A'])}-{int(abc_counts['B'])}-{int(abc_counts['C'])}"
+        f"{int(abc_counts['A'])}-{int(abc_counts['B'])}-"
+        f"{int(abc_counts['C'])}-{zero_pick_slots}"
     )
     slot_json = build_slot_3d_map(slot_data)
 
@@ -4409,6 +4424,7 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         .replace("__HEIGHT__", str(viewer_height))   # Hoehe aus Regler 3
         .replace("__GLB__", glb_url)                 # die GLB-URL von oben
         .replace("__DATA__", slot_json)              # Lagerdaten je Platz (JSON)
+        .replace("__LEGEND_COUNTS__", legend_counts_json)  # DB-basierte Legende
         .replace("__LABELS__", labels_json)          # Platz-Beschriftungen
         .replace("__ROTATE__", "false")              # Auto-Drehen aus
         .replace("__COLORMODE__", colormode_cad)     # fest: ABC-Klasse
@@ -4428,6 +4444,7 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         a=de_num(abc_counts["A"]),
         b=de_num(abc_counts["B"]),
         c=de_num(abc_counts["C"]),
+        z=de_num(zero_pick_slots),
     ))
     st.caption(t("d3_caption"))  # kleine Bedien-Hilfe: Ziehen=drehen, Scrollen=zoomen
 
