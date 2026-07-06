@@ -116,6 +116,7 @@ const L = __LABELS__;
 const AUTOROTATE = __ROTATE__;
 const COLORMODE = "__COLORMODE__";  // 'abc' | 'picks' | 'moves' | 'none'
 const HIDEGREY = __HIDEGREY__;
+const ONLYOCC = __ONLYOCC__;  // true = nur belegte Plaetze anzeigen (Rest ausblenden)
 const FOCUS = "__FOCUS__";  // gesuchte PLATZ_ID (leer = keine Suche)
 const SENS = parseFloat("__SENS__") || 1;  // Maus-Empfindlichkeit (Drehen/Zoom/Pan)
 // 'zero' = Platz MIT DB-Datensatz, aber 0 Picks (nie angefahren). Bewusst ein
@@ -495,6 +496,9 @@ new GLTFLoader().load('__GLB__',
       // Leistungsmodus: graue (datenlose) Plaetze ausblenden -> weniger
       // Draw-Calls. Kein Datenverlust, da grau ohnehin keine DB-Daten hat.
       if(key === 'grey' && HIDEGREY){ o.visible = false; }
+      // "Nur belegte Plaetze": alles ausblenden, was aktuell keine Ware traegt
+      // (d.b === true). Datenlose (grey) Plaetze sind nie belegt -> ebenfalls weg.
+      if(ONLYOCC && !(d && d.b)){ o.visible = false; }
       // Einfaerben ueber GETEILTE Materialien (kein Klon pro Mesh).
       if(COLORMODE==='abc'){
         o.material = SHARED_MAT[key];
@@ -2293,6 +2297,13 @@ TR: dict[str, dict[str, str]] = {
               "flüssiger. Es gehen keine Daten verloren.",
         "en": "Hides the grey slots that have no data record (model-only). On by "
               "default – cleaner and smoother. No data is lost.",
+    },
+    "d3_only_occ": {"de": "Nur belegte Plätze", "en": "Only occupied slots"},
+    "d3_only_occ_help": {
+        "de": "Zeigt nur Plätze, auf denen aktuell Ware steht (belegt). Leere und "
+              "graue (datenlose) Plätze werden ausgeblendet. Standardmäßig aus.",
+        "en": "Shows only slots that currently hold goods (occupied). Empty and "
+              "data-less slots are hidden. Off by default.",
     },
     # --- Erklaerungen/Beschriftungen (Lehrer-Feedback) ---
     "active_filters": {"de": "Aktive Filter", "en": "Active filters"},
@@ -4326,6 +4337,10 @@ def render_3d(filtered: pd.DataFrame) -> None:
         # Checkbox "Plaetze ohne Daten ausblenden" (Standard an) -> blendet die
         # grauen "keine Daten"-Plaetze aus: uebersichtlicher + schneller.
         perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
+        # Checkbox "Nur belegte Plaetze" (Standard aus) -> blendet alle Plaetze
+        # aus, die aktuell keine Ware tragen (BELEGT=false) inkl. datenloser.
+        only_occ = st.checkbox(t("d3_only_occ"), value=False,
+                               help=t("d3_only_occ_help"))
     with ctrl3:
         # Schieberegler "Anzeigehoehe (px)": 360-900, Start 640, 20er-Schritte.
         viewer_height = st.slider(t("d3_height"), 360, 900, 640, step=20,
@@ -4346,6 +4361,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
         .replace("__ROTATE__", "false")              # Auto-Drehen aus
         .replace("__COLORMODE__", colormode_cad)     # "abc"/"picks"/... aus Spalte 1
         .replace("__HIDEGREY__", "true" if perf_mode else "false")  # Checkbox 2
+        .replace("__ONLYOCC__", "true" if only_occ else "false")    # Checkbox "nur belegte"
         .replace("__FOCUS__", focus_id)              # auf welchen Platz zoomen
         .replace("__SENS__", str(sens))              # Maus-Empfindlichkeit
     )
