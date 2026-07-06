@@ -53,7 +53,9 @@ st.set_page_config(
 #   __HEIGHT__  Hoehe in px        __GLB__    URL der klickbaren GLB
 #   __DATA__    JSON PLATZ_ID->Werte  __LABELS__ JSON uebersetzte Beschriftungen
 #   __ROTATE__  "true"/"false"     __COLORMODE__ Faerb-Modus der Plaetze:
-#       'abc'   = nach berechneter ABC-Klasse (rot/gelb/gruen)
+#       'abc'   = nach berechneter ABC-Klasse (rot/gelb/gruen); Plaetze mit
+#                 0 Picks (nie angefahren) bekommen ein eigenes Blau statt
+#                 Gruen (C), damit tote Faecher nicht wie aktive aussehen
 #       'picks' = Heatmap nach Pick-Haeufigkeit (ANZ_PICKS), Rang/Perzentil
 #       'moves' = Heatmap nach Gesamt-Bewegungen (Picks + Nachschub), Rang
 #       'none'  = Original-Material der GLB (keine Einfaerbung)
@@ -116,7 +118,10 @@ const COLORMODE = "__COLORMODE__";  // 'abc' | 'picks' | 'moves' | 'none'
 const HIDEGREY = __HIDEGREY__;
 const FOCUS = "__FOCUS__";  // gesuchte PLATZ_ID (leer = keine Suche)
 const SENS = parseFloat("__SENS__") || 1;  // Maus-Empfindlichkeit (Drehen/Zoom/Pan)
-const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'grey':0x9e9e9e };
+// 'zero' = Platz MIT DB-Datensatz, aber 0 Picks (nie angefahren). Bewusst ein
+// eigenes Blau statt Gruen (C), damit tote Plaetze nicht wie aktive C-Plaetze
+// aussehen. 'grey' = gar kein DB-Datensatz (nur im CAD-Modell).
+const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'zero':0x1e88e5, 'grey':0x9e9e9e };
 const PID_RE = /^[0-9]{9}$/;
 
 // Geteilte Materialien statt pro-Mesh-Klon (26k Meshes!) -> spart Speicher
@@ -125,6 +130,7 @@ const SHARED_MAT = {
   'A': new THREE.MeshStandardMaterial({ color: ABC_HEX.A }),
   'B': new THREE.MeshStandardMaterial({ color: ABC_HEX.B }),
   'C': new THREE.MeshStandardMaterial({ color: ABC_HEX.C }),
+  'zero': new THREE.MeshStandardMaterial({ color: ABC_HEX.zero }),
   'grey': new THREE.MeshStandardMaterial({ color: ABC_HEX.grey }),
 };
 
@@ -454,6 +460,7 @@ function fillLegend(counts){
     + row('#c62828', 'A', counts.A)
     + row('#f9a825', 'B', counts.B)
     + row('#2e7d32', 'C', counts.C)
+    + row('#1e88e5', L.zeropicks, counts.zero)
     + row('#9e9e9e', L.grey, counts.grey);
 }
 
@@ -464,7 +471,7 @@ new GLTFLoader().load('__GLB__',
 
     // Eine Traversierung: Plaetze je Klasse zaehlen und (optional) einfaerben.
     // grau = Mesh hat eine PLATZ_ID, aber keinen Datensatz in der DB.
-    const counts = { A:0, B:0, C:0, grey:0, zero:0, active:0 };
+    const counts = { A:0, B:0, C:0, zero:0, grey:0, active:0 };
     const heatOn = (COLORMODE==='picks' || COLORMODE==='moves');
     // Rang-Skala einmal aus ALLEN Plaetzen bauen (stabil, unabhaengig davon,
     // welche Meshes die GLB enthaelt).
@@ -473,8 +480,17 @@ new GLTFLoader().load('__GLB__',
       if(!o.isMesh || !o.name || !PID_RE.test(o.name)) return;
       meshIndex[o.name] = o;  // fuer die Lagerplatz-Suche
       const d = DATA[o.name];
-      const cls = d ? d.ac : null;
-      const key = (cls === 'A' || cls === 'B' || cls === 'C') ? cls : 'grey';
+      // Reihenfolge wichtig: erst "kein Datensatz" (grey), dann "0 Picks"
+      // (zero, eigenes Grau statt Gruen), erst danach die echte ABC-Klasse.
+      let key;
+      if(!d){
+        key = 'grey';
+      } else if((d.p || 0) === 0){
+        key = 'zero';
+      } else {
+        const cls = d.ac;
+        key = (cls === 'A' || cls === 'B' || cls === 'C') ? cls : 'grey';
+      }
       counts[key] += 1;
       // Leistungsmodus: graue (datenlose) Plaetze ausblenden -> weniger
       // Draw-Calls. Kein Datenverlust, da grau ohnehin keine DB-Daten hat.
@@ -2238,6 +2254,7 @@ TR: dict[str, dict[str, str]] = {
     },
     "d3_legend": {"de": "Plätze im Modell", "en": "Slots in model"},
     "d3_grey": {"de": "ohne Daten", "en": "no data"},
+    "d3_zero_picks": {"de": "0 Picks", "en": "0 picks"},
     "d3_view": {"de": "Ansicht", "en": "View"},
     "d3_view_cad": {"de": "CAD-Modell (Teildaten)", "en": "CAD model (partial)"},
     "d3_view_schema": {"de": "Daten-Modell (alle Plätze)", "en": "Data model (all slots)"},
@@ -4280,6 +4297,7 @@ def render_3d(filtered: pd.DataFrame) -> None:
         "notdb": t("d3_not_in_db"),
         "legend": t("d3_legend"),
         "grey": t("d3_grey"),
+        "zeropicks": t("d3_zero_picks"),
         "notfound": t("d3_notfound"),
         "loading": "Lade Modell" if _LANG == "de" else "Loading model",
         # Heatmap-Legende (CAD-Viewer, Modi 'picks'/'moves')
