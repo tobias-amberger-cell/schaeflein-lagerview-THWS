@@ -54,8 +54,8 @@ st.set_page_config(
 #   __DATA__    JSON PLATZ_ID->Werte  __LABELS__ JSON uebersetzte Beschriftungen
 #   __ROTATE__  "true"/"false"     __COLORMODE__ Faerb-Modus der Plaetze:
 #       'abc'   = nach berechneter ABC-Klasse (rot/gelb/gruen); Plaetze mit
-#                 0 Picks (nie angefahren) bekommen ein eigenes Blau statt
-#                 Gruen (C), damit tote Faecher nicht wie aktive aussehen
+#                 0 Picks (nie angefahren) bekommen ein gedaempftes Blaugrau
+#                 statt Gruen (C), damit tote Faecher nicht wie aktive aussehen
 #       'picks' = Heatmap nach Pick-Haeufigkeit (ANZ_PICKS), Rang/Perzentil
 #       'moves' = Heatmap nach Gesamt-Bewegungen (Picks + Nachschub), Rang
 #       'none'  = Original-Material der GLB (keine Einfaerbung)
@@ -120,9 +120,10 @@ const ONLYOCC = __ONLYOCC__;  // true = nur belegte Plaetze anzeigen (Rest ausbl
 const FOCUS = "__FOCUS__";  // gesuchte PLATZ_ID (leer = keine Suche)
 const SENS = parseFloat("__SENS__") || 1;  // Maus-Empfindlichkeit (Drehen/Zoom/Pan)
 // 'zero' = Platz MIT DB-Datensatz, aber 0 Picks (nie angefahren). Bewusst ein
-// eigenes Blau statt Gruen (C), damit tote Plaetze nicht wie aktive C-Plaetze
-// aussehen. 'grey' = gar kein DB-Datensatz (nur im CAD-Modell).
-const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'zero':0x1e88e5, 'grey':0x9e9e9e };
+// gedaempftes Blaugrau statt Gruen (C), damit tote Plaetze nicht wie aktive
+// C-Plaetze aussehen, aber auch nicht zu grell auffallen. 'grey' = gar kein
+// DB-Datensatz (nur im CAD-Modell), neutraleres Grau zur Abgrenzung.
+const ABC_HEX = { 'A':0xc62828, 'B':0xf9a825, 'C':0x2e7d32, 'zero':0x90a4ae, 'grey':0x9e9e9e };
 const PID_RE = /^[0-9]{9}$/;
 
 // Geteilte Materialien statt pro-Mesh-Klon (26k Meshes!) -> spart Speicher
@@ -461,7 +462,7 @@ function fillLegend(counts){
     + row('#c62828', 'A', counts.A)
     + row('#f9a825', 'B', counts.B)
     + row('#2e7d32', 'C', counts.C)
-    + row('#1e88e5', L.zeropicks, counts.zero)
+    + row('#90a4ae', L.zeropicks, counts.zero)
     + row('#9e9e9e', L.grey, counts.grey);
 }
 
