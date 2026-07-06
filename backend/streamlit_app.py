@@ -2201,21 +2201,24 @@ TR: dict[str, dict[str, str]] = {
         "de": "**Klickbares 3D-Modell** — klick einen Lagerplatz im Modell an, dann "
               "siehst du rechts seine Kennzahlen. Jeder Platz ist mit der Datenbank "
               "verknüpft.\n\n"
-              "ℹ️ **Der 3D-Tab zeigt bewusst immer das ganze Lager** und reagiert "
-              "**nicht** auf die Sidebar-Filter (auch nicht auf den Zeitraum-Regler). "
-              "Die ABC-Färbung beruht auf dem **kumulierten Pick-Zähler des WMS** "
-              "(Gesamtstand je Platz), der keinen Zeitbezug hat – der Zeitraum-Regler "
-              "wirkt nur in den anderen Tabs auf die Bewegungsdaten. Zum Ein-/Ausblenden "
-              "von Plätzen nutze die Checkboxen **„Plätze ohne Daten ausblenden“** und "
+              "ℹ️ **Der 3D-Tab zeigt jetzt dieselbe Auswahl wie die Kacheln oben** und "
+              "reagiert auf die **Sidebar-Filter** (ABC, Auslastung, „Nur belegte Plätze“, "
+              "Regal/Ebene/Picks, Sperr-Status). Herausgefilterte Plätze fallen im Modell "
+              "weg. Der **Zeitraum-Regler** wirkt weiterhin nur in den bewegungsbasierten "
+              "Tabs – die ABC-Färbung beruht auf dem **kumulierten Pick-Zähler des WMS** "
+              "(Gesamtstand je Platz), der keinen Zeitbezug hat. Zum zusätzlichen "
+              "Ein-/Ausblenden nutze die Checkboxen **„Plätze ohne Daten ausblenden“** und "
               "**„Nur belegte Plätze“** direkt über dem Modell.",
         "en": "**Clickable 3D model** — click a storage slot in the model and you'll "
               "see its metrics on the right. Every slot is linked to the database.\n\n"
-              "ℹ️ **The 3D tab always shows the whole warehouse** and does **not** react "
-              "to the sidebar filters (including the time-range slider). The ABC coloring "
-              "is based on the **cumulative WMS pick counter** (per-slot total), which has "
-              "no time reference – the time-range slider only affects the movement data in "
-              "the other tabs. To show/hide slots use the **“Hide slots without data”** and "
-              "**“Only occupied slots”** checkboxes right above the model.",
+              "ℹ️ **The 3D tab now shows the same selection as the tiles above** and reacts "
+              "to the **sidebar filters** (ABC, utilization, “only occupied slots”, "
+              "rack/level/picks, lock status). Filtered-out slots disappear from the model. "
+              "The **time-range slider** still only affects the movement-based tabs – the "
+              "ABC coloring is based on the **cumulative WMS pick counter** (per-slot total), "
+              "which has no time reference. For extra show/hide control use the "
+              "**“Hide slots without data”** and **“Only occupied slots”** checkboxes right "
+              "above the model.",
     },
     "d3_color_abc": {"de": "Nach ABC einfärben", "en": "Color by ABC"},
     # CAD-Viewer: Auswahl der Einfaerbung (ABC / Pick-Heatmap / Bewegungs-Heatmap)
@@ -2733,18 +2736,17 @@ def classify_abc(
     return out
 
 
-@st.cache_data(ttl=3600, show_spinner="Baue 3D-Platzdaten ...")
-def load_slot_3d_map() -> str:
-    """Kompakte JSON-Map PLATZ_ID -> Kennzahlen fuer den klickbaren 3D-Viewer.
+def build_slot_3d_map(df: pd.DataFrame) -> str:
+    """Baut die JSON-Map PLATZ_ID -> Kennzahlen fuer den 3D-Viewer aus `df`.
 
-    Die Meshes in SampleScene_clickable.glb sind nach PLATZ_ID benannt. Beim
-    Klick liest das three.js-Frontend hier nach, welche Werte zu dem Platz
-    gehoeren (ABC, Picks, Auslastung, belegt). Als JSON-String gecacht, damit
-    er pro Session nur einmal gebaut wird.
+    Reine Funktion ohne Cache: `render_3d` ruft sie mit dem GEFILTERTEN
+    DataFrame auf, damit das Modell dieselbe Auswahl zeigt wie die Kacheln
+    oben (Plaetze, die die Sidebar-Filter rauswerfen, fehlen dann in der Map
+    -> der Viewer behandelt sie als 'keine Daten' und blendet sie aus).
+    `load_slot_3d_map` cacht die ungefilterte Vollansicht als Fallback.
     """
     import json
 
-    df = load_platz_full()
     out: dict[str, dict] = {}
     for row in df.itertuples(index=False):
         pid = str(row.PLATZ_ID).strip()
@@ -2776,6 +2778,16 @@ def load_slot_3d_map() -> str:
             "dl": (None if pd.isna(de) else int(de)),
         }
     return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
+
+
+@st.cache_data(ttl=3600, show_spinner="Baue 3D-Platzdaten ...")
+def load_slot_3d_map() -> str:
+    """Ungefilterte 3D-Platzdaten (alle Plaetze), pro Session einmal gecacht.
+
+    Fallback fuer die Vollansicht; der 3D-Tab selbst baut die Map ueber
+    `build_slot_3d_map(filtered)`, damit sie auf die Sidebar-Filter reagiert.
+    """
+    return build_slot_3d_map(load_platz_full())
 
 
 # Zentrale, einzige Quelle aller in der App verwendeten Formeln/Definitionen.
@@ -4311,7 +4323,12 @@ def render_3d(filtered: pd.DataFrame) -> None:
         key="d3_search",
     ).strip()
 
-    slot_json = load_slot_3d_map()
+    # Das Modell zeigt jetzt DIESELBE Auswahl wie die Kacheln oben: die Map
+    # wird aus dem gefilterten DataFrame gebaut (nicht mehr load_slot_3d_map,
+    # das alle Plaetze umfasst). Plaetze, die die Sidebar-Filter rauswerfen,
+    # fehlen dann in der Map -> der Viewer faerbt sie als 'keine Daten' (grau)
+    # und blendet sie bei aktivem Standard-Haekchen 'ohne Daten ausblenden' aus.
+    slot_json = build_slot_3d_map(filtered)
     labels = {
         "hint": t("d3_panel_hint"),
         "platz": t("d3_f_platz"),
@@ -4463,9 +4480,8 @@ def main() -> None:
             help=t("abc_src_help"), disabled=not abc,
         )
         abc_src = ["Stamm", "Berechnet"][abc_src_opts.index(abc_src_choice)]
-        util_range = st.slider(
-            t("util"), 0, 100, (0, 100), step=5, help=t("util_help"),
-        )
+        # Auslastungs-Regler entfernt (User-Wunsch); Filter bleibt intern neutral.
+        util_range = (0, 100)
         only_occupied = st.checkbox(t("only_occ"), value=False)
         with st.expander(t("place_filter")):
             regal_max = max(int(platz["REGAL"].max()), 1)
