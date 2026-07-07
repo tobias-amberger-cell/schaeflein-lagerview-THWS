@@ -2189,12 +2189,45 @@ TR: dict[str, dict[str, str]] = {
               "bottom right** (arrows = move, ⟲⟳ = rotate, +/− = zoom, ⌂ = reset "
               "view). Click a slot to see its data **below the map**.",
     },
-    "d3_period_status": {
-        "de": "3D-ABC im aktuellen Zeitraum: {p} Picks auf {active} Plaetzen "
-              "· A {a} · B {b} · C {c} · 0 Picks {z}",
-        "en": "3D ABC in current period: {p} picks across {active} slots "
-              "· A {a} · B {b} · C {c} · 0 picks {z}",
+    # Status-Zeile unter dem Modell, je Faerb-Modus:
+    "d3_status_abc": {
+        "de": "ABC-Färbung (stabil, kumulierter Pick-Zähler) · A {a} · B {b} · "
+              "C {c} · 0 Picks {z} — unabhängig vom Zeitraum-Regler",
+        "en": "ABC coloring (stable, cumulative pick counter) · A {a} · B {b} · "
+              "C {c} · 0 picks {z} — independent of the time-range slider",
     },
+    "d3_status_period": {
+        "de": "Pick-Heatmap im Zeitraum: {p} Picks auf {active} aktiven Plätzen "
+              "(reagiert auf den Zeitraum-Regler)",
+        "en": "Pick heatmap in period: {p} picks across {active} active slots "
+              "(reacts to the time-range slider)",
+    },
+    # Faerbung-Umschalter (CAD-Viewer): stabile ABC vs. Pick-Heatmap im Zeitraum
+    "d3_color": {"de": "Färbung", "en": "Coloring"},
+    "d3_color_abc": {"de": "ABC (Gesamt)", "en": "ABC (total)"},
+    "d3_color_period": {"de": "Pick-Heatmap (Zeitraum)",
+                        "en": "Pick heatmap (period)"},
+    "d3_color_help": {
+        "de": "**ABC (Gesamt)**: färbt nach der stabilen ABC-Klasse aus dem "
+              "kumulierten WMS-Pick-Zähler – zeitlos, reagiert **nicht** auf den "
+              "Zeitraum-Regler (konsistent mit dem Rest der App). **Pick-Heatmap "
+              "(Zeitraum)**: färbt nach Anzahl Picks im per Zeitraum-Regler "
+              "gewählten Fenster – **reagiert live** auf den Regler. Kalt = "
+              "selten, heiß = oft gepickt.",
+        "en": "**ABC (total)**: colors by the stable ABC class from the cumulative "
+              "WMS pick counter – timeless, does **not** react to the time-range "
+              "slider (consistent with the rest of the app). **Pick heatmap "
+              "(period)**: colors by number of picks within the window chosen via "
+              "the time-range slider – **reacts live** to the slider. Cold = rare, "
+              "hot = frequently picked.",
+    },
+    # Heatmap-Legende/Labels (CAD-Viewer, Modus 'period')
+    "d3_heat_picks": {"de": "Pick-Häufigkeit", "en": "Pick frequency"},
+    "d3_heat_period": {"de": "Picks im Zeitraum", "en": "Picks in period"},
+    "d3_heat_low": {"de": "selten", "en": "rare"},
+    "d3_heat_high": {"de": "oft", "en": "frequent"},
+    "d3_heat_zero": {"de": "keine Aktivität", "en": "no activity"},
+    "d3_f_picks_period": {"de": "Picks im Zeitraum", "en": "Picks in period"},
     "abc3d_head": {"de": "### 🏷️ ABC je Lagerplatz", "en": "### 🏷️ ABC per slot"},
     "abc3d_intro": {
         "de": "Welche Plätze welcher ABC-Klasse zugeordnet sind. Reagiert auf die "
@@ -2226,19 +2259,23 @@ TR: dict[str, dict[str, str]] = {
               "reagiert auf die **Sidebar-Filter** (ABC, Auslastung, „Nur belegte Plätze“, "
               "Regal/Ebene/Picks, Sperr-Status). Herausgefilterte Plätze fallen im Modell "
               "weg.\n\n"
-              "🎨 Die Einfärbung ist fest **ABC-Klasse**. Die berechnete ABC-Klasse "
-              "basiert auf den Picks im gewählten Zeitraum und reagiert damit live "
-              "auf den Zeitraum-Regler. Zum zusätzlichen Ein-/Ausblenden nutze die Checkboxen "
-              "**„Plätze ohne Daten ausblenden“** und **„Nur belegte Plätze“** direkt über "
-              "dem Modell.",
+              "🎨 Mit dem Umschalter **„Färbung“** wählst du: **ABC (Gesamt)** = stabile "
+              "ABC-Klasse aus dem kumulierten WMS-Pick-Zähler (zeitlos, reagiert **nicht** "
+              "auf den Zeitraum-Regler – wenige A, viele C wie im klassischen ABC) · "
+              "**Pick-Heatmap (Zeitraum)** = färbt nach Picks im gewählten Zeitraum und "
+              "**reagiert live auf den Zeitraum-Regler**. Zum zusätzlichen Ein-/Ausblenden "
+              "nutze die Checkboxen **„Plätze ohne Daten ausblenden“** und **„Nur belegte "
+              "Plätze“** direkt über dem Modell.",
         "en": "**Clickable 3D model** — click a storage slot in the model and you'll "
               "see its metrics on the right. Every slot is linked to the database.\n\n"
               "ℹ️ **The 3D tab now shows the same selection as the tiles above** and reacts "
               "to the **sidebar filters** (ABC, utilization, “only occupied slots”, "
               "rack/level/picks, lock status). Filtered-out slots disappear from the model.\n\n"
-              "🎨 Coloring is fixed to **ABC class**. The calculated ABC class is based "
-              "on picks in the selected time range, so it reacts live to the time-range "
-              "slider. For extra show/hide control use the "
+              "🎨 The **“Coloring”** toggle lets you choose: **ABC (total)** = stable ABC "
+              "class from the cumulative WMS pick counter (timeless, does **not** react to "
+              "the time-range slider – few A, many C as in classic ABC) · **Pick heatmap "
+              "(period)** = colors by picks in the selected period and **reacts live to the "
+              "time-range slider**. For extra show/hide control use the "
               "**“Hide slots without data”** and **“Only occupied slots”** checkboxes right "
               "above the model.",
     },
@@ -2254,7 +2291,7 @@ TR: dict[str, dict[str, str]] = {
     "d3_f_pos": {"de": "Regal / Fach / Ebene", "en": "Rack / bin / level"},
     "d3_f_abc_m": {"de": "ABC (Stamm)", "en": "ABC (master)"},
     "d3_f_abc_c": {"de": "ABC (berechnet)", "en": "ABC (calculated)"},
-    "d3_f_picks": {"de": "Picks im Zeitraum", "en": "Picks in period"},
+    "d3_f_picks": {"de": "Picks (kumuliert)", "en": "Picks (cumulative)"},
     "d3_f_nachschub": {"de": "Nachschub", "en": "Replenishment"},
     "d3_f_util": {"de": "Auslastung", "en": "Utilization"},
     "d3_f_status": {"de": "Status", "en": "Status"},
@@ -2732,7 +2769,8 @@ def classify_abc(
     return out
 
 
-def build_slot_3d_map(df: pd.DataFrame) -> str:
+def build_slot_3d_map(df: pd.DataFrame,
+                      picks_period: dict | None = None) -> str:
     """Baut die JSON-Map PLATZ_ID -> Kennzahlen fuer den 3D-Viewer aus `df`.
 
     Reine Funktion ohne Cache: `render_3d` ruft sie mit dem GEFILTERTEN
@@ -2740,10 +2778,15 @@ def build_slot_3d_map(df: pd.DataFrame) -> str:
     oben (Plaetze, die die Sidebar-Filter rauswerfen, fehlen dann in der Map
     -> der Viewer behandelt sie als 'keine Daten' und blendet sie aus).
 
-    Der 3D-Viewer faerbt fest nach der berechneten ABC-Klasse.
+    Der 3D-Viewer faerbt im Standard nach der STABILEN berechneten ABC-Klasse
+    (ABC_CALC, kumulierter WMS-Zaehler, zeitlos). `picks_period` (optional):
+    {PLATZ_ID -> Picks im gewaehlten Zeitraum} aus den zeitgefilterten TPA-
+    Bewegungen; landet als Feld 'pp' und speist den Faerb-Modus 'period'
+    (Pick-Heatmap, die auf den Zeitraum-Regler reagiert).
     """
     import json
 
+    pp_map = picks_period or {}
     out: dict[str, dict] = {}
     for row in df.itertuples(index=False):
         pid = str(row.PLATZ_ID).strip()
@@ -2762,6 +2805,8 @@ def build_slot_3d_map(df: pd.DataFrame) -> str:
             "a": (row.ABC_KLASSE or "—"),
             "ac": (row.ABC_CALC if isinstance(row.ABC_CALC, str) else "—"),
             "p": int(row.ANZ_PICKS),
+            # Picks im gewaehlten Zeitraum (aus TPA); 0 wenn keine im Zeitraum.
+            "pp": int(pp_map.get(pid, 0)),
             "n": int(getattr(row, "ANZ_NACHSCHUB", 0)),
             "u": (None if pd.isna(util) else round(float(util), 1)),
             "b": bool(row.BELEGT),
@@ -4297,13 +4342,14 @@ def render_article(tpa: pd.DataFrame, movements_filtered: bool,
 def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
     """Tab '3D-Modell': klickbarer CAD-Viewer (Meshes nach PLATZ_ID).
 
-    Die Plaetze werden fest nach ABC-Klasse eingefaerbt; die berechnete
-    ABC-Klasse basiert hier auf den Picks im gewaehlten Zeitraum.
+    Faerbung per Umschalter: 'ABC (Gesamt)' nach der STABILEN ABC_CALC
+    (kumulierter WMS-Zaehler, zeitlos) oder 'Pick-Heatmap (Zeitraum)' nach den
+    Picks im gewaehlten Zeitraum (aus `tpa`, reagiert auf den Zeitraum-Regler).
     """
     import json as _json
 
     # Einheitliches Tab-Layout wie die anderen Reiter: Ueberschrift + Info-
-    # Expander. Es gibt nur noch EINE Ansicht (CAD), daher kein Umschalter mehr.
+    # Expander.
     st.markdown(t("d3_head"))
     with st.expander(t("d3_explain_head")):
         st.markdown(t("d3_click_intro"))
@@ -4321,6 +4367,7 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         "abc_m": t("d3_f_abc_m"),
         "abc_c": t("d3_f_abc_c"),
         "picks": t("d3_f_picks"),
+        "picks_period": t("d3_f_picks_period"),
         "nachschub": t("d3_f_nachschub"),
         "util": t("d3_f_util"),
         "status": t("d3_f_status"),
@@ -4340,6 +4387,12 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         "zeropicks": t("d3_zero_picks"),
         "notfound": t("d3_notfound"),
         "loading": "Lade Modell" if _LANG == "de" else "Loading model",
+        # Heatmap-Legende (CAD-Viewer, Faerb-Modus 'period')
+        "heat_picks": t("d3_heat_picks"),
+        "heat_period": t("d3_heat_period"),
+        "heat_low": t("d3_heat_low"),
+        "heat_high": t("d3_heat_high"),
+        "heat_zero": t("d3_heat_zero"),
     }
     labels_json = _json.dumps(labels, ensure_ascii=False)
     # Nur 9-stellige PLATZ_ID ins Modell durchreichen.
@@ -4354,6 +4407,14 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
     # in jede kommt ein Regler/Auswahlfeld fuer den Viewer.
     ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1])
     with ctrl2:
+        # Faerbung: 'ABC (Gesamt)' = stabile ABC_CALC (kumulierter WMS-Zaehler,
+        # zeitlos, reagiert NICHT auf den Zeitraum-Regler) oder 'Pick-Heatmap
+        # (Zeitraum)' = faerbt nach Picks im gewaehlten Zeitraum (aus TPA) und
+        # reagiert damit LIVE auf den Zeitraum-Regler.
+        color_opts = [t("d3_color_abc"), t("d3_color_period")]
+        color_choice = st.radio(t("d3_color"), color_opts, horizontal=True,
+                                help=t("d3_color_help"), key="d3_colormode")
+        colormode_cad = "abc" if color_choice == t("d3_color_abc") else "period"
         # Checkbox "Plaetze ohne Daten ausblenden" (Standard an) -> blendet die
         # grauen "keine Daten"-Plaetze aus: uebersichtlicher + schneller.
         perf_mode = st.checkbox(t("d3_perf"), value=True, help=t("d3_perf_help"))
@@ -4374,46 +4435,52 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         sens = st.slider(t("d3_sens"), 0.2, 1.5, 1.0, step=0.1,
                          key="d3_sens_cad", help=t("d3_sens_help"))
 
-    colormode_cad = "abc"
-
     # Datenschicht NACH den Controls bauen. Das Modell zeigt DIESELBE Auswahl
     # wie die Kacheln oben: die Map wird aus dem gefilterten DataFrame gebaut -> per
     # Sidebar-Filter rausgeworfene Plaetze fehlen und werden als 'keine Daten'
     # (grau) behandelt bzw. beim Standard-Haekchen 'ohne Daten ausblenden' weg.
-    # Fuer die 3D-ABC-Faerbung zaehlen aber nur Picks im gewaehlten Zeitraum.
-    period_picks = (
-        tpa[tpa["q_platz"] != ""]
-        .groupby("q_platz")
-        .size()
-    )
-    slot_data = filtered.copy()
-    slot_data["ANZ_PICKS"] = (
-        slot_data["PLATZ_ID"].astype(str).str.strip()
-        .map(period_picks)
-        .fillna(0)
-        .astype(int)
-    )
-    slot_data = classify_abc(slot_data, "ANZ_PICKS", 80, 95)
-    slot_data["ABC_CALC"] = slot_data["ABC"]
-    active_slot_data = slot_data[slot_data["ANZ_PICKS"] > 0]
-    abc_counts = active_slot_data["ABC_CALC"].value_counts().reindex(
+    #
+    # Die ABC-KLASSE ist STABIL (ABC_CALC aus load_platz_full = kumulierter WMS-
+    # Zaehler, zeitlos) und wird NICHT pro Zeitraum neu gerechnet - so bleibt die
+    # lehrbuchmaessige Verteilung (wenige A, viele C) erhalten. Der Zeitraum-Regler
+    # wirkt nur im Modus 'period' als separate Pick-Heatmap.
+    #
+    # Legenden-Zahlen aus der STABILEN Klasse: A/B/C zaehlen nur Plaetze mit
+    # kumulierten Picks > 0 (0-Pick-Plaetze faerbt der Viewer als 'zero'/blaugrau,
+    # nicht als C - deshalb hier gleich trennen, konsistent zur Modell-Faerbung).
+    active_slots = filtered[filtered["ANZ_PICKS"] > 0]
+    abc_counts = active_slots["ABC_CALC"].value_counts().reindex(
         ["A", "B", "C"], fill_value=0
     )
-    zero_pick_slots = int(slot_data["ANZ_PICKS"].eq(0).sum())
-    period_pick_total = int(slot_data["ANZ_PICKS"].sum())
-    period_active_slots = int(slot_data["ANZ_PICKS"].gt(0).sum())
+    zero_pick_slots = int(filtered["ANZ_PICKS"].eq(0).sum())
     legend_counts_json = _json.dumps({
         "A": int(abc_counts["A"]),
         "B": int(abc_counts["B"]),
         "C": int(abc_counts["C"]),
         "zero": zero_pick_slots,
     }, ensure_ascii=False, separators=(",", ":"))
+
+    # Perioden-Picks je Platz nur im Heatmap-Modus noetig (aus zeitgefilterten
+    # TPA; `tpa` folgt bereits dem Zeitraum-Regler -> reagiert live). Kennzahlen
+    # fuer die Status-Zeile unten.
+    picks_period = None
+    period_pick_total = 0
+    period_active_slots = 0
+    if colormode_cad == "period":
+        _pp = tpa[tpa["q_platz"] != ""].groupby("q_platz").size()
+        picks_period = _pp.to_dict()
+        _pp_sel = filtered["PLATZ_ID"].astype(str).str.strip().map(_pp).fillna(0)
+        period_pick_total = int(_pp_sel.sum())
+        period_active_slots = int(_pp_sel.gt(0).sum())
+    slot_json = build_slot_3d_map(filtered, picks_period)
+
+    # Cache-Buster fuer das components.html-iframe: aendert sich der Zustand
+    # (Modus/Filter/Zeitraum), muss das iframe neu laden statt aus dem Cache.
     data_rev = (
-        f"{period_pick_total}-{period_active_slots}-"
-        f"{int(abc_counts['A'])}-{int(abc_counts['B'])}-"
-        f"{int(abc_counts['C'])}-{zero_pick_slots}"
+        f"{colormode_cad}-{len(filtered)}-{period_pick_total}-"
+        f"{period_active_slots}-{int(abc_counts['A'])}-"
+        f"{int(abc_counts['B'])}-{int(abc_counts['C'])}-{zero_pick_slots}"
     )
-    slot_json = build_slot_3d_map(slot_data)
 
     # Fertige 3D-Seite zusammenbauen: _THREE_VIEWER_HTML ist eine HTML/JS-Vorlage
     # (three.js) mit Platzhaltern __XXX__. Jedes .replace(...) setzt einen echten
@@ -4427,7 +4494,7 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         .replace("__LEGEND_COUNTS__", legend_counts_json)  # DB-basierte Legende
         .replace("__LABELS__", labels_json)          # Platz-Beschriftungen
         .replace("__ROTATE__", "false")              # Auto-Drehen aus
-        .replace("__COLORMODE__", colormode_cad)     # fest: ABC-Klasse
+        .replace("__COLORMODE__", colormode_cad)     # 'abc' (stabil) | 'period'
         .replace("__HIDEGREY__", "true" if perf_mode else "false")  # Checkbox 2
         .replace("__HIDEZERO__", "true" if hide_zero else "false")  # Checkbox "0-Picks aus"
         .replace("__ONLYOCC__", "true" if only_occ else "false")    # Checkbox "nur belegte"
@@ -4438,14 +4505,20 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
     # das 3D-Modell. Hoehe = Viewer + 410: Detail-Panel liegt UNTER der Karte
     # (380px) + Abstand -> alle Platz-Infos passen ohne internen Scrollbalken.
     components.html(html, height=viewer_height + 410)
-    st.caption(t("d3_period_status").format(
-        p=de_num(period_pick_total),
-        active=de_num(period_active_slots),
-        a=de_num(abc_counts["A"]),
-        b=de_num(abc_counts["B"]),
-        c=de_num(abc_counts["C"]),
-        z=de_num(zero_pick_slots),
-    ))
+    # Status-Zeile je Modus: ABC = stabile Klassenzahlen (zeitlos), period =
+    # Pick-Aktivitaet im gewaehlten Zeitraum.
+    if colormode_cad == "period":
+        st.caption(t("d3_status_period").format(
+            p=de_num(period_pick_total),
+            active=de_num(period_active_slots),
+        ))
+    else:
+        st.caption(t("d3_status_abc").format(
+            a=de_num(abc_counts["A"]),
+            b=de_num(abc_counts["B"]),
+            c=de_num(abc_counts["C"]),
+            z=de_num(zero_pick_slots),
+        ))
     st.caption(t("d3_caption"))  # kleine Bedien-Hilfe: Ziehen=drehen, Scrollen=zoomen
 
 
