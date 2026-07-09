@@ -451,18 +451,21 @@ function fillLegend(counts){
     + '<span style="font-weight:600;margin-left:8px;">' + fmtN(n) + '</span></div>';
   // Modus 'none': Plaetze nicht eingefaerbt -> keine Legende anzeigen.
   if(COLORMODE==='none'){ legendEl.innerHTML = ''; return; }
-  // Heatmap-Modi: Farbverlauf-Balken (kalt->heiss) statt ABC-Klassen.
+  // Heatmap-Modi: diskrete Farbstufen (kalt->heiss) statt Farbverlauf-Balken.
   if(COLORMODE==='picks' || COLORMODE==='moves' || COLORMODE==='period'){
     const title = (COLORMODE==='moves') ? L.heat_moves
                 : (COLORMODE==='period') ? L.heat_period : L.heat_picks;
-    const stops = HEAT_STOPS.map((s) =>
-      '#' + s[1].toString(16).padStart(6,'0') + ' ' + Math.round(s[0]*100) + '%'
-    ).join(',');
+    // Farbkaestchen ohne Zahl (je Stufe keine eigene Zaehlung vorhanden).
+    const swatch = (hex, label) =>
+      '<div style="display:flex;align-items:center;gap:6px;">'
+      + '<span style="width:12px;height:12px;border-radius:2px;background:' + hex + ';display:inline-block;"></span>'
+      + '<span style="flex:1;">' + label + '</span></div>';
+    const hex = (n) => '#' + n.toString(16).padStart(6,'0');
     legendEl.innerHTML =
       '<div style="font-weight:600;margin-bottom:4px;">' + title + '</div>'
-      + '<div style="width:150px;height:10px;border-radius:2px;background:linear-gradient(to right,' + stops + ');"></div>'
-      + '<div style="display:flex;justify-content:space-between;width:150px;font-size:11px;color:#555;margin-bottom:4px;">'
-      + '<span>' + L.heat_low + '</span><span>' + L.heat_high + '</span></div>'
+      + swatch(hex(HEAT_STOPS[0][1]), L.heat_low)      // selten (kalt)
+      + swatch(hex(HEAT_STOPS[2][1]), L.heat_mid)      // mittel
+      + swatch(hex(HEAT_STOPS[4][1]), L.heat_high)     // oft (heiss)
       + row('#cfd3d6', L.heat_zero, counts.zero);
     return;
   }
@@ -2225,6 +2228,7 @@ TR: dict[str, dict[str, str]] = {
     "d3_heat_picks": {"de": "Pick-Häufigkeit", "en": "Pick frequency"},
     "d3_heat_period": {"de": "Picks im Zeitraum", "en": "Picks in period"},
     "d3_heat_low": {"de": "selten", "en": "rare"},
+    "d3_heat_mid": {"de": "mittel", "en": "medium"},
     "d3_heat_high": {"de": "oft", "en": "frequent"},
     "d3_heat_zero": {"de": "keine Aktivität", "en": "no activity"},
     "d3_f_picks_period": {"de": "Picks im Zeitraum", "en": "Picks in period"},
@@ -4391,6 +4395,7 @@ def render_3d(filtered: pd.DataFrame, tpa: pd.DataFrame) -> None:
         "heat_picks": t("d3_heat_picks"),
         "heat_period": t("d3_heat_period"),
         "heat_low": t("d3_heat_low"),
+        "heat_mid": t("d3_heat_mid"),
         "heat_high": t("d3_heat_high"),
         "heat_zero": t("d3_heat_zero"),
     }
